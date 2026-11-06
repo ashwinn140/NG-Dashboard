@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>New Globe and Neutral Consolidation: performance and profit dashboard (review version)</title>
+<style>__CSS__</style></head>
+<body>
+<div id="app">
+  <header class="top">
+    <div>
+      <h1>New Globe and Neutral Consolidation: performance dashboard</h1>
+      <p class="sub">Data as of <span id="asof">—</span> (latest shipment date) · <span id="nrows">—</span> shipments from 8 ERP reports</p>
+    </div>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap"><span class="ribbon">Review version: static sample, no login, no refresh</span><span class="ribbon" title="Added in a later build step">Ask AI: coming in a later step</span><span class="ribbon" title="Finance and Management roles only in the live system">Finance view: Finance and Management</span></div>
+  </header>
+  <div class="frow" id="grpRow"><span class="lbl2">View</span><div id="grpSeg"><button type="button" class="btn on" data-v="summary">Owner’s summary</button><button type="button" class="btn" data-v="ops">Operations</button><button type="button" class="btn" data-v="profit">Finance</button><button type="button" class="btn" data-v="mine">My visuals</button></div>
+    <span class="lbl2" style="margin-left:1rem">Views</span><select id="viewSel" aria-label="Saved views"><option value="">Saved views…</option></select><button type="button" class="btn" id="viewSave">Save this view</button><button type="button" class="btn" id="viewDel">Delete view</button><button type="button" class="btn" id="printBtn">Print this page</button></div>
+  <div id="tabs">
+  <nav class="tabs" data-g="summary" aria-label="Summary pages">
+    <button type="button" data-p="s_owner" class="on" aria-selected="true">Owner’s summary</button>
+    <button type="button" data-p="s_score" aria-selected="false">Scorecard by any angle</button>
+  </nav>
+  <nav class="tabs" data-g="mine" aria-label="My visuals" hidden>
+    <button type="button" data-p="v_mine" aria-selected="false">My dashboard</button>
+    <button type="button" data-p="v_build" aria-selected="false">Build a visual</button>
+  </nav>
+  <nav class="tabs" data-g="ops" aria-label="Operations pages" hidden>
+    <button type="button" data-p="overview" aria-selected="false">Overview</button>
+    <button type="button" data-p="compare" aria-selected="false">Compare periods</button>
+    <button type="button" data-p="customers" aria-selected="false">Customers</button>
+    <button type="button" data-p="lanes" aria-selected="false">Lanes and carriers</button>
+    <button type="button" data-p="ops" aria-selected="false">Operations worklist</button>
+    <button type="button" data-p="ship" aria-selected="false">Shipments</button>
+    <button type="button" data-p="o_agents" aria-selected="false">Agent variation report</button>
+    <button type="button" data-p="o_sales" aria-selected="false">Sales performance report</button>
+    <button type="button" data-p="changes" aria-selected="false">Changes since last report</button>
+    <button type="button" data-p="status" aria-selected="false">Data status</button>
+    </nav>
+  <nav class="tabs" data-g="profit" aria-label="Profit pages" hidden>
+    <button type="button" data-p="p_overview" aria-selected="false">Profit overview</button>
+    <button type="button" data-p="p_compare" aria-selected="false">Variance</button>
+    <button type="button" data-p="p_explorer" aria-selected="false">Profitability by…</button>
+    <button type="button" data-p="p_branches" aria-selected="false">Branch profit</button>
+    <button type="button" data-p="p_customers" aria-selected="false">Customers</button>
+    <button type="button" data-p="p_charges" aria-selected="false">Charges and vendors</button>
+    <button type="button" data-p="p_jobs" aria-selected="false">Jobs</button>
+    <button type="button" data-p="p_quality" aria-selected="false">Profit quality</button>
+    <button type="button" data-p="p_billing" aria-selected="false">Billing health</button>
+    <button type="button" data-p="p_rates" aria-selected="false">Rate margin</button>
+    <button type="button" data-p="p_status" aria-selected="false">Finance data status</button>
+  </nav>
+  </div>
+  <section class="card" id="filters" aria-label="Filters">
+    <div class="frow" id="yearRow"><span class="lbl2">Year</span><div id="ybSeg" title="Calendar year runs January to December. Accounting year follows the start month set under Definitions."><button type="button" class="btn" data-v="cal">Calendar year</button><button type="button" class="btn" data-v="fy">Accounting year</button></div><label class="f"><span>Show</span><select id="yearSel" aria-label="Year"></select></label></div>
+    <div class="frow">
+      <span class="lbl2">Company</span>
+      <div id="coSeg"><button type="button" class="btn" data-v="both">Both</button><button type="button" class="btn" data-v="ng">New Globe</button><button type="button" class="btn" data-v="ncs">Neutral Consolidation</button></div>
+      <span class="lbl2">Reports</span>
+      <div id="qMode" title="Click to include; click again to remove. Leave none selected to include everything."><button type="button" class="btn" data-v="air">Air</button><button type="button" class="btn" data-v="sea">Sea</button></div>
+      <div id="qDir" title="Click to include; click again to remove. Leave none selected to include everything."><button type="button" class="btn" data-v="exp">Exports</button><button type="button" class="btn" data-v="imp">Imports</button></div>
+      <span class="lbl2" data-g="ops">Measure</span>
+      <div id="mSeg" data-g="ops"><button type="button" class="btn" data-v="count">Shipments</button><button type="button" class="btn" data-v="volume">Volume (t or TEU)</button></div>
+      <span class="lbl2" data-g="profit" hidden>Rank by</span><div id="rankSeg" data-g="profit" hidden><button type="button" class="btn" data-v="profit">Profit</button><button type="button" class="btn" data-v="income">Income</button><button type="button" class="btn" data-v="expense">Expense</button></div>
+      <span class="lbl2" data-g="profit" hidden>Date basis</span><div id="basisSeg" data-g="profit" hidden title="The profit report is built on billing date. Job date is when the job was opened."><button type="button" class="btn" data-v="bill">Billing date</button><button type="button" class="btn" data-v="job">Job date</button></div>
+      <label class="f"><input type="checkbox" id="cmp" checked> Show change vs comparison period</label>
+      <button type="button" class="btn" id="defBtn" aria-expanded="false">Definitions ⚙</button>
+    </div>
+    <div class="frow">
+      <label class="f"><span>From</span><input type="date" id="dFrom" aria-label="From date"></label>
+      <label class="f"><span>To</span><input type="date" id="dTo" aria-label="To date"></label>
+      <div id="presets"><button type="button" class="btn" data-v="30">Last 30 days</button><button type="button" class="btn" data-v="month">This month</button><button type="button" class="btn" data-v="last">Last month</button><button type="button" class="btn" data-v="ytd">Year to date</button><button type="button" class="btn" data-v="all">All dates</button></div>
+      <span class="f" id="relBox">Last <input type="number" id="relN" min="1" max="3650" value="30" aria-label="How many"> <select id="relU" aria-label="Unit"><option value="days">days</option><option value="weeks">weeks</option><option value="months">months</option><option value="years">years</option><option value="cweeks">complete weeks</option><option value="cmonths">complete months</option></select> <button type="button" class="btn" id="relGo">Apply</button></span>
+    </div>
+    <div class="frow" id="fbtns"></div>
+    <div class="frow" id="chips"></div>
+    <div id="defs" class="defs" hidden></div>
+    <div id="status"></div>
+  </section>
+  <main id="page"></main>
+  <footer>Review version. Click any bar, row, legend item or cell to filter everything; click again to remove. Air and sea are never added together. Every definition (top N, age limits, bands, comparison period) can be changed under Definitions. Profit is not shown yet because the registers carry no profit.</footer>
+</div>
+<div id="menu" hidden role="dialog" aria-label="Filter values">
+  <div class="mhead"><b id="mh"></b><button id="mClose" class="x" type="button" aria-label="Close">×</button></div>
+  <input id="mq" class="q" placeholder="Search values…" aria-label="Search values" autocomplete="off">
+  <div class="ma"><button id="mAll" class="btn" type="button">Select all</button><button id="mClear" class="btn" type="button">Clear</button></div>
+  <div id="ml" class="ml"></div><p id="mf" class="mfoot"></p>
+</div>
+<script type="text/plain" id="data">__DATA__</script>
+<script>__FFLATE__</script>
+<script>__D3__</script>
+<script>__APP__</script>
+</body></html>

@@ -1,0 +1,749 @@
+(function () {
+'use strict';
+// ---------------------------------------------------------------- decode data
+const bin = atob(document.getElementById('data').textContent.trim());
+const D = JSON.parse(fflate.strFromU8(fflate.gunzipSync(fflate.strToU8(bin, true))));
+const N = D.rep.length;
+const REPN = ['Air Export', 'Air Import', 'Sea Export', 'Sea Import'], COMP = ['New Globe', 'Neutral Consolidation'];
+const REPCOL = ['#4c78a8', '#f58518', '#54a24b', '#b279a2'];
+const fInt = d3.format(','), f1 = d3.format(',.1f'), fP0 = d3.format('.0%'), fP1 = d3.format('.1%');
+const DMS = 864e5, dDate = (d) => new Date(d * DMS), isoD = (s) => Math.round(Date.parse(s) / DMS);
+const fIso = d3.utcFormat('%Y-%m-%d'), fDay = (d) => d3.utcFormat('%-d %b %Y')(dDate(d)), fMon = (d) => d3.utcFormat('%b %Y')(dDate(d)), fDM = (d) => d3.utcFormat('%-d %b')(dDate(d));
+
+// Demo history: earlier years simulated from this year's rows so year-on-year can be previewed. They are only ever
+// visible on the Compare page when the demo switch is on. Real rows are 0..N-1; demo rows follow them.
+const hash01 = (a, b) => { let x = (Math.imul(a + 1, 2654435761) ^ Math.imul(b + 7, 40503)) >>> 0; x = Math.imul(x ^ (x >>> 15), 2246822519) >>> 0; x = Math.imul(x ^ (x >>> 13), 3266489917) >>> 0; return ((x ^ (x >>> 16)) >>> 0) / 4294967296; };
+const DEMO_KEEP = [0, 0.86, 0.72], demoSrc = [], demoK = [];
+for (let i = 0; i < N; i++) for (let k = 1; k <= 2; k++) { if (hash01(D.cols.customer.c[i], 99) < 0.08) continue; if (hash01(i, k) < DEMO_KEEP[k]) { demoSrc.push(i); demoK.push(k); } }
+const NA = N + demoSrc.length, ext = (T, a) => { const x = new T(NA); x.set(a); return x; };
+const rep = ext(Uint8Array, D.rep), comp = new Uint8Array(NA), rtype = new Uint8Array(NA), mode = new Uint8Array(NA), demo = new Uint8Array(NA);
+const date = ext(Int32Array, D.date), opsD = ext(Int32Array, D.ops), finD = ext(Int32Array, D.fin);
+const chg = ext(Float32Array, D.chg), teus = ext(Float32Array, D.teus), gross = ext(Float32Array, D.gross), cbm = ext(Float32Array, D.cbm);
+for (let t = 0; t < demoSrc.length; t++) { const i = N + t, s0 = demoSrc[t], k = demoK[t], f = 0.7 + 0.6 * hash01(s0, 10 + k); rep[i] = rep[s0]; date[i] = date[s0] - 365 * k; chg[i] = chg[s0] * f; teus[i] = Math.round(teus[s0] * f); gross[i] = gross[s0] * f; cbm[i] = cbm[s0] * f; demo[i] = 1; opsD[i] = -1; finD[i] = -1; }
+for (let i = 0; i < NA; i++) { comp[i] = rep[i] < 4 ? 0 : 1; rtype[i] = rep[i] % 4; mode[i] = rtype[i] < 2 ? 0 : 1; }
+const VOL = new Float32Array(NA); for (let i = 0; i < NA; i++) VOL[i] = mode[i] === 0 ? chg[i] : teus[i];
+const mStart = new Int32Array(NA); { const cache = new Map(); for (let i = 0; i < NA; i++) { let v = cache.get(date[i]); if (v === undefined) { v = Math.round(+d3.utcMonth.floor(dDate(date[i])) / DMS); cache.set(date[i], v); } mStart[i] = v; } }
+const COLS = {company: {l: 'Company', d: COMP, c: comp}, report: {l: 'Report', d: REPN, c: rtype}};
+for (const k in D.cols) { const c = ext(Uint16Array, D.cols[k].c); for (let t = 0; t < demoSrc.length; t++) c[N + t] = c[demoSrc[t]]; COLS[k] = {l: D.cols[k].l, d: D.cols[k].d, c}; }
+{ const lm = new Map(), names = [], codes = new Uint16Array(NA), oc = COLS.origin.c, dc = COLS.destination.c; for (let i = 0; i < NA; i++) { const key = oc[i] * 1000 + dc[i]; let j = lm.get(key); if (j === undefined) { j = names.length; lm.set(key, j); names.push(COLS.origin.d[oc[i]] + ' → ' + COLS.destination.d[dc[i]]); } codes[i] = j; } COLS.lane = {l: 'Lane', d: names, c: codes}; }
+const MAIN = ['company', 'report', 'branch', 'customer', 'shipper', 'consignee', 'job_owner', 'carrier', 'origin', 'destination', 'nomination', 'consol', 'cargo', 'status', 'stage'];
+const EXTRA = Object.keys(COLS).filter((k) => k.startsWith('x_')).sort((a, b) => COLS[a].l.localeCompare(COLS[b].l));
+let MINDATE = 1e9, MAXDATE = -1e9; for (let i = 0; i < N; i++) { if (date[i] < MINDATE) MINDATE = date[i]; if (date[i] > MAXDATE) MAXDATE = date[i]; }
+const STAGE_PEND = COLS.stage.d.indexOf('Pending ops lock'), STAGE_FIN = COLS.stage.d.indexOf('Financials open');
+
+// ---------------------------------------------------------------- state
+const S = {page: 'overview', from: null, to: null, rel: null, sel: {}, extra: [], qm: new Set(), qd: new Set(), measure: 'count', compare: true,
+  cust: {sort: 'cnt', dir: -1}, ship: {q: '', page: 0, sort: 'date', dir: -1}, wl: {q: '', stage: '', sort: 'age', dir: -1}, ch: null};
+let R = {};
+const DEFAULTS = {topN: 10, heatN: 15, tableRows: 50, pageSize: 100, wlRows: 300, oldDays: 90, buckets: '30,60,90,180', activeMin: 1, grain: 'auto', autoDays: 62, compare: 'prev', fyStart: 4, weekStart: 1, relEnd: 'data', yearBasis: 'fy', historyYears: 3, flatPct: 1, varMinPct: 0, varMinBase: 0, varMinAbs: 0};
+S.def = Object.assign({}, DEFAULTS);
+try { const st = JSON.parse(localStorage.getItem('ngDefs') || '{}'); for (const k in DEFAULTS) if (st[k] !== undefined && typeof st[k] === typeof DEFAULTS[k]) S.def[k] = st[k]; } catch (e) { /* storage not available: defaults are used */ }
+function saveDefs() { try { localStorage.setItem('ngDefs', JSON.stringify(S.def)); } catch (e) { /* ignore */ } }
+function bucketList() { const u = [...new Set(String(S.def.buckets).split(',').map((x) => parseInt(x, 10)).filter((x) => x > 0))].sort((x, y) => x - y); return u.length ? u : [30, 60, 90, 180]; }
+function cmpLabel() { return S.def.compare === 'yoy' ? 'same period last year' : 'previous ' + R.w.n + ' days'; }
+function grainOf(w) { const g = S.def.grain; return g === 'auto' ? (w.n > S.def.autoDays ? 'month' : 'day') : g; }
+function asOfDay() { return S.def.relEnd === 'today' ? Math.floor(Date.now() / DMS) : MAXDATE; }
+function dayClamped(y, m, d) { const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate(); return dayOf(y, m, Math.min(d, last)); }
+function resolveRel(r) {
+  const a = asOfDay();
+  if (r.kind === 'month') return {from: pStart('month', a), to: a};
+  if (r.kind === 'lastmonth') { const s0 = pStart('month', a); return {from: addMonths(s0, -1), to: s0 - 1}; }
+  if (r.kind === 'ytd') return {from: pStart('year', a), to: a};
+  if (r.kind === 'lastyear') { const s0 = pStart('year', a); return {from: addMonths(s0, -12), to: s0 - 1}; }
+  if (r.kind === 'year') { const b = yearBounds(r.y); return {from: b.from, to: Math.max(b.from, Math.min(b.to, a))}; }
+  const n = Math.max(1, r.n | 0), [y, m, d] = ymd(a);
+  if (r.unit === 'weeks') return {from: a - 7 * n + 1, to: a};
+  if (r.unit === 'months') return {from: dayClamped(y, m - n, d) + 1, to: a};
+  if (r.unit === 'years') return {from: dayClamped(y - n, m, d) + 1, to: a};
+  if (r.unit === 'cweeks') { const e = wkStart(a) - 1; return {from: e - 7 * n + 1, to: e}; }
+  if (r.unit === 'cmonths') { const s0 = pStart('month', a); return {from: addMonths(s0, -n), to: s0 - 1}; }
+  return {from: a - n + 1, to: a};
+}
+const FYB = () => S.def.yearBasis === 'fy' && S.def.fyStart !== 1;
+const fyLabel = (y) => 'FY ' + y + '–' + String((y + 1) % 100).padStart(2, '0');
+function yearBounds(y) { const fm = FYB() ? S.def.fyStart - 1 : 0, s0 = dayOf(y, fm, 1); return {from: s0, to: dayOf(y + 1, fm, 1) - 1}; }
+function yearOfDay(d) { const [y, m] = ymd(d), fm = FYB() ? S.def.fyStart - 1 : 0; return m >= fm ? y : y - 1; }
+const yearName = (y) => (FYB() ? fyLabel(y) : String(y));
+function relLabel(r) {
+  if (r.kind === 'month') return 'This month so far'; if (r.kind === 'lastmonth') return 'Last month'; if (r.kind === 'ytd') return FYB() ? 'Financial year to date' : 'Year to date';
+  if (r.kind === 'lastyear') return FYB() ? 'Last financial year' : 'Last year'; if (r.kind === 'year') return yearName(r.y);
+  const pl = {days: 'days', weeks: 'weeks', months: 'months', years: 'years', cweeks: 'complete weeks', cmonths: 'complete months'}[r.unit];
+  return 'Last ' + (r.n === 1 ? pl.replace(/s$/, '') : r.n + ' ' + pl);
+}
+const wkStart = (d) => (S.def.weekStart === 0 ? d - ((d + 4) % 7) : d - ((d + 3) % 7));
+const MENU = {key: null, q: ''};
+
+function h(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  if (props) for (const k in props) { const v = props[k];
+    if (k === 'class') e.className = v; else if (k === 'style') e.style.cssText = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else if (v === true) e.setAttribute(k, ''); else if (v !== false && v != null) e.setAttribute(k, v); }
+  for (const c of kids.flat(Infinity)) { if (c == null || c === false) continue; e.append(c.nodeType ? c : document.createTextNode(String(c))); }
+  return e;
+}
+const $ = (id) => document.getElementById(id);
+
+// ---------------------------------------------------------------- filtering
+function win() { let from, to; if (S.rel) { const r = resolveRel(S.rel); from = r.from; to = r.to; } else { from = S.from == null ? MINDATE : S.from; to = S.to == null ? MAXDATE : S.to; } const n = Math.max(1, to - from + 1); return S.def.compare === 'yoy' ? {from, to, n, pfrom: from - 365, pto: to - 365} : {from, to, n, pfrom: from - n, pto: from - 1}; }
+function mask(opt) {
+  opt = opt || {}; const skip = new Set([].concat(opt.skip || [])), NN = opt.demo && S.demo ? NA : N, m = new Uint8Array(NA); m.fill(1, 0, NN);
+  for (const k in S.sel) { if (skip.has(k)) continue; const set = S.sel[k]; if (!set || !set.size) continue;
+    const L = new Uint8Array(COLS[k].d.length); set.forEach((v) => { L[v] = 1; }); const c = COLS[k].c; for (let i = 0; i < NN; i++) if (!L[c[i]]) m[i] = 0; }
+  if (opt.dates !== 'none') { const w = win(), lo = opt.dates === 'prev' ? w.pfrom : w.from, hi = opt.dates === 'prev' ? w.pto : w.to; for (let i = 0; i < NN; i++) if (date[i] < lo || date[i] > hi) m[i] = 0; }
+  return m;
+}
+function compute() {
+  const M = mask(), P = mask({dates: 'prev'}); let n = 0, air = 0, sea = 0, np = 0;
+  for (let i = 0; i < N; i++) { if (M[i]) { n++; if (mode[i]) sea++; else air++; } if (P[i]) np++; }
+  const mixed = air > 0 && sea > 0, useVol = S.measure === 'volume' && !mixed;
+  R = {w: win(), M, P, n, np, air, sea, mixed, useVol};
+}
+const vi = (i) => (R.useVol ? VOL[i] : 1);
+const fm = (x) => (R.useVol ? (R.air ? f1(x) + ' t' : fInt(Math.round(x)) + ' TEU') : fInt(x));
+const pctChange = (a, b) => (b > 0 ? (a - b) / b : null);
+const fDelta = (x) => (x == null ? '' : (x >= 0 ? '+' : '−') + fP1(Math.abs(x)));
+function toggle(key, j) { if (key === 'report') { S.qm.clear(); S.qd.clear(); } const set = S.sel[key] || (S.sel[key] = new Set()); if (set.has(j)) set.delete(j); else set.add(j); if (!set.size) delete S.sel[key]; renderAll(); }
+function setOnly(key, j) { if (key === 'report') { S.qm.clear(); S.qd.clear(); } S.sel[key] = new Set([j]); renderAll(); }
+
+// ---------------------------------------------------------------- small components
+function emptyNote() { return h('p', {class: 'empty'}, 'Nothing in this selection.'); }
+function rankRows(items, total, onClick, ci) {
+  if (!items.length) return emptyNote();
+  const mx = Math.max(...items.map((d) => d.v), 1e-9);
+  return h('div', {class: 'rank'}, items.map((d) => h('button', {type: 'button', class: 'row' + (d.sel ? ' on' : ''), onclick: () => onClick(d)},
+    h('span', {class: 'lab', title: d.label}, d.label),
+    h('span', {class: 'track'}, h('span', {class: 'fill', style: 'width:' + (d.v / mx * 100) + '%;background:' + (d.color || (window.CHART_COLORS || ['#4c78a8'])[ci || 0])})),
+    h('span', {class: 'val'}, fm(d.v) + (total ? ' · ' + fS(d.v / total) : '')))));
+}
+const fS = (s) => (s >= 0.1 ? fP0(s) : fP1(s));
+function rankedKey(key) {
+  const limit = S.def.topN;
+  const m = mask({skip: key}), c = COLS[key].c, a = new Float64Array(COLS[key].d.length); let tot = 0;
+  for (let i = 0; i < N; i++) if (m[i]) { const v = vi(i); a[c[i]] += v; tot += v; }
+  const sel = S.sel[key] || new Set(); let ids = []; for (let j = 0; j < a.length; j++) if (a[j] > 0 || sel.has(j)) ids.push(j);
+  ids.sort((x, y) => a[y] - a[x]); const top = ids.slice(0, limit); sel.forEach((j) => { if (!top.includes(j)) top.push(j); });
+  return h('div', null, rankRows(top.map((j) => ({k: j, label: COLS[key].d[j], v: a[j], sel: sel.has(j)})), tot, (d) => toggle(key, d.k), CI[key] || 0),
+    ids.length > top.length ? h('p', {class: 'more'}, 'Top ' + top.length + ' of ' + fInt(ids.length) + '. Use the ' + COLS[key].l + ' filter above to find others.') : null);
+}
+const CI = {customer: 0, branch: 1, carrier: 3, origin: 2, destination: 4, x_tradelanename: 5, x_dischargecountry: 6, shipper: 0, consignee: 1};
+window.CHART_COLORS = ['#4c78a8', '#f58518', '#54a24b', '#b279a2', '#e45756', '#72b7b2', '#eeca3b', '#9d755d'];
+function card(title, note, body, cls) { return h('article', {class: 'card ' + (cls || '')}, h('h2', {class: 'h'}, title), note ? h('p', {class: 'note'}, note) : null, body); }
+function kpi(label, value, delta, note) {
+  return h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, label), h('div', {class: 'kv'}, value),
+    delta == null ? null : h('div', {class: 'delta ' + (delta >= 0 ? 'ok' : 'bad')}, fDelta(delta) + ' vs ' + cmpLabel()), note ? h('div', {class: 'kn'}, note) : null);
+}
+function activeCust(m) { const c = COLS.customer.c, a = new Uint32Array(COLS.customer.d.length); for (let i = 0; i < N; i++) if (m[i]) a[c[i]]++; let n = 0; for (let j = 0; j < a.length; j++) if (a[j] > 0 && a[j] >= S.def.activeMin) n++; return n; }
+function sumWhere(m, f) { let s = 0; for (let i = 0; i < N; i++) if (m[i]) s += f(i); return s; }
+function distinct(m, key) { const c = COLS[key].c, set = new Set(); for (let i = 0; i < N; i++) if (m[i]) set.add(c[i]); return set.size; }
+function top10(m, useVol) { const c = COLS.customer.c, a = new Float64Array(COLS.customer.d.length); let t = 0; for (let i = 0; i < N; i++) if (m[i]) { const v = useVol ? VOL[i] : 1; a[c[i]] += v; t += v; }
+  if (!t) return null; const s = Array.from(a).sort((x, y) => y - x); let u = 0; for (let k = 0; k < S.def.topN; k++) u += s[k] || 0; return u / t; }
+
+// ---------------------------------------------------------------- trend chart
+function trendChart() {
+  const w = R.w, grain = grainOf(w), month = grain === 'month', M = R.M; const starts = [];
+  if (month) d3.utcMonth.range(d3.utcMonth.floor(dDate(w.from)), dDate(w.to + 1)).forEach((d) => starts.push(Math.round(+d / DMS))); else if (grain === 'week') { for (let d = wkStart(w.from); d <= w.to; d += 7) starts.push(d); } else for (let d = w.from; d <= w.to; d++) starts.push(d);
+  const idx = new Map(starts.map((s, i) => [s, i])), data = starts.map(() => [0, 0, 0, 0]);
+  for (let i = 0; i < N; i++) if (M[i]) { const b = idx.get(month ? mStart[i] : grain === 'week' ? wkStart(date[i]) : date[i]); if (b !== undefined) data[b][rtype[i]] += vi(i); }
+  const tot = data.map((a) => a[0] + a[1] + a[2] + a[3]), box = h('div', {class: 'trend'});
+  if (!R.n) { box.append(emptyNote()); return box; }
+  const W = Math.max(280, Math.round(($('page').clientWidth || 900) - 40)), H = 250, mt = 20, mb = 28;
+  const svg = d3.select(box).append('svg').attr('width', '100%').attr('viewBox', '0 0 ' + W + ' ' + H).attr('role', 'img').attr('aria-label', 'Stacked bars by report over time');
+  const ymax = d3.max(tot) || 1, y = d3.scaleLinear([0, ymax], [H - mb, mt]).nice(4), ticks = y.ticks(4), yf = y.domain()[1] >= 10 ? d3.format(',.0f') : d3.format(',.1f');
+  const probe = svg.append('text').attr('class', 'tick').text(yf(d3.max(ticks))); const ml = Math.ceil(probe.node().getComputedTextLength()) + 12; probe.remove();
+  const x = d3.scaleBand(starts, [ml, W - 8]).padding(0.25), bw = Math.min(x.bandwidth(), 40), off = (x.bandwidth() - bw) / 2;
+  ticks.forEach((t) => { svg.append('line').attr('x1', ml).attr('x2', W - 8).attr('y1', y(t)).attr('y2', y(t)).style('stroke', 'var(--grid)'); svg.append('text').attr('class', 'tick').attr('x', ml - 6).attr('y', y(t)).attr('text-anchor', 'end').attr('dominant-baseline', 'middle').text(yf(t)); });
+  const tip = h('div', {class: 'tip', hidden: true}); box.append(tip);
+  starts.forEach((s, bi) => { let acc = 0;
+    for (let r = 0; r < 4; r++) { const v = data[bi][r]; if (!v) continue; const y0 = y(acc + v), y1 = y(acc); acc += v;
+      svg.append('rect').attr('x', x(s) + off).attr('y', y0).attr('width', bw).attr('height', Math.max(0, y1 - y0)).attr('fill', REPCOL[r]); }
+    svg.append('rect').attr('class', 'hit').attr('x', x(s)).attr('y', mt).attr('width', x.bandwidth()).attr('height', H - mb - mt).attr('fill', 'transparent').style('cursor', 'pointer')
+      .on('mousemove', (ev) => { const b = box.getBoundingClientRect(); tip.replaceChildren(h('div', {class: 'tip-h'}, month ? fMon(s) : (grain === 'week' ? 'Week of ' + fDay(s) : fDay(s))), h('div', null, 'Total: ' + fm(tot[bi])),
+          ...[0, 1, 2, 3].filter((r) => data[bi][r]).map((r) => h('div', null, h('i', {class: 'sw', style: 'background:' + REPCOL[r]}), REPN[r] + ': ' + fm(data[bi][r])))); tip.hidden = false;
+        const tw = tip.offsetWidth; let l = ev.clientX - b.left + 12; if (l + tw > b.width) l = ev.clientX - b.left - tw - 12; tip.style.left = Math.max(0, l) + 'px'; tip.style.top = Math.max(0, ev.clientY - b.top - 60) + 'px'; })
+      .on('mouseleave', () => { tip.hidden = true; })
+      .on('click', () => { if (month) { S.rel = null; S.from = Math.max(s, MINDATE); S.to = Math.min(Math.round(+d3.utcMonth.offset(dDate(s), 1) / DMS) - 1, MAXDATE); } else if (grain === 'week') { S.rel = null; S.from = Math.max(s, MINDATE); S.to = Math.min(s + 6, MAXDATE); } else { S.rel = null; S.from = s; S.to = s; } renderAll(); });
+  });
+  const step = Math.max(1, Math.ceil(56 / x.step()));
+  starts.forEach((s, bi) => { if (bi % step === 0) svg.append('text').attr('class', 'tick').attr('x', x(s) + x.bandwidth() / 2).attr('y', H - 8).attr('text-anchor', 'middle').text(month ? d3.utcFormat('%b %y')(dDate(s)) : fDM(s)); });
+  if (starts.length <= 14) starts.forEach((s, bi) => { if (tot[bi] > 0) svg.append('text').attr('class', 'lbl').attr('x', x(s) + x.bandwidth() / 2).attr('y', y(tot[bi]) - 5).attr('text-anchor', 'middle').text(yf(tot[bi])); });
+  const present = [0, 1, 2, 3].filter((r) => data.some((a) => a[r] > 0));
+  box.append(h('div', {class: 'legend'}, present.map((r) => h('button', {type: 'button', class: 'lg' + (S.sel.report && S.sel.report.has(r) ? ' on' : ''), onclick: () => toggle('report', r)}, h('i', {class: 'sw', style: 'background:' + REPCOL[r]}), REPN[r]))));
+  return box;
+}
+function mixBlock(key, title) {
+  const m = mask({skip: key}), c = COLS[key].c, a = new Float64Array(COLS[key].d.length); let t = 0; for (let i = 0; i < N; i++) if (m[i]) { a[c[i]]++; t++; }
+  const ids = []; for (let j = 0; j < a.length; j++) if (a[j] > 0) ids.push(j); ids.sort((x, y) => a[y] - a[x]); const sel = S.sel[key] || new Set();
+  return h('div', {class: 'mix'}, h('div', {class: 'mixh'}, title),
+    h('div', {class: 'stack'}, ids.map((j, k) => h('span', {class: 'seg', style: 'width:' + (a[j] / t * 100) + '%;background:' + window.CHART_COLORS[k % 8]}))),
+    h('div', {class: 'legend'}, ids.map((j, k) => h('button', {type: 'button', class: 'lg' + (sel.has(j) ? ' on' : ''), onclick: () => toggle(key, j)}, h('i', {class: 'sw', style: 'background:' + window.CHART_COLORS[k % 8]}), COLS[key].d[j] + ' ' + fS(a[j] / t)))));
+}
+
+// ---------------------------------------------------------------- pages
+function pageOverview() {
+  const kp = [];
+  const dN = pctChange(R.n, R.np);
+  kp.push(kpi('Shipments', fInt(R.n), S.compare ? dN : null, 'Dated within the selected range'));
+  const sumAir = (m) => sumWhere(m, (i) => (mode[i] ? 0 : chg[i])), sumSea = (m) => sumWhere(m, (i) => (mode[i] ? teus[i] : 0));
+  if (R.air) kp.push(kpi('Air chargeable weight (tonnes)', f1(sumAir(R.M)), S.compare ? pctChange(sumAir(R.M), sumAir(R.P)) : null, 'Air reports only'));
+  if (R.sea) kp.push(kpi('Sea TEUs', fInt(Math.round(sumSea(R.M))), S.compare ? pctChange(sumSea(R.M), sumSea(R.P)) : null, 'Filled for FCL shipments only'));
+  kp.push(kpi('Active customers', fInt(activeCust(R.M)), S.compare ? pctChange(activeCust(R.M), activeCust(R.P)) : null, 'At least ' + S.def.activeMin + ' shipment' + (S.def.activeMin > 1 ? 's' : '') + ' in range'));
+  const t1 = top10(R.M, R.useVol), t0 = top10(R.P, R.useVol);
+  kp.push(h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'Top ' + S.def.topN + ' customers’ share'), h('div', {class: 'kv'}, t1 == null ? '—' : fP0(t1)),
+    t1 != null && t0 != null && S.compare ? h('div', {class: 'delta flat'}, (t1 >= t0 ? '+' : '−') + f1(Math.abs(t1 - t0) * 100) + ' pts vs ' + cmpLabel()) : null,
+    h('div', {class: 'kn'}, 'Share of ' + (R.useVol ? 'volume' : 'shipments') + '; higher means more concentrated')));
+  const lanes = laneList();
+  return h('div', null, h('div', {class: 'kpis'}, kp),
+    h('div', {class: 'grid'},
+      card('Trend', (R.useVol ? (R.air ? 'Chargeable weight (tonnes)' : 'TEUs') : 'Shipments') + ' per ' + grainOf(R.w) + ', stacked by report. Click a bar to zoom the date range; click a legend item to filter.', trendChart(), 'full'),
+      card('Top ' + S.def.topN + ' customers', 'Click a customer to filter everything; click again to remove.', rankedKey('customer')),
+      card('Top ' + S.def.topN + ' branches', 'Click a branch to filter everything.', rankedKey('branch')),
+      card('Top ' + S.def.topN + ' lanes', 'Origin port to destination port. Click a lane to filter both ports.', lanes),
+      card('Top ' + S.def.topN + ' airlines and shipping lines', 'Carrier on each shipment.', rankedKey('carrier')),
+      card('Shipment mix', 'Share of shipments. Click an item to filter.', h('div', null, mixBlock('report', 'Report'), mixBlock('nomination', 'Nomination'), mixBlock('consol', 'Consol type'), mixBlock('cargo', 'Cargo type')))));
+}
+function laneAgg() {
+  const m = mask({skip: ['origin', 'destination']}), o = COLS.origin.c, d = COLS.destination.c, c = COLS.carrier.c, map = new Map(); let tot = 0;
+  for (let i = 0; i < N; i++) if (m[i]) { const k = o[i] * 1000 + d[i]; let e = map.get(k); if (!e) { e = {o: o[i], d: d[i], cnt: 0, v: 0, air: 0, sea: 0, car: new Set()}; map.set(k, e); } e.cnt++; const v = vi(i); e.v += v; tot += v; if (mode[i]) e.sea += teus[i]; else e.air += chg[i]; e.car.add(c[i]); }
+  return {rows: [...map.values()], tot};
+}
+function laneSelected(e) { const so = S.sel.origin, sd = S.sel.destination; return !!(so && sd && so.size === 1 && sd.size === 1 && so.has(e.o) && sd.has(e.d)); }
+function laneClick(e) { if (laneSelected(e)) { delete S.sel.origin; delete S.sel.destination; } else { S.sel.origin = new Set([e.o]); S.sel.destination = new Set([e.d]); } renderAll(); }
+function laneList() {
+  const limit = S.def.topN;
+  const a = laneAgg(); a.rows.sort((x, y) => y.v - x.v); const items = a.rows.slice(0, limit).map((e) => ({k: e, label: COLS.origin.d[e.o] + ' → ' + COLS.destination.d[e.d], v: e.v, sel: laneSelected(e)}));
+  return rankRows(items, a.tot, (d) => laneClick(d.k), 2);
+}
+function sortHead(cols, state, redraw) {
+  return h('tr', null, cols.map((c) => h('th', {class: c.num ? 'n' : '', 'aria-sort': state.sort === c.k ? (state.dir > 0 ? 'ascending' : 'descending') : 'none'},
+    c.sort === false ? c.t : h('button', {type: 'button', onclick: () => { state.dir = state.sort === c.k ? -state.dir : (c.num ? -1 : 1); state.sort = c.k; redraw(); }}, c.t + (state.sort === c.k ? (state.dir > 0 ? ' ▲' : ' ▼') : '')))));
+}
+function pageCustomers() {
+  const key = 'customer', M2 = mask({skip: key}), P2 = mask({skip: key, dates: 'prev'}), c = COLS.customer.c, sz = COLS.customer.d.length;
+  const cnt = new Float64Array(sz), pc = new Float64Array(sz), air = new Float64Array(sz), sea = new Float64Array(sz), last = new Int32Array(sz), vol = new Float64Array(sz); let totC = 0, totV = 0;
+  for (let i = 0; i < N; i++) { if (M2[i]) { const j = c[i]; cnt[j]++; totC++; const v = vi(i); vol[j] += v; totV += v; if (mode[i]) sea[j] += teus[i]; else air[j] += chg[i]; if (date[i] > last[j]) last[j] = date[i]; } if (P2[i]) pc[c[i]]++; }
+  const sel = S.sel[key] || new Set(), hasPrev = R.np > 0; const rows = []; for (let j = 0; j < sz; j++) if (cnt[j] > 0 || sel.has(j)) rows.push({j, cnt: cnt[j], air: air[j], sea: sea[j], share: totC ? cnt[j] / totC : 0, delta: hasPrev ? cnt[j] - pc[j] : 0, last: last[j], v: vol[j]});
+  const exportCust = () => { const list = rows.slice().sort((a, b) => b.cnt - a.cnt), n = list.length + 1;
+    downloadXlsx('customers_' + fIso(dDate(MAXDATE)) + '.xlsx', [{name: 'Customers', freeze: true, filter: true, cols: [42, 12, 18, 12, 18, 18, 16], rows: [['Customer', 'Shipments', 'Air chargeable weight (t)', 'Sea TEUs', 'Share of shipments', 'Change vs comparison (shipments)', 'Last shipment'].map(HDR)].concat(list.map((r, i) => [COLS.customer.d[r.j], {v: r.cnt, s: 3}, r.air ? {v: +r.air.toFixed(3), s: 4} : '', r.sea ? {v: Math.round(r.sea), s: 3} : '', {f: 'B' + (i + 2) + '/SUM(B$2:B$' + n + ')', s: 2}, hasPrev ? {v: r.delta, s: 3} : '', r.last > 0 ? {v: serial(r.last), s: 5} : '']))}, settingsSheet([[HDR('Range'), fDay(R.w.from) + ' to ' + fDay(R.w.to)]])]); };
+  const tbody = h('tbody'), note = h('p', {class: 'note'});
+  const cols = [{k: 'name', t: 'Customer'}, {k: 'cnt', t: 'Shipments', num: true}, {k: 'air', t: 'Air weight (t)', num: true}, {k: 'sea', t: 'Sea TEUs', num: true}, {k: 'share', t: 'Share', num: true}, {k: 'delta', t: 'Change vs previous', num: true}, {k: 'last', t: 'Last shipment', num: true}];
+  const thead = h('thead'); const draw = () => {
+    const s = S.cust, f = s.sort === 'name' ? (a, b) => COLS.customer.d[a.j].localeCompare(COLS.customer.d[b.j]) : (a, b) => a[s.sort] - b[s.sort]; rows.sort((a, b) => f(a, b) * s.dir);
+    thead.replaceChildren(sortHead(cols, s, draw)); const shown = rows.slice(0, S.def.tableRows);
+    tbody.replaceChildren(...shown.map((r) => h('tr', {class: 'click' + (sel.has(r.j) ? ' on' : ''), onclick: () => toggle(key, r.j)}, h('td', null, COLS.customer.d[r.j]), h('td', {class: 'n'}, fInt(r.cnt)), h('td', {class: 'n'}, r.air ? f1(r.air) : '–'), h('td', {class: 'n'}, r.sea ? fInt(Math.round(r.sea)) : '–'),
+      h('td', {class: 'n'}, fS(r.share)), h('td', {class: 'n ' + (r.delta > 0 ? 'ok' : r.delta < 0 ? 'bad' : '')}, hasPrev ? (r.delta > 0 ? '+' : r.delta < 0 ? '−' : '') + fInt(Math.abs(r.delta)) : '–'), h('td', {class: 'n'}, r.last > 0 ? fDay(r.last) : '–'))));
+    note.textContent = 'Showing ' + shown.length + ' of ' + fInt(rows.length) + ' customers. Click a header to sort, a row to filter. ' + (hasPrev ? 'Change = shipments minus the ' + cmpLabel() + '.' : 'No earlier period exists before this date range, so there is no change to show.'); };
+  draw();
+  // heatmap
+  const topIds = rows.slice().sort((a, b) => b.v - a.v).slice(0, S.def.heatN).map((r) => r.j), months = d3.utcMonth.range(d3.utcMonth.floor(dDate(R.w.from)), dDate(R.w.to + 1)).map((d) => Math.round(+d / DMS)), mi = new Map(months.map((s, i) => [s, i]));
+  const hm = new Map(topIds.map((j) => [j, new Float64Array(months.length)])); let hmax = 0;
+  for (let i = 0; i < N; i++) if (M2[i]) { const a = hm.get(c[i]); if (a) { const b = mi.get(mStart[i]); if (b !== undefined) { a[b] += vi(i); if (a[b] > hmax) hmax = a[b]; } } }
+  const heat = h('div', {class: 'scroll'}, h('table', {class: 'tbl heat'}, h('thead', null, h('tr', null, h('th', null, 'Customer'), months.map((s) => h('th', {class: 'n'}, d3.utcFormat('%b %y')(dDate(s)))))),
+    h('tbody', null, topIds.map((j) => h('tr', null, h('td', {class: 'lab2'}, h('button', {type: 'button', class: 'link', onclick: () => toggle(key, j)}, COLS.customer.d[j])),
+      [...hm.get(j)].map((v, bi) => h('td', {class: 'n hc', title: COLS.customer.d[j] + ' · ' + d3.utcFormat('%b %Y')(dDate(months[bi])) + ': ' + fm(v), style: v ? 'background:rgba(76,120,168,' + (0.12 + 0.75 * v / hmax) + ');color:' + (v / hmax > 0.55 ? '#fff' : 'inherit') : '', onclick: () => { S.sel.customer = new Set([j]); S.rel = null; S.from = Math.max(months[bi], MINDATE); S.to = Math.min(Math.round(+d3.utcMonth.offset(dDate(months[bi]), 1) / DMS) - 1, MAXDATE); renderAll(); }}, v ? (R.useVol ? (R.air ? f1(v) : fInt(Math.round(v))) : fInt(v)) : '')))))));
+  const mov = hasPrev ? rows.filter((r) => r.delta !== 0) : [], gain = mov.filter((r) => r.delta > 0).sort((a, b) => b.delta - a.delta).slice(0, S.def.topN), lose = mov.filter((r) => r.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, S.def.topN);
+  const moverList = (arr, sign) => arr.length ? h('div', {class: 'rank'}, arr.map((r) => h('button', {type: 'button', class: 'row', onclick: () => toggle(key, r.j)}, h('span', {class: 'lab', title: COLS.customer.d[r.j]}, COLS.customer.d[r.j]), h('span', {class: 'track'}, h('span', {class: 'fill', style: 'width:' + Math.min(100, Math.abs(r.delta) / Math.abs(arr[0].delta) * 100) + '%;background:var(--' + (sign > 0 ? 'ok' : 'bad') + ')'})), h('span', {class: 'val'}, (sign > 0 ? '+' : '−') + fInt(Math.abs(r.delta)) + ' shipments')))) : (hasPrev ? emptyNote() : h('p', {class: 'empty'}, 'No earlier period to compare with. Choose a shorter date range, for example the last 30 days.'));
+  return h('div', null, h('div', {class: 'grid'},
+    card('Customers', null, h('div', null, h('div', {class: 'frow'}, dlButton('Download Excel', exportCust)), note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody))), 'full'),
+    card('Customer by month', 'Top ' + S.def.heatN + ' customers by ' + (R.useVol ? 'volume' : 'shipments') + '. Click a cell to focus that customer and month.', heat, 'full'),
+    card('Growing accounts', 'Biggest increase in shipments against the ' + cmpLabel() + '.', moverList(gain, 1)),
+    card('Declining accounts', 'Biggest fall in shipments against the ' + cmpLabel() + '.', moverList(lose, -1))));
+}
+function pageLanes() {
+  const a = laneAgg(); a.rows.sort((x, y) => y.cnt - x.cnt); const shown = a.rows.slice(0, S.def.tableRows);
+  const exportLanes = () => { const list = a.rows.slice().sort((x, y) => y.cnt - x.cnt);
+    downloadXlsx('lanes_' + fIso(dDate(MAXDATE)) + '.xlsx', [{name: 'Lanes', freeze: true, filter: true, cols: [46, 12, 18, 12, 12], rows: [['Lane', 'Shipments', 'Air chargeable weight (t)', 'Sea TEUs', 'Carriers'].map(HDR)].concat(list.map((e) => [COLS.origin.d[e.o] + ' → ' + COLS.destination.d[e.d], {v: e.cnt, s: 3}, e.air ? {v: +e.air.toFixed(3), s: 4} : '', e.sea ? {v: Math.round(e.sea), s: 3} : '', {v: e.car.size, s: 3}]))}, settingsSheet([[HDR('Range'), fDay(R.w.from) + ' to ' + fDay(R.w.to)]])]); };
+  const tbl = h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, h('thead', null, h('tr', null, h('th', null, 'Lane'), h('th', {class: 'n'}, 'Shipments'), h('th', {class: 'n'}, 'Air weight (t)'), h('th', {class: 'n'}, 'Sea TEUs'), h('th', {class: 'n'}, 'Carriers'))),
+    h('tbody', null, shown.map((e) => h('tr', {class: 'click' + (laneSelected(e) ? ' on' : ''), onclick: () => laneClick(e)}, h('td', null, COLS.origin.d[e.o] + ' → ' + COLS.destination.d[e.d]), h('td', {class: 'n'}, fInt(e.cnt)), h('td', {class: 'n'}, e.air ? f1(e.air) : '–'), h('td', {class: 'n'}, e.sea ? fInt(Math.round(e.sea)) : '–'), h('td', {class: 'n'}, fInt(e.car.size)))))));
+  return h('div', {class: 'grid'}, card('Lanes', 'Top ' + shown.length + ' of ' + fInt(a.rows.length) + ' lanes by shipments. Click a row to filter both ports.', h('div', null, h('div', {class: 'frow'}, dlButton('Download Excel', exportLanes)), tbl), 'full'),
+    card('Top ' + S.def.topN + ' origin ports', null, rankedKey('origin')), card('Top ' + S.def.topN + ' destination ports', null, rankedKey('destination')),
+    card('Top ' + S.def.topN + ' airlines and shipping lines', null, rankedKey('carrier')), card('Top ' + S.def.topN + ' trade lanes', 'From the ERP’s Trade Lane Name column.', rankedKey('x_tradelanename')),
+    card('Top ' + S.def.topN + ' destination countries', null, rankedKey('x_dischargecountry')), card('Top ' + S.def.topN + ' origin agents', null, rankedKey('x_originagent')));
+}
+function pageOps() {
+  const M = mask({dates: 'none'}), st = COLS.stage.c, open = [];
+  for (let i = 0; i < N; i++) if (M[i] && st[i] !== COLS.stage.d.indexOf('Closed')) open.push(i);
+  const age = (i) => MAXDATE - date[i], pend = open.filter((i) => st[i] === STAGE_PEND).length, fin = open.filter((i) => st[i] === STAGE_FIN).length, old = open.filter((i) => age(i) > S.def.oldDays).length, oldest = open.reduce((m, i) => Math.max(m, age(i)), 0);
+  const bl = bucketList(), buckets = []; { let lo = 0; bl.forEach((b) => { buckets.push([lo, b, lo + '–' + b + ' days']); lo = b + 1; }); buckets.push([lo, 1e9, 'Over ' + bl[bl.length - 1] + ' days']); }
+  const bd = buckets.map(([lo, hi, l]) => { let p = 0, f = 0; open.forEach((i) => { const a = age(i); if (a >= lo && a <= hi) { if (st[i] === STAGE_PEND) p++; else f++; } }); return {l, p, f}; });
+  const bmax = Math.max(...bd.map((d) => d.p + d.f), 1);
+  const aging = h('div', null, bd.map((d) => h('div', {class: 'arow'}, h('span', {class: 'lab'}, d.l), h('span', {class: 'track'}, h('span', {class: 'aw', style: 'width:' + ((d.p + d.f) / bmax * 100) + '%'}, d.f ? h('span', {style: 'flex:' + d.f + ' 1 0;background:' + REPCOL[0]}) : null, d.p ? h('span', {style: 'flex:' + d.p + ' 1 0;background:' + REPCOL[1]}) : null)), h('span', {class: 'val'}, fInt(d.p + d.f)))),
+    h('div', {class: 'legend'}, h('span', {class: 'lg static'}, h('i', {class: 'sw', style: 'background:' + REPCOL[0]}), 'Financials open'), h('span', {class: 'lg static'}, h('i', {class: 'sw', style: 'background:' + REPCOL[1]}), 'Waiting for ops lock')));
+  // owners
+  const oc = COLS.job_owner.c, om = new Map(); open.forEach((i) => { let e = om.get(oc[i]); if (!e) { e = {j: oc[i], p: 0, f: 0, o: 0}; om.set(oc[i], e); } if (st[i] === STAGE_PEND) e.p++; else e.f++; e.o = Math.max(e.o, age(i)); });
+  const owners = [...om.values()].sort((a, b) => (b.p + b.f) - (a.p + a.f)).slice(0, S.def.tableRows), osel = S.sel.job_owner || new Set(), omax = Math.max(...owners.map((e) => e.p + e.f), 1);
+  const otbl = h('div', {class: 'scroll'}, h('table', {class: 'tbl'}, h('thead', null, h('tr', null, h('th', null, 'Job owner'), h('th', null, 'Open'), h('th', {class: 'n'}, 'Ops lock'), h('th', {class: 'n'}, 'Financials'), h('th', {class: 'n'}, 'Oldest (days)'))),
+    h('tbody', null, owners.map((e) => h('tr', {class: 'click' + (osel.has(e.j) ? ' on' : ''), onclick: () => toggle('job_owner', e.j)}, h('td', null, COLS.job_owner.d[e.j]), h('td', null, h('div', {class: 'ob'}, h('span', {class: 'track'}, h('span', {class: 'fill', style: 'width:' + ((e.p + e.f) / omax * 100) + '%;background:' + REPCOL[0]})), h('span', {class: 'val'}, fInt(e.p + e.f)))), h('td', {class: 'n'}, fInt(e.p)), h('td', {class: 'n'}, fInt(e.f)), h('td', {class: 'n'}, fInt(e.o)))))));
+  // worklist
+  const q = h('input', {type: 'search', class: 'q', placeholder: 'Search shipment, customer, owner…', 'aria-label': 'Search worklist', value: S.wl.q}), note = h('p', {class: 'note'}), tbody = h('tbody'), thead = h('thead');
+  const stBtn = (v, t) => h('button', {type: 'button', class: 'btn' + (S.wl.stage === v ? ' on' : ''), onclick: () => { S.wl.stage = v; renderPage(); }}, t);
+  const cols = [{k: 'rep', t: 'Report'}, {k: 'no', t: 'Shipment'}, {k: 'date', t: 'Date'}, {k: 'cust', t: 'Customer'}, {k: 'owner', t: 'Job owner'}, {k: 'branch', t: 'Branch'}, {k: 'stage', t: 'Stage'}, {k: 'status', t: 'Status'}, {k: 'age', t: 'Age (days)', num: true}];
+  const KEY = {rep: (i) => rep[i], no: (i) => D.no[i], date: (i) => date[i], cust: (i) => COLS.customer.d[COLS.customer.c[i]], owner: (i) => COLS.job_owner.d[COLS.job_owner.c[i]], branch: (i) => COLS.branch.d[COLS.branch.c[i]], stage: (i) => st[i], status: (i) => COLS.status.d[COLS.status.c[i]], age: (i) => -date[i]};
+  let lastWl = [];
+  const exportWl = () => downloadXlsx('open_shipments_' + fIso(dDate(MAXDATE)) + '.xlsx', [{name: 'Open shipments', freeze: true, filter: true, cols: [24, 20, 14, 40, 22, 16, 22, 28, 12], rows: [['Report', 'Shipment', 'Date', 'Customer', 'Job owner', 'Branch', 'Stage', 'Status', 'Age (days)'].map(HDR)].concat(lastWl.map((i, k) => [COMP[comp[i]] + ' · ' + REPN[rtype[i]], D.no[i], {v: serial(date[i]), s: 5}, catv('customer', i), catv('job_owner', i), catv('branch', i), st[i] === STAGE_PEND ? 'Waiting for ops lock' : 'Financials open', catv('status', i), {f: 'Settings!$B$1-C' + (k + 2), s: 3}]))}, settingsSheet()]);
+  const draw = () => { const s = S.wl, needle = s.q.trim().toLowerCase(); let rows = open.filter((i) => (!s.stage || COLS.stage.d[st[i]] === s.stage) && (!needle || (D.no[i] + ' ' + KEY.cust(i) + ' ' + KEY.owner(i) + ' ' + KEY.branch(i) + ' ' + KEY.status(i)).toLowerCase().includes(needle)));
+    const kf = KEY[s.sort]; rows.sort((a, b) => { const x = kf(a), y = kf(b); return (typeof x === 'number' ? x - y : String(x).localeCompare(String(y))) * s.dir; });
+    lastWl = rows; thead.replaceChildren(sortHead(cols, s, draw)); const shown = rows.slice(0, S.def.wlRows);
+    tbody.replaceChildren(...shown.map((i) => h('tr', null, h('td', null, COMP[comp[i]].split(' ')[0] + ' · ' + REPN[rtype[i]]), h('td', null, D.no[i]), h('td', null, fDay(date[i])), h('td', null, KEY.cust(i)), h('td', null, KEY.owner(i)), h('td', null, KEY.branch(i)),
+      h('td', null, h('span', {class: 'pill' + (st[i] === STAGE_PEND ? ' warn' : '')}, st[i] === STAGE_PEND ? 'Waiting for ops lock' : 'Financials open')), h('td', null, KEY.status(i)), h('td', {class: 'n'}, fInt(age(i))))));
+    note.textContent = 'Showing ' + shown.length + ' of ' + fInt(rows.length) + ' open shipments' + (needle ? ' matching the search' : '') + '. Oldest first by default; click a header to sort.'; };
+  q.addEventListener('input', () => { S.wl.q = q.value; draw(); }); draw();
+  return h('div', null, h('p', {class: 'take'}, fInt(pend) + ' shipments still wait for an operations lock and ' + fInt(fin) + ' have operations locked but financials open; ' + fInt(old) + ' of these ' + fInt(pend + fin) + ' are more than ' + S.def.oldDays + ' days old.'),
+    h('p', {class: 'meta'}, 'An open shipment has a blank operations lock or financials lock in the register. This page ignores the date range and follows every other filter. Age counts days from the shipment date to ' + fDay(MAXDATE) + '.'),
+    h('div', {class: 'kpis'}, kpi('Waiting for operations lock', fInt(pend), null, 'Operations not locked yet'), kpi('Operations locked, financials open', fInt(fin), null, 'Financials not locked yet'), kpi('Open more than ' + S.def.oldDays + ' days', fInt(old), null, 'Either stage, from shipment date'), kpi('Oldest open shipment (days)', fInt(oldest), null, 'Days since shipment date')),
+    h('div', {class: 'grid'}, card('How long shipments have been open', 'Open shipments by days since shipment date.', aging), card('Open shipments by job owner', 'Click an owner to filter everything below.', otbl),
+      card('Worklist', null, h('div', null, h('div', {class: 'frow'}, q, h('div', {class: 'segs'}, stBtn('', 'All open'), stBtn('Pending ops lock', 'Waiting for ops lock'), stBtn('Financials open', 'Financials open')), dlButton('Download Excel', exportWl)), note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody))), 'full')));
+}
+const SHIP_COLS = [{k: 'rep', t: 'Report'}, {k: 'no', t: 'Shipment'}, {k: 'date', t: 'Date'}, {k: 'branch', t: 'Branch'}, {k: 'customer', t: 'Customer'}, {k: 'shipper', t: 'Shipper'}, {k: 'consignee', t: 'Consignee'}, {k: 'carrier', t: 'Carrier'}, {k: 'lane', t: 'Lane'}, {k: 'status', t: 'Status'}, {k: 'stage', t: 'Stage'}, {k: 'vol', t: 'Weight / TEU', num: true}];
+const catv = (key, i) => COLS[key].d[COLS[key].c[i]];
+function volText(i) { return mode[i] ? (teus[i] ? fInt(Math.round(teus[i])) + ' TEU' : (cbm[i] ? f1(cbm[i]) + ' CBM' : '–')) : (chg[i] ? f1(chg[i]) + ' t' : '–'); }
+function shipTable(M) {
+  const extra = EXTRA, head = ['Company', 'Report', 'Shipment No', 'Shipment Date', 'Branch', 'Customer', 'Shipper', 'Consignee', 'Job owner', 'Airline / shipping line', 'Origin port', 'Destination port', 'Status', 'Stage', 'Gross weight (t)', 'Chargeable weight (t)', 'TEUs', 'Volume (CBM)', 'Nomination', 'Consol type', 'Cargo type', 'Operations locked on', 'Financials locked on'].concat(extra.map((k) => COLS[k].l)), rows = [];
+  for (let i = 0; i < N; i++) if (M[i]) rows.push([COMP[comp[i]], REPN[rtype[i]], D.no[i], fIso(dDate(date[i])), catv('branch', i), catv('customer', i), catv('shipper', i), catv('consignee', i), catv('job_owner', i), catv('carrier', i), catv('origin', i), catv('destination', i), catv('status', i), catv('stage', i), gross[i], chg[i], teus[i], cbm[i], catv('nomination', i), catv('consol', i), catv('cargo', i), opsD[i] > 0 ? fIso(dDate(opsD[i])) : '', finD[i] > 0 ? fIso(dDate(finD[i])) : ''].concat(extra.map((k) => catv(k, i))));
+  return {head, rows};
+}
+function csvOf(M) {
+  const t = shipTable(M), esc = (v) => { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  return [t.head].concat(t.rows).map((r) => r.map(esc).join(',')).join('\n');
+}
+function pageShip() {
+  const M = R.M, idx = []; for (let i = 0; i < N; i++) if (M[i]) idx.push(i);
+  const S2 = S.ship, q = h('input', {type: 'search', class: 'q', placeholder: 'Search shipment, customer, shipper, consignee…', 'aria-label': 'Search shipments', value: S2.q}), note = h('p', {class: 'note'}), tbody = h('tbody'), thead = h('thead'), pager = h('div', {class: 'frow'});
+  const KEY = {rep: (i) => rep[i], no: (i) => D.no[i], date: (i) => date[i], branch: (i) => catv('branch', i), customer: (i) => catv('customer', i), shipper: (i) => catv('shipper', i), consignee: (i) => catv('consignee', i), carrier: (i) => catv('carrier', i), lane: (i) => catv('origin', i) + catv('destination', i), status: (i) => catv('status', i), stage: (i) => catv('stage', i), vol: (i) => VOL[i]};
+  const draw = () => { const needle = S2.q.trim().toLowerCase(); let rows = needle ? idx.filter((i) => (D.no[i] + ' ' + catv('customer', i) + ' ' + catv('shipper', i) + ' ' + catv('consignee', i)).toLowerCase().includes(needle)) : idx.slice();
+    const kf = KEY[S2.sort]; rows.sort((a, b) => { const x = kf(a), y = kf(b); return (typeof x === 'number' ? x - y : String(x).localeCompare(String(y))) * S2.dir; });
+    const pages = Math.max(1, Math.ceil(rows.length / S.def.pageSize)); S2.page = Math.min(S2.page, pages - 1); const shown = rows.slice(S2.page * S.def.pageSize, (S2.page + 1) * S.def.pageSize);
+    thead.replaceChildren(sortHead(SHIP_COLS, S2, draw));
+    tbody.replaceChildren(...shown.map((i) => h('tr', null, h('td', null, COMP[comp[i]].split(' ')[0] + ' · ' + REPN[rtype[i]]), h('td', null, D.no[i]), h('td', null, fDay(date[i])), h('td', null, catv('branch', i)), h('td', null, catv('customer', i)), h('td', null, catv('shipper', i)), h('td', null, catv('consignee', i)), h('td', null, catv('carrier', i)),
+      h('td', null, catv('origin', i) + ' → ' + catv('destination', i)), h('td', null, catv('status', i)), h('td', null, catv('stage', i)), h('td', {class: 'n'}, volText(i)))));
+    note.textContent = fInt(rows.length) + ' shipments' + (needle ? ' match the search' : ' in the current selection') + '. Page ' + (S2.page + 1) + ' of ' + pages + '.';
+    pager.replaceChildren(h('button', {type: 'button', class: 'btn', disabled: S2.page === 0, onclick: () => { S2.page--; draw(); }}, 'Previous'), h('button', {type: 'button', class: 'btn', disabled: S2.page >= pages - 1, onclick: () => { S2.page++; draw(); }}, 'Next')); };
+  q.addEventListener('input', () => { S2.q = q.value; S2.page = 0; draw(); }); draw();
+  const dl = h('button', {type: 'button', class: 'btn on', onclick: () => { const blob = new Blob(['\ufeff' + csvOf(M)], {type: 'text/csv'}), a = h('a', {href: URL.createObjectURL(blob), download: 'shipments_' + fIso(dDate(MAXDATE)) + '.csv'}); document.body.append(a); a.click(); a.remove(); }}, 'Download CSV (' + fInt(idx.length) + ' rows, all columns)'), dx = dlButton('Download Excel (' + fInt(idx.length) + ' rows)', () => { const t = shipTable(M), isD = new Set([3, 21, 22]); downloadXlsx('shipments_' + fIso(dDate(MAXDATE)) + '.xlsx', [{name: 'Shipments', freeze: true, filter: true, cols: t.head.map((x, k) => (k === 5 || k === 6 || k === 7 ? 30 : 16)), rows: [t.head.map(HDR)].concat(t.rows.map((r) => r.map((v, k) => (isD.has(k) && v ? {v: serial(isoD(v)), s: 5} : (typeof v === 'number' ? v : v))))) }, settingsSheet()]); });
+  return h('div', {class: 'grid'}, card('Shipments', 'Every shipment in the current selection. The CSV carries all filtered rows with the extra columns, and opens in Excel.', h('div', null, h('div', {class: 'frow'}, q, dx, dl), note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody)), pager), 'full'));
+}
+function pageChanges() {
+  const avail = Object.keys(D.changes).map(Number);
+  if (!avail.length) return card('Changes since the last report', 'What each new load added, changed or removed.', h('p', {class: 'empty'}, 'Nothing to compare yet. A report needs to have been loaded at least twice; after the next daily load this page lists the new, changed and no-longer-present shipments.'), 'full');
+  if (S.ch == null || !avail.includes(S.ch)) S.ch = avail[0]; const c = D.changes[String(S.ch)], m = D.meta[S.ch];
+  const sel = h('div', {class: 'segs'}, avail.map((r) => h('button', {type: 'button', class: 'btn' + (S.ch === r ? ' on' : ''), onclick: () => { S.ch = r; renderPage(); }}, COMP[r < 4 ? 0 : 1] + ' · ' + REPN[r % 4])));
+  const tb = (rows, cols) => rows.length ? h('div', {class: 'scroll'}, h('table', {class: 'tbl'}, h('thead', null, h('tr', null, cols.map((t) => h('th', null, t)))), h('tbody', null, rows))) : h('p', {class: 'empty'}, 'None.');
+  const brief = (b) => [h('td', null, b[0]), h('td', null, b[1]), h('td', null, b[2]), h('td', null, b[3]), h('td', null, b[4])];
+  return h('div', null, h('p', {class: 'meta'}, 'Compares the last two runs received of one report. Records are matched on shipment number plus date. A record missing from the newer run is “no longer present”, never “completed”. This page ignores the filters. In this review file the two runs are the two files received; the live system compares any two dates.'),
+    h('div', {class: 'frow'}, sel), h('div', {class: 'kpis'}, kpi('Rows in earlier run', fInt(c.old_rows)), kpi('Rows in latest run', fInt(c.new_rows)), kpi('New shipments', fInt(c.new.length)), kpi('Changed shipments', fInt(c.changed.length)), kpi('No longer present', fInt(c.gone.length))),
+    h('div', {class: 'grid'}, card('New shipments', null, tb(c.new.map((b) => h('tr', null, brief(b))), ['Shipment', 'Date', 'Customer', 'Branch', 'Status']), 'full'),
+      card('Changed shipments', 'Each row shows the columns that changed, from earlier value to later value.', tb(c.changed.map(([b, ds]) => h('tr', null, brief(b), h('td', {class: 'chg'}, ds.slice(0, 5).map((d) => h('div', null, h('b', null, d[0] + ': '), (d[1] || '(blank)') + ' → ' + (d[2] || '(blank)'))), ds.length > 5 ? h('div', {class: 'more'}, '+' + (ds.length - 5) + ' more columns') : null))), ['Shipment', 'Date', 'Customer', 'Branch', 'Status', 'What changed']), 'full'),
+      card('No longer present', null, tb(c.gone.map((b) => h('tr', null, brief(b))), ['Shipment', 'Date', 'Customer', 'Branch', 'Status']), 'full')));
+}
+function coverageCard() {
+  const a = asOfDay(), Y = yearOfDay(a), hy = S.def.historyYears, years = []; for (let y = Y - hy + 1; y <= Y; y++) years.push(y);
+  const cnt = new Map(); for (let i = 0; i < N; i++) { const k = rep[i] * 10000 + yearOfDay(date[i]); cnt.set(k, (cnt.get(k) || 0) + 1); }
+  const warns = [], rows = D.meta.map((m, i) => {
+    const expired = a > isoD(m.range_to);
+    if (expired) warns.push(COMP[i < 4 ? 0 : 1] + ' ' + REPN[i % 4] + ' ends ' + fDay(isoD(m.range_to)));
+    return h('tr', null, h('td', null, COMP[i < 4 ? 0 : 1]), h('td', null, REPN[i % 4]), years.map((y) => { const n = cnt.get(i * 10000 + y) || 0; return h('td', {class: 'n ' + (n ? '' : 'bad')}, n ? fInt(n) : 'missing'); }), h('td', {class: expired ? 'bad' : ''}, fDay(isoD(m.range_to)) + (expired ? ' (passed)' : '')));
+  });
+  return card('History by year', 'Years expected: ' + yearName(years[0]) + ' to ' + yearName(Y) + ', which is this ' + (FYB() ? 'financial year' : 'year') + ' and ' + (hy - 1) + ' before it. The window moves by itself each January, and an admin sets how many years to keep. A year shows “missing” until its reports are loaded.',
+    h('div', null, warns.length ? h('p', {class: 'meta', style: 'color:var(--warn)'}, 'The ERP date range has run out for: ' + warns.join('; ') + '. Change the schedule’s date range in the ERP so new shipments keep arriving.') : null,
+      h('div', {class: 'scroll'}, h('table', {class: 'tbl'}, h('thead', null, h('tr', null, ['Company', 'Report'].concat(years.map(yearName), ['ERP report covers up to']).map((t, k) => h('th', {class: k >= 2 && k < 2 + years.length ? 'n' : ''}, t)))), h('tbody', null, rows)))), 'full');
+}
+function pageStatus() {
+  const rows = D.meta.map((m, i) => h('tr', null, h('td', null, COMP[m.co === 'NG' ? 0 : 1]), h('td', null, REPN[i % 4]), h('td', {class: 'n'}, fInt(m.rows)), h('td', null, m.from + ' to ' + m.to), h('td', {class: 'n'}, fInt(m.repeated)), h('td', {class: 'n'}, fInt(m.pend)), h('td', {class: 'n'}, fInt(m.finopen)), h('td', {class: 'n'}, m.runs), h('td', null, h('span', {class: 'pill ok'}, 'Current'))));
+  return h('div', {class: 'grid'}, coverageCard(), card('Data status', 'What each report contains in this review file. In the live system this shows the last successful import time and any import errors per report.', h('div', {class: 'scroll'}, h('table', {class: 'tbl'},
+    h('thead', null, h('tr', null, ['Company', 'Report', 'Rows', 'Shipment dates', 'Repeated numbers', 'Waiting ops lock', 'Financials open', 'Runs loaded', 'Status'].map((t, i) => h('th', {class: i > 1 && (i < 4 || i > 6) && i !== 3 && i !== 8 ? 'n' : ''}, t)))), h('tbody', null, rows))), 'full'),
+    card('How the data is read', null, h('ul', {class: 'notes'},
+      h('li', null, 'A shipment is identified by Shipment No plus Shipment Date together. Some shipment numbers were used twice in the ERP; both shipments are counted.'),
+      h('li', null, 'Air volume is chargeable weight in tonnes. Sea volume is TEUs, which the ERP fills for FCL shipments only. Air and sea are never added together.'),
+      h('li', null, '“Financials open” means the Financials Locked On date is blank; “waiting for ops lock” means Operations Locked On is blank.'),
+      h('li', null, 'Customer, shipper, consignee and carrier spellings are cleaned so variants count together. Port names are matched on the port code.'),
+      h('li', null, 'History: each report covers the dates and branches stated in its title rows, and a shipment can only be marked not present inside them, so loading this year never touches earlier years. The plan keeps this year and the two years before it for year-on-year comparison.'),
+      h('li', null, 'The comparison period, the top N, the age limit for open shipments, the age bands and the other definitions can all be changed under Definitions; the defaults are shown there.'),
+      h('li', null, 'Profit is not shown yet because the registers carry no profit; it will be added from the profit analysis report.')), 'full'));
+}
+// ================================================================ Excel (.xlsx) writer: real formulas, no library needed beyond fflate
+function xlsxBytes(sheets) {
+  const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '');
+  const colName = (n) => { let r = ''; n++; while (n > 0) { const k = (n - 1) % 26; r = String.fromCharCode(65 + k) + r; n = Math.floor((n - 1) / 26); } return r; };
+  const sheetXml = (sh) => {
+    const rows = sh.rows, last = Math.max(1, rows.length), width = Math.max(1, ...rows.map((r) => r.length));
+    let x = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
+    x += '<sheetViews><sheetView workbookViewId="0">' + (sh.freeze ? '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>' : '') + '</sheetView></sheetViews>';
+    if (sh.cols) x += '<cols>' + sh.cols.map((w, i) => '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + w + '" customWidth="1"/>').join('') + '</cols>';
+    x += '<sheetData>';
+    rows.forEach((row, r) => {
+      x += '<row r="' + (r + 1) + '">';
+      row.forEach((cell, c) => {
+        if (cell == null || cell === '') return;
+        const o = typeof cell === 'object' ? cell : {v: cell}, ref = colName(c) + (r + 1), st = o.s ? ' s="' + o.s + '"' : '';
+        if (o.f) x += '<c r="' + ref + '"' + st + '><f>' + esc(o.f) + '</f></c>';
+        else if (typeof o.v === 'number' && isFinite(o.v)) x += '<c r="' + ref + '"' + st + '><v>' + o.v + '</v></c>';
+        else x += '<c r="' + ref + '"' + st + ' t="inlineStr"><is><t xml:space="preserve">' + esc(o.v) + '</t></is></c>';
+      });
+      x += '</row>';
+    });
+    x += '</sheetData>' + (sh.filter ? '<autoFilter ref="A1:' + colName(width - 1) + last + '"/>' : '') + '</worksheet>';
+    return x;
+  };
+  const files = {};
+  files['[Content_Types].xml'] = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' + sheets.map((_, i) => '<Override PartName="/xl/worksheets/sheet' + (i + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join('') + '</Types>';
+  files['_rels/.rels'] = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>';
+  files['xl/workbook.xml'] = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>' + sheets.map((sh, i) => '<sheet name="' + esc(sh.name.replace(/[\\/?*[\]:]/g, ' ').slice(0, 31)) + '" sheetId="' + (i + 1) + '" r:id="rId' + (i + 1) + '"/>').join('') + '</sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>';
+  files['xl/_rels/workbook.xml.rels'] = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + sheets.map((_, i) => '<Relationship Id="rId' + (i + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' + (i + 1) + '.xml"/>').join('') + '<Relationship Id="rId' + (sheets.length + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>';
+  // style ids: 1 bold header, 2 percent 0.0%, 3 whole number, 4 one decimal, 5 date
+  files['xl/styles.xml'] = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="3"><numFmt numFmtId="164" formatCode="0.0%"/><numFmt numFmtId="165" formatCode="#,##0.0"/><numFmt numFmtId="166" formatCode="dd-mmm-yyyy"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="6"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="3" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="166" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+  sheets.forEach((sh, i) => { files['xl/worksheets/sheet' + (i + 1) + '.xml'] = sheetXml(sh); });
+  const bin = {}; for (const k in files) bin[k] = fflate.strToU8(files[k]);
+  return fflate.zipSync(bin, {level: 6});
+}
+function saveBytes(name, bytes, type) {
+  const a = h('a', {href: URL.createObjectURL(new Blob([bytes], {type})), download: name}); document.body.append(a); a.click(); a.remove();
+}
+const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const serial = (d) => d + 25569;                       // days since 1970 -> Excel date serial
+const HDR = (t) => ({v: t, s: 1});
+function downloadXlsx(name, sheets) { saveBytes(name, xlsxBytes(sheets), XLSX_TYPE); }
+function dlButton(label, build, disabledWhy) {
+  return h('button', {type: 'button', class: 'btn on', disabled: !!disabledWhy, title: disabledWhy || '', onclick: build}, label);
+}
+const settingsSheet = (extraRows) => ({name: 'Settings', cols: [34, 60], rows: [[HDR('As-of date (latest shipment date)'), {v: serial(MAXDATE), s: 5}], [HDR('Exported'), new Date().toISOString().slice(0, 16).replace('T', ' ')], [HDR('Filters applied'), filterSummary()]].concat(extraRows || [])});
+function filterSummary() {
+  const bits = []; for (const k in S.sel) { const set = S.sel[k]; if (set && set.size) bits.push(COLS[k].l + ': ' + [...set].slice(0, 6).map((j) => COLS[k].d[j]).join(', ') + (set.size > 6 ? ' +' + (set.size - 6) : '')); }
+  return bits.length ? bits.join(' | ') : 'None';
+}
+
+// ================================================================ Compare periods
+S.cmp = {unit: 'month', against: 'prev', basis: 'todate', anchor: null, custom: false, A: {from: null, to: null}, B: {from: null, to: null}, dim: 'customer', show: 'all', tsort: {sort: 'adelta', dir: -1}};
+S.demo = false;
+const UNITS = [['week', 'Week'], ['month', 'Month'], ['quarter', 'Quarter'], ['year', 'Year (follows the year setting above)']];
+const ymd = (d) => { const x = dDate(d); return [x.getUTCFullYear(), x.getUTCMonth(), x.getUTCDate()]; };
+const dayOf = (y, m, dd) => Math.round(Date.UTC(y, m, dd) / DMS);
+const addMonths = (startDay, n) => { const [y, m] = ymd(startDay); return dayOf(y, m + n, 1); };
+function pStart(unit, d) {
+  const [y, m] = ymd(d), fm = FYB() ? S.def.fyStart - 1 : 0, rel = (m - fm + 12) % 12;      // months since the (financial) year began
+  if (unit === 'week') return wkStart(d);
+  if (unit === 'month') return dayOf(y, m, 1);
+  if (unit === 'quarter') return dayOf(y, m - (rel % 3), 1);
+  return dayOf(m >= fm ? y : y - 1, fm, 1);
+}
+const monthsIn = (unit) => (unit === 'month' ? 1 : unit === 'quarter' ? 3 : 12);
+const pNext = (unit, start) => (unit === 'week' ? start + 7 : addMonths(start, monthsIn(unit)));
+const pPrev = (unit, start) => (unit === 'week' ? start - 7 : addMonths(start, -monthsIn(unit)));
+const nDays = (p) => p.to - p.from + 1;
+const fRange = (p) => (p.from === p.to ? fDay(p.from) : fDay(p.from) + ' – ' + fDay(p.to));
+function unitName(u) { return u === 'year' ? (FYB() ? 'financial year' : 'year') : {week: 'week', month: 'month', quarter: 'quarter'}[u]; }
+function pName(unit, start) {
+  const [y, m] = ymd(start), fm = FYB() ? S.def.fyStart - 1 : 0;
+  if (unit === 'week') return 'Week of ' + fDay(start);
+  if (unit === 'month') return d3.utcFormat('%b %Y')(dDate(start));
+  const nm = yearName(m >= fm ? y : y - 1); return unit === 'year' ? nm : 'Q' + (Math.floor(((m - fm + 12) % 12) / 3) + 1) + ' ' + nm;
+}
+function periods() {
+  const c = S.cmp;
+  if (c.custom) {
+    if ([c.A.from, c.A.to, c.B.from, c.B.to].some((x) => x == null)) return {err: 'Pick both date ranges.'};
+    const fix = (p) => ({from: Math.min(p.from, p.to), to: Math.max(p.from, p.to)});
+    const cur = fix(c.A), prev = fix(c.B); return {cur, prev, unit: nDays(cur) <= 8 ? 'week' : nDays(cur) <= 62 ? 'month' : 'year', custom: true, title: 'Custom ranges'};
+  }
+  const unit = c.unit, anchor = c.anchor == null ? asOfDay() : c.anchor, cs = pStart(unit, anchor), ceFull = pNext(unit, cs) - 1;
+  const cur = {from: cs, to: c.basis === 'todate' ? anchor : ceFull}, elapsed = anchor - cs;
+  const ps = c.against === 'yoy' ? (unit === 'week' ? pStart('week', cs - 364) : addMonths(cs, -12)) : pPrev(unit, cs), peFull = pNext(unit, ps) - 1;
+  let pe = c.basis === 'todate' ? ps + elapsed : peFull, clamped = false; if (pe > peFull) { pe = peFull; clamped = true; }
+  const t = pName(unit, cs) + (c.basis === 'todate' ? ' so far' : '') + ' against ' + pName(unit, ps) + (c.basis === 'todate' ? ' (same number of days)' : '');
+  return {cur, prev: {from: ps, to: pe}, unit, clamped, title: t, curName: pName(unit, cs), prevName: pName(unit, ps)};
+}
+const alignStart = (unit, p) => (unit === 'week' || unit === 'month' ? p.from : addMonths(pStart('month', p.from), 0));
+function bucketIdx(unit, start, d) { if (unit === 'week') return d - start; if (unit === 'month') return Math.floor((d - start) / 7); const a = ymd(start), b = ymd(d); return (b[0] * 12 + b[1]) - (a[0] * 12 + a[1]); }
+function bucketInfo(pr) {
+  const unit = pr.unit, sc = alignStart(unit, pr.cur), sp = alignStart(unit, pr.prev);
+  const n = unit === 'week' ? 7 : unit === 'month' ? Math.ceil(Math.max(nDays(pr.cur), nDays(pr.prev)) / 7) : Math.max(1, Math.min(60, Math.max(bucketIdx(unit, sc, pr.cur.to), bucketIdx(unit, sp, pr.prev.to)) + 1));
+  const s0 = sc, labels = [];
+  for (let k = 0; k < n; k++) labels.push(unit === 'week' ? d3.utcFormat('%a')(dDate(s0 + k)) : unit === 'month' ? (1 + 7 * k) + '–' + (7 * k + 7) : d3.utcFormat('%b')(dDate(addMonths(s0, k))));
+  return {n, labels, sc, sp};
+}
+
+const cmpDims = () => ['customer', 'shipper', 'consignee', 'branch', 'carrier', 'lane', 'origin', 'destination', 'job_owner', 'nomination', 'consol', 'cargo', 'status', 'report', 'company'].concat(EXTRA);
+function scanDim(m, key, pr, val) {
+  const c = COLS[key].c, sz = COLS[key].d.length, curV = new Float64Array(sz), prevV = new Float64Array(sz), curC = new Float64Array(sz), prevC = new Float64Array(sz), NN = S.demo ? NA : N;
+  const cf = pr.cur.from, ct = pr.cur.to, pf = pr.prev.from, pt = pr.prev.to;
+  for (let i = 0; i < NN; i++) { if (!m[i]) continue; const d = date[i], inC = d >= cf && d <= ct, inP = d >= pf && d <= pt; if (!inC && !inP) continue; const j = c[i], v = val(i); if (inC) { curV[j] += v; curC[j]++; } if (inP) { prevV[j] += v; prevC[j]++; } }
+  return {curV, prevV, curC, prevC, sz};
+}
+function scanTotals(m, pr) {
+  const t = {nC: 0, nP: 0, airC: 0, airP: 0, seaC: 0, seaP: 0, hasAir: false, hasSea: false}, NN = S.demo ? NA : N;
+  for (let i = 0; i < NN; i++) { if (!m[i]) continue; const d = date[i], inC = d >= pr.cur.from && d <= pr.cur.to, inP = d >= pr.prev.from && d <= pr.prev.to; if (!inC && !inP) continue;
+    if (mode[i]) t.hasSea = true; else t.hasAir = true;
+    if (inC) { t.nC++; if (mode[i]) t.seaC += teus[i]; else t.airC += chg[i]; } if (inP) { t.nP++; if (mode[i]) t.seaP += teus[i]; else t.airP += chg[i]; } }
+  return t;
+}
+const sgn = (x) => (x > 0 ? '+' : x < 0 ? '−' : '');
+const pctOf = (cur, prev) => (prev > 0 ? (cur - prev) / prev : null);
+const fPctS = (p) => (p == null ? 'new' : sgn(p) + fP1(Math.abs(p)));
+function statusOf(cur, prev) { if (prev === 0 && cur > 0) return 'New'; if (cur === 0 && prev > 0) return 'Lost'; const p = pctOf(cur, prev); if (p == null) return 'Flat'; return Math.abs(p) * 100 <= S.def.flatPct ? 'Flat' : p > 0 ? 'Up' : 'Down'; }
+
+function cmpChartLine(el, tl, pr, info) {
+  el.replaceChildren(); const W = Math.max(280, Math.round(($('page').clientWidth || 900) / (window.innerWidth > 900 ? 2 : 1) - 50)), H = 250, mt = 16, mb = 28;
+  const L = tl.L, ymax = Math.max(d3.max(tl.cur.slice(0, tl.curN)) || 0, d3.max(tl.prev.slice(0, tl.prevN)) || 0, 1);
+  const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', '0 0 ' + W + ' ' + H).attr('role', 'img').attr('aria-label', 'Cumulative current period against previous period');
+  const y = d3.scaleLinear([0, ymax], [H - mb, mt]).nice(4), yf = y.domain()[1] >= 10 ? d3.format(',.0f') : d3.format(',.1f'), ticks = y.ticks(4);
+  const probe = svg.append('text').attr('class', 'tick').text(yf(d3.max(ticks))); const ml = Math.ceil(probe.node().getComputedTextLength()) + 12; probe.remove();
+  const x = d3.scaleLinear([0, Math.max(1, L - 1)], [ml, W - 10]);
+  ticks.forEach((t) => { svg.append('line').attr('x1', ml).attr('x2', W - 10).attr('y1', y(t)).attr('y2', y(t)).style('stroke', 'var(--grid)'); svg.append('text').attr('class', 'tick').attr('x', ml - 6).attr('y', y(t)).attr('text-anchor', 'end').attr('dominant-baseline', 'middle').text(yf(t)); });
+  const line = d3.line().x((d, i) => x(i)).y((d) => y(d));
+  svg.append('path').attr('d', line(Array.from(tl.prev.slice(0, tl.prevN)))).attr('fill', 'none').attr('stroke', '#a39f95').attr('stroke-width', 2).attr('stroke-dasharray', '5 3');
+  svg.append('path').attr('d', line(Array.from(tl.cur.slice(0, tl.curN)))).attr('fill', 'none').attr('stroke', '#4c78a8').attr('stroke-width', 2.5);
+  const tickIdx = []; if (pr.unit === 'week') { for (let k = 0; k < Math.min(7, L); k++) tickIdx.push(k); } else if (pr.unit === 'month') { for (let k = 0; k < L; k += Math.max(1, Math.ceil(L / 8))) tickIdx.push(k); } else { for (let k = 0; ; k++) { const off = addMonths(pStart('month', pr.cur.from), k) - pr.cur.from; if (off >= L) break; if (off >= 0) tickIdx.push(off); } }
+  const stepT = Math.max(1, Math.ceil(tickIdx.length / 8));
+  tickIdx.forEach((k, n) => { if (n % stepT === 0) svg.append('text').attr('class', 'tick').attr('x', x(k)).attr('y', H - 8).attr('text-anchor', 'middle').text(pr.unit === 'week' ? d3.utcFormat('%a')(dDate(pr.cur.from + k)) : pr.unit === 'month' ? String(ymd(pr.cur.from + k)[2]) : d3.utcFormat('%b')(dDate(pr.cur.from + k))); });
+  const curEnd = tl.cur[tl.curN - 1] || 0, prevEnd = tl.prev[tl.prevN - 1] || 0;
+  svg.append('circle').attr('cx', x(tl.curN - 1)).attr('cy', y(curEnd)).attr('r', 4).attr('fill', '#4c78a8');
+  svg.append('circle').attr('cx', x(tl.prevN - 1)).attr('cy', y(prevEnd)).attr('r', 4).attr('fill', '#a39f95');
+  const tip = h('div', {class: 'tip', hidden: true}); el.append(tip);
+  svg.append('rect').attr('x', ml).attr('y', mt).attr('width', W - ml - 10).attr('height', H - mt - mb).attr('fill', 'transparent')
+    .on('mousemove', (ev) => { const b = el.getBoundingClientRect(), k = Math.max(0, Math.min(L - 1, Math.round(x.invert((ev.clientX - b.left) * W / b.width)))), cv = tl.cur[Math.min(k, tl.curN - 1)], pv = tl.prev[Math.min(k, tl.prevN - 1)];
+      tip.replaceChildren(h('div', {class: 'tip-h'}, 'Day ' + (k + 1) + ' of the period'), h('div', null, h('i', {class: 'sw', style: 'background:#4c78a8'}), 'Current: ' + info.f(cv)), h('div', null, h('i', {class: 'sw', style: 'background:#a39f95'}), 'Previous: ' + info.f(pv)), h('div', null, 'Change: ' + sgn(cv - pv) + info.f(Math.abs(cv - pv)) + ' (' + fPctS(pctOf(cv, pv)) + ')')); tip.hidden = false;
+      const tw = tip.offsetWidth; let l = ev.clientX - b.left + 12; if (l + tw > b.width) l = ev.clientX - b.left - tw - 12; tip.style.left = Math.max(0, l) + 'px'; tip.style.top = Math.max(0, ev.clientY - b.top - 70) + 'px'; })
+    .on('mouseleave', () => { tip.hidden = true; });
+  el.append(h('div', {class: 'legend'}, h('span', {class: 'lg static'}, h('i', {class: 'sw', style: 'background:#4c78a8'}), 'Current ' + fRange(pr.cur)), h('span', {class: 'lg static'}, h('i', {class: 'sw', style: 'background:#a39f95'}), 'Previous ' + fRange(pr.prev))));
+}
+function cmpChartBars(el, bk, info) {
+  el.replaceChildren(); const W = Math.max(280, Math.round(($('page').clientWidth || 900) / (window.innerWidth > 900 ? 2 : 1) - 50)), H = 250, mt = 22, mb = 28, n = bk.n;
+  const ymax = Math.max(1, d3.max(bk.cur) || 0, d3.max(bk.prev) || 0), y = d3.scaleLinear([0, ymax], [H - mb, mt]).nice(4), yf = y.domain()[1] >= 10 ? d3.format(',.0f') : d3.format(',.1f'), ticks = y.ticks(4);
+  const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', '0 0 ' + W + ' ' + H).attr('role', 'img').attr('aria-label', 'Current against previous by period');
+  const probe = svg.append('text').attr('class', 'tick').text(yf(d3.max(ticks))); const ml = Math.ceil(probe.node().getComputedTextLength()) + 12; probe.remove();
+  const x = d3.scaleBand(d3.range(n), [ml, W - 8]).padding(0.2), bw = x.bandwidth() / 2;
+  ticks.forEach((t) => { svg.append('line').attr('x1', ml).attr('x2', W - 8).attr('y1', y(t)).attr('y2', y(t)).style('stroke', 'var(--grid)'); svg.append('text').attr('class', 'tick').attr('x', ml - 6).attr('y', y(t)).attr('text-anchor', 'end').attr('dominant-baseline', 'middle').text(yf(t)); });
+  const tip = h('div', {class: 'tip', hidden: true}); el.append(tip);
+  for (let k = 0; k < n; k++) {
+    svg.append('rect').attr('x', x(k)).attr('y', y(bk.prev[k])).attr('width', bw).attr('height', Math.max(0, H - mb - y(bk.prev[k]))).attr('fill', '#a39f95').attr('rx', 2);
+    svg.append('rect').attr('x', x(k) + bw).attr('y', y(bk.cur[k])).attr('width', bw).attr('height', Math.max(0, H - mb - y(bk.cur[k]))).attr('fill', '#4c78a8').attr('rx', 2);
+    svg.append('text').attr('class', 'tick').attr('x', x(k) + x.bandwidth() / 2).attr('y', H - 8).attr('text-anchor', 'middle').text(bk.labels[k]);
+    const p = pctOf(bk.cur[k], bk.prev[k]); if (n <= 12 && (bk.cur[k] || bk.prev[k])) svg.append('text').attr('class', 'lbl').attr('x', x(k) + x.bandwidth() / 2).attr('y', y(Math.max(bk.cur[k], bk.prev[k])) - 5).attr('text-anchor', 'middle').style('fill', p == null ? 'var(--muted)' : p >= 0 ? 'var(--ok)' : 'var(--bad)').text(p == null ? 'new' : (p >= 0 ? '+' : '−') + d3.format('.0%')(Math.abs(p)));
+    svg.append('rect').attr('x', x(k)).attr('y', mt).attr('width', x.bandwidth()).attr('height', H - mt - mb).attr('fill', 'transparent')
+      .on('mousemove', (ev) => { const b = el.getBoundingClientRect(); tip.replaceChildren(h('div', {class: 'tip-h'}, bk.labels[k]), h('div', null, h('i', {class: 'sw', style: 'background:#4c78a8'}), 'Current: ' + info.f(bk.cur[k])), h('div', null, h('i', {class: 'sw', style: 'background:#a39f95'}), 'Previous: ' + info.f(bk.prev[k])), h('div', null, 'Change: ' + sgn(bk.cur[k] - bk.prev[k]) + info.f(Math.abs(bk.cur[k] - bk.prev[k])) + ' (' + fPctS(pctOf(bk.cur[k], bk.prev[k])) + ')')); tip.hidden = false;
+        const tw = tip.offsetWidth; let l = ev.clientX - b.left + 12; if (l + tw > b.width) l = ev.clientX - b.left - tw - 12; tip.style.left = Math.max(0, l) + 'px'; tip.style.top = Math.max(0, ev.clientY - b.top - 70) + 'px'; })
+      .on('mouseleave', () => { tip.hidden = true; });
+  }
+  el.append(h('div', {class: 'legend'}, h('span', {class: 'lg static'}, h('i', {class: 'sw', style: 'background:#4c78a8'}), 'Current'), h('span', {class: 'lg static'}, h('i', {class: 'sw', style: 'background:#a39f95'}), 'Previous')));
+}
+function deltaRows(items, onClick, info) {
+  if (!items.length) return h('p', {class: 'empty'}, 'Nothing here for these periods and filters.');
+  const mx = Math.max(...items.map((d) => Math.abs(d.delta)), 1e-9);
+  return h('div', {class: 'rank'}, items.map((d) => h('button', {type: 'button', class: 'row' + (d.sel ? ' on' : ''), onclick: () => onClick(d)}, h('span', {class: 'lab', title: d.label}, d.label),
+    h('span', {class: 'track'}, h('span', {class: 'fill', style: 'width:' + (Math.abs(d.delta) / mx * 100) + '%;background:var(--' + (d.delta >= 0 ? 'ok' : 'bad') + ')'})),
+    h('span', {class: 'val'}, sgn(d.delta) + info.f(Math.abs(d.delta)) + (d.prev > 0 ? ' (' + fPctS(pctOf(d.cur, d.prev)) + ')' : ' (new)')))));
+}
+function pageCompare() {
+  const c = S.cmp, pr = periods(), root = h('div');
+  const controls = h('div', {class: 'card', style: 'margin-bottom:.9rem'});
+  const sel = (opts, val, on) => { const e = h('select', null, opts.map((o) => h('option', {value: o[0], selected: String(o[0]) === String(val)}, o[1]))); e.value = String(val); e.addEventListener('change', () => on(e.value)); return e; };
+  const dateIn = (val, on) => { const e = h('input', {type: 'date', value: val == null ? '' : fIso(dDate(val)), min: '2000-01-01', max: '2099-12-31'}); e.addEventListener('change', () => { if (e.value) { on(isoD(e.value)); renderAll(); } }); return e; };
+  const preset = (label, f) => h('button', {type: 'button', class: 'btn', onclick: () => { Object.assign(c, {custom: false}, f); renderAll(); }}, label);
+  const prefill = () => { const keep = c.custom; c.custom = false; const p = periods(); c.custom = keep; if (!p.err) { c.A = Object.assign({}, p.cur); c.B = Object.assign({}, p.prev); } };
+  controls.append(h('h2', {class: 'h'}, 'Compare periods'), h('p', {class: 'note'}, 'Pick what to compare. Everything below follows the filters above (company, report, customer and so on) and ignores the date range.'),
+    h('div', {class: 'frow'}, h('span', {class: 'lbl2'}, 'Quick picks'), preset(FYB() ? 'This financial year vs last' : 'Year vs last year', {unit: 'year', against: 'prev'}), preset('Quarter vs last quarter', {unit: 'quarter', against: 'prev'}), preset('Month vs last month', {unit: 'month', against: 'prev'}), preset('Week vs last week', {unit: 'week', against: 'prev'}), preset('Month vs same month last year', {unit: 'month', against: 'yoy'})),
+    h('div', {class: 'frow'}, h('label', {class: 'f'}, h('span', null, 'Period'), sel(UNITS, c.unit, (v) => { c.unit = v; c.custom = false; renderAll(); })), h('label', {class: 'f'}, h('span', null, 'Against'), sel([['prev', 'The period just before'], ['yoy', 'Same period last year']], c.against, (v) => { c.against = v; c.custom = false; renderAll(); })),
+      h('label', {class: 'f'}, h('span', null, 'Basis'), sel([['todate', 'To date (like for like)'], ['full', 'Full period']], c.basis, (v) => { c.basis = v; renderAll(); })), h('label', {class: 'f'}, h('span', null, 'As at'), dateIn(c.anchor == null ? asOfDay() : c.anchor, (v) => { c.anchor = v; c.custom = false; })),
+      h('button', {type: 'button', class: 'btn', onclick: () => { c.anchor = null; renderAll(); }}, 'Reset to as-of date'), h('label', {class: 'f'}, h('input', {type: 'checkbox', checked: c.custom, onchange: (e) => { c.custom = e.target.checked; if (c.custom) prefill(); renderAll(); }}), 'Custom date ranges')));
+  if (c.custom) controls.append(h('div', {class: 'frow'}, h('span', {class: 'lbl2'}, 'Current'), dateIn(c.A.from, (v) => { c.A.from = v; }), dateIn(c.A.to, (v) => { c.A.to = v; }), h('span', {class: 'lbl2'}, 'compared with'), dateIn(c.B.from, (v) => { c.B.from = v; }), dateIn(c.B.to, (v) => { c.B.to = v; })));
+  controls.append(h('div', {class: 'frow'}, h('label', {class: 'f'}, h('input', {type: 'checkbox', checked: S.demo, onchange: (e) => { S.demo = e.target.checked; renderAll(); }}), 'Show demo history (simulated earlier years, so you can preview year-on-year before the real years are loaded)')));
+  root.append(controls);
+  if (S.demo) root.append(h('div', {class: 'card warnbar'}, h('b', null, 'Demo history is on. '), '2025 and 2024 figures on this page are simulated from 2026 data, so they are not real. Downloads are switched off while this is on.'));
+  if (pr.err) { root.append(h('div', {class: 'card'}, h('p', {class: 'empty'}, pr.err))); return root; }
+
+  const m = mask({dates: 'none', demo: true}), tot = scanTotals(m, pr), mixed = tot.hasAir && tot.hasSea, useVol = S.measure === 'volume' && !mixed;
+  const val = (i) => (useVol ? VOL[i] : 1), unitTxt = useVol ? (tot.hasAir ? 't' : 'TEU') : '';
+  const info = {f: (x) => (useVol ? (tot.hasAir ? f1(x) + ' t' : fInt(Math.round(x)) + ' TEU') : fInt(Math.round(x)))};
+  root.append(h('div', {class: 'card', style: 'margin-bottom:.9rem'}, h('p', {class: 'take', style: 'margin:0 0 .3rem'}, pr.title + '.'),
+    h('p', {class: 'meta', style: 'margin:0'}, 'Current: ' + (pr.curName ? pr.curName + ', ' : '') + fRange(pr.cur) + ' (' + nDays(pr.cur) + ' days)   |   Previous: ' + (pr.prevName ? pr.prevName + ', ' : '') + fRange(pr.prev) + ' (' + nDays(pr.prev) + ' days)' + (nDays(pr.cur) !== nDays(pr.prev) ? '   |   The two periods have a different number of days.' : '') + (pr.clamped ? '   |   The previous period is shorter than the days elapsed in the current one, so it stops at its last day.' : '')),
+    mixed && S.measure === 'volume' ? h('p', {class: 'meta', style: 'margin:.3rem 0 0'}, 'Air and sea are never added together, so the figures below count shipments. Select only air or only sea reports to compare volume.') : null,
+    tot.nP === 0 ? h('p', {class: 'meta', style: 'margin:.4rem 0 0;color:var(--warn)'}, 'There is no data in the comparison period. ' + (c.against === 'yoy' || pr.prev.to < MINDATE ? 'Load the earlier years (admin portal, Upload report), or switch on demo history above to preview this page.' : 'Choose a different period.')) : null));
+
+  // KPI cards
+  const cu = scanDim(m, 'customer', pr, () => 1); let aC = 0, aP = 0, nw = 0, ls = 0;
+  for (let j = 0; j < cu.sz; j++) { const a = cu.curC[j] >= S.def.activeMin && cu.curC[j] > 0, b = cu.prevC[j] >= S.def.activeMin && cu.prevC[j] > 0; if (a) aC++; if (b) aP++; if (a && cu.prevC[j] === 0) nw++; if (b && cu.curC[j] === 0) ls++; }
+  const vk = (label, cur, prev, f, note) => { const d = cur - prev, p = pctOf(cur, prev); return h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, label), h('div', {class: 'kv'}, f(cur)), h('div', {class: 'kn'}, 'Previous ' + f(prev)), h('div', {class: 'delta ' + (d > 0 ? 'ok' : d < 0 ? 'bad' : 'flat')}, sgn(d) + f(Math.abs(d)) + ' (' + fPctS(p) + ')'), note ? h('div', {class: 'kn'}, note) : null); };
+  const kp = [vk('Shipments', tot.nC, tot.nP, fInt)];
+  if (tot.hasAir) kp.push(vk('Air chargeable weight (tonnes)', tot.airC, tot.airP, f1));
+  if (tot.hasSea) kp.push(vk('Sea TEUs', tot.seaC, tot.seaP, (x) => fInt(Math.round(x)), 'FCL shipments only'));
+  kp.push(vk('Active customers', aC, aP, fInt), h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'New customers'), h('div', {class: 'kv'}, fInt(nw)), h('div', {class: 'kn'}, 'Shipped now, not in the previous period')), h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'Lost customers'), h('div', {class: 'kv'}, fInt(ls)), h('div', {class: 'kn'}, 'Shipped before, not now')));
+  root.append(h('div', {class: 'kpis'}, kp));
+
+  // charts
+  const L = Math.max(nDays(pr.cur), nDays(pr.prev)), cum = new Float64Array(L), cumP = new Float64Array(L), bk = bucketInfo(pr), bc = new Float64Array(bk.n), bpv = new Float64Array(bk.n), NN = S.demo ? NA : N;
+  for (let i = 0; i < NN; i++) { if (!m[i]) continue; const d = date[i], v = val(i);
+    if (d >= pr.cur.from && d <= pr.cur.to) { cum[d - pr.cur.from] += v; const b = bucketIdx(pr.unit, bk.sc, d); if (b >= 0 && b < bk.n) bc[b] += v; }
+    if (d >= pr.prev.from && d <= pr.prev.to) { cumP[d - pr.prev.from] += v; const b = bucketIdx(pr.unit, bk.sp, d); if (b >= 0 && b < bk.n) bpv[b] += v; } }
+  for (let k = 1; k < L; k++) { cum[k] += cum[k - 1]; cumP[k] += cumP[k - 1]; }
+  const lineBox = h('div', {class: 'trend'}), barBox = h('div', {class: 'trend'});
+  const mTxt = useVol ? (tot.hasAir ? 'Chargeable weight (tonnes)' : 'TEUs') : 'Shipments';
+  root.append(h('div', {class: 'grid', style: 'margin-bottom:.9rem'}, card('Running total', mTxt + ', adding up day by day from the start of each period. The gap between the lines is the change.', lineBox), card('Period by period', mTxt + ' in each part of the period, with the percentage change above each pair.', barBox)));
+  cmpChartLine(lineBox, {cur: cum, prev: cumP, L, curN: nDays(pr.cur), prevN: nDays(pr.prev)}, pr, info); cmpChartBars(barBox, {n: bk.n, labels: bk.labels, cur: bc, prev: bpv}, info);
+
+  // dimension table
+  const key = cmpDims().includes(c.dim) ? c.dim : 'customer', dm = mask({dates: 'none', demo: true, skip: key}), sc = scanDim(dm, key, pr, val), selSet = S.sel[key] || new Set();
+  let totC = 0, totP = 0; for (let j = 0; j < sc.sz; j++) { totC += sc.curV[j]; totP += sc.prevV[j]; }
+  const all = []; for (let j = 0; j < sc.sz; j++) { const cur = sc.curV[j], prev = sc.prevV[j]; if (cur === 0 && prev === 0 && !selSet.has(j)) continue; const delta = cur - prev; all.push({j, label: COLS[key].d[j], cur, prev, delta, adelta: Math.abs(delta), pct: pctOf(cur, prev), contrib: totP > 0 ? delta / totP : null, status: statusOf(cur, prev), sel: selSet.has(j)}); }
+  const passes = (r) => { if (c.show === 'up' && !(r.delta > 0)) return false; if (c.show === 'down' && !(r.delta < 0)) return false; if (c.show === 'new' && r.status !== 'New') return false; if (c.show === 'lost' && r.status !== 'Lost') return false;
+    if (S.def.varMinBase > 0 && r.prev < S.def.varMinBase) return false; if (S.def.varMinAbs > 0 && r.adelta < S.def.varMinAbs) return false;
+    if (S.def.varMinPct > 0 && r.pct != null && Math.abs(r.pct) * 100 < S.def.varMinPct) return false; return true; };
+  const rowsF = all.filter(passes), onPick = (d) => toggle(key, d.j);
+  const gain = all.filter((r) => r.delta > 0).sort((a, b) => b.delta - a.delta).slice(0, S.def.topN), lose = all.filter((r) => r.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, S.def.topN);
+  root.append(h('div', {class: 'grid', style: 'margin-bottom:.9rem'}, card('Biggest increases by ' + COLS[key].l.toLowerCase(), 'What added most to the total. Click to filter everything.', deltaRows(gain, onPick, info)), card('Biggest decreases by ' + COLS[key].l.toLowerCase(), 'What took most away from the total. Click to filter everything.', deltaRows(lose, onPick, info))));
+
+  const dimSel = sel(cmpDims().map((k) => [k, COLS[k].l]), key, (v) => { c.dim = v; renderAll(); });
+  const showSel = sel([['all', 'All changes'], ['up', 'Increases only'], ['down', 'Decreases only'], ['new', 'New only'], ['lost', 'Lost only']], c.show, (v) => { c.show = v; renderAll(); });
+  const num = (k, label, hint) => { const e = h('input', {type: 'number', min: 0, value: S.def[k], 'aria-label': label}); e.addEventListener('change', () => { const v = Math.max(0, parseFloat(e.value) || 0); S.def[k] = v; saveDefs(); renderDefs(); renderAll(); }); return h('label', {class: 'f', title: hint}, h('span', null, label), e); };
+  const cols = [{k: 'label', t: COLS[key].l}, {k: 'cur', t: 'Current', num: true}, {k: 'prev', t: 'Previous', num: true}, {k: 'delta', t: 'Change', num: true}, {k: 'pct', t: 'Change %', num: true}, {k: 'contrib', t: 'Share of total change', num: true}, {k: 'status', t: 'Trend'}];
+  const thead = h('thead'), tbody = h('tbody'), note = h('p', {class: 'note'});
+  const draw = () => { const ts = c.tsort, f = ts.sort === 'label' || ts.sort === 'status' ? (a, b) => String(a[ts.sort]).localeCompare(String(b[ts.sort])) : (a, b) => (a[ts.sort] == null ? -1e18 : a[ts.sort]) - (b[ts.sort] == null ? -1e18 : b[ts.sort]);
+    const rows = rowsF.slice().sort((a, b) => f(a, b) * ts.dir); thead.replaceChildren(sortHead(cols, ts, draw)); const shown = rows.slice(0, S.def.tableRows);
+    tbody.replaceChildren(...shown.map((r) => h('tr', {class: 'click' + (r.sel ? ' on' : ''), onclick: () => onPick(r)}, h('td', null, r.label), h('td', {class: 'n'}, info.f(r.cur)), h('td', {class: 'n'}, info.f(r.prev)), h('td', {class: 'n ' + (r.delta > 0 ? 'ok' : r.delta < 0 ? 'bad' : '')}, sgn(r.delta) + info.f(r.adelta)),
+      h('td', {class: 'n ' + (r.delta > 0 ? 'ok' : r.delta < 0 ? 'bad' : '')}, r.pct == null ? (r.cur > 0 ? 'new' : '–') : fPctS(r.pct)), h('td', {class: 'n'}, r.contrib == null ? '–' : sgn(r.contrib) + f1(Math.abs(r.contrib) * 100) + ' pts'), h('td', null, h('span', {class: 'pill ' + (r.status === 'Up' || r.status === 'New' ? 'ok' : r.status === 'Down' || r.status === 'Lost' ? 'bad' : '')}, r.status)))));
+    tbody.append(h('tr', {class: 'totrow'}, h('td', null, 'Total of all ' + COLS[key].l.toLowerCase() + ' values'), h('td', {class: 'n'}, info.f(totC)), h('td', {class: 'n'}, info.f(totP)), h('td', {class: 'n'}, sgn(totC - totP) + info.f(Math.abs(totC - totP))), h('td', {class: 'n'}, fPctS(pctOf(totC, totP))), h('td'), h('td')));
+    note.textContent = 'Showing ' + shown.length + ' of ' + fInt(rows.length) + ' rows' + (rows.length < all.length ? ' (' + (all.length - rows.length) + ' hidden by the filters)' : '') + '. Click a header to sort, a row to filter everything. Share of total change = the row’s change divided by the previous total.'; };
+  draw();
+  const why = S.demo ? 'Switched off while demo history is on' : '';
+  const exportXlsx = () => { const rows = rowsF.slice().sort((a, b) => b.adelta - a.adelta), n = rows.length, tr = n + 2;
+    const sheet = {name: 'Variance', freeze: true, filter: true, cols: [38, 14, 14, 14, 12, 18, 10], rows: [[HDR(COLS[key].l), HDR('Current'), HDR('Previous'), HDR('Change'), HDR('Change %'), HDR('Share of total change'), HDR('Trend')]]
+      .concat(rows.map((r, i) => { const x = i + 2; return [r.label, {v: +r.cur.toFixed(3), s: useVol && tot.hasAir ? 4 : 3}, {v: +r.prev.toFixed(3), s: useVol && tot.hasAir ? 4 : 3}, {f: 'B' + x + '-C' + x, s: useVol && tot.hasAir ? 4 : 3}, {f: 'IF(C' + x + '=0,"",D' + x + '/C' + x + ')', s: 2}, {f: 'IF($C$' + tr + '=0,"",D' + x + '/$C$' + tr + ')', s: 2}, {f: 'IF(AND(C' + x + '=0,B' + x + '>0),"New",IF(AND(B' + x + '=0,C' + x + '>0),"Lost",IF(C' + x + '=0,"Flat",IF(ABS(D' + x + '/C' + x + ')<=Settings!$B$7/100,"Flat",IF(D' + x + '>0,"Up","Down")))))'}]; }))};
+    sheet.rows.push([HDR('Total of rows listed'), {f: 'SUM(B2:B' + (n + 1) + ')', s: 3}, {f: 'SUM(C2:C' + (n + 1) + ')', s: 3}, {f: 'B' + tr + '-C' + tr, s: 3}, {f: 'IF(C' + tr + '=0,"",D' + tr + '/C' + tr + ')', s: 2}]);
+    downloadXlsx('variance_' + fIso(dDate(MAXDATE)) + '.xlsx', [sheet, settingsSheet([[HDR('Comparison'), pr.title], [HDR('Current period'), fRange(pr.cur)], [HDR('Previous period'), fRange(pr.prev)], [HDR('Flat when change within (%)'), S.def.flatPct], [HDR('Measure'), mTxt], [HDR('Rows by'), COLS[key].l]])]); };
+  // Settings sheet rows: 1 as-of, 2 exported, 3 filters, 4 comparison, 5 current, 6 previous, 7 flat percent (read by the Trend formula)
+  root.append(card('Variance by ' + COLS[key].l.toLowerCase(), 'Current against previous, in value and in percent.', h('div', null,
+    h('div', {class: 'frow'}, h('label', {class: 'f'}, h('span', null, 'Rows by'), dimSel), h('label', {class: 'f'}, h('span', null, 'Show'), showSel), num('varMinPct', 'Change at least (%)', 'Hide rows whose percentage change is smaller than this. 0 shows all.'), num('varMinAbs', 'Change at least (value)', 'Hide rows whose change in value is smaller than this.'), num('varMinBase', 'Previous at least', 'Hide rows whose previous value is below this, so tiny bases do not give huge percentages.'), dlButton('Download Excel', exportXlsx, why)),
+    note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody))), 'full'));
+  root.append(h('p', {class: 'ng-foot', style: 'font-size:.78rem;color:var(--muted)'}, 'Percent change is the change divided by the previous value. Items with nothing in the previous period are shown as New, and items with nothing now as Lost, instead of an infinite percentage. Like for like (to date) compares the same number of elapsed days in each period.'));
+  return root;
+}
+
+const PAGES = {overview: pageOverview, compare: pageCompare, customers: pageCustomers, lanes: pageLanes, ops: pageOps, ship: pageShip, changes: pageChanges, status: pageStatus};
+
+// ---------------------------------------------------------------- filter bar + menu
+function selLabel(key) { const set = S.sel[key]; if (!set || !set.size) return 'All'; const names = [...set].slice(0, 1).map((j) => COLS[key].d[j]); return names[0] + (set.size > 1 ? ' +' + (set.size - 1) : ''); }
+function renderFilterButtons() {
+  const keys = MAIN.concat(S.extra), box = $('fbtns');
+  box.replaceChildren(...keys.map((k) => { const on = S.sel[k] && S.sel[k].size, b = h('span', {class: 'fb' + (on ? ' on' : '')},
+    h('button', {type: 'button', class: 'fbtn', 'data-key': k, onclick: (e) => openMenu(k, e.currentTarget)}, h('span', {class: 'fl'}, COLS[k].l + ': '), h('b', null, selLabel(k))),
+    S.extra.includes(k) && !on ? h('button', {type: 'button', class: 'fx', 'aria-label': 'Remove ' + COLS[k].l + ' filter', onclick: () => { S.extra = S.extra.filter((x) => x !== k); renderAll(); }}, '×') : null); return b; }),
+    h('button', {type: 'button', class: 'fbtn add', 'data-key': '__add', onclick: (e) => openMenu('__add', e.currentTarget)}, '+ Add filter'));
+  const chips = []; for (const k in S.sel) { const set = S.sel[k]; if (!set || !set.size) continue; const names = [...set].map((j) => COLS[k].d[j]);
+    chips.push(h('button', {type: 'button', class: 'chip', onclick: () => { if (k === 'report') { S.qm.clear(); S.qd.clear(); } delete S.sel[k]; renderAll(); }}, COLS[k].l + ': ' + names.slice(0, 2).join(', ') + (names.length > 2 ? ' +' + (names.length - 2) : '') + '  ×')); }
+  if (S.rel || S.from != null || S.to != null) chips.push(h('button', {type: 'button', class: 'chip', onclick: () => { S.rel = null; S.from = null; S.to = null; renderAll(); }}, 'Dates: ' + (S.rel ? relLabel(S.rel) + ' (' + fDay(R.w.from) + ' – ' + fDay(R.w.to) + ')' : fDay(R.w.from) + ' – ' + fDay(R.w.to)) + '  ×'));
+  if (chips.length) chips.push(h('button', {type: 'button', class: 'btn', id: 'clearall', onclick: () => { S.sel = {}; S.qm.clear(); S.qd.clear(); S.rel = null; S.from = null; S.to = null; renderAll(); }}, 'Clear all'));
+  $('chips').replaceChildren(...chips);
+  $('status').textContent = 'Showing ' + fInt(R.n) + ' of ' + fInt(N) + ' shipments · ' + fDay(R.w.from) + ' to ' + fDay(R.w.to) + ' by shipment date' + (R.mixed ? ' · air and sea are shown separately, never added together' : '');
+}
+function applyQuick() {
+  const modes = S.qm.size ? [...S.qm] : ['air', 'sea'], dirs = S.qd.size ? [...S.qd] : ['exp', 'imp'], set = [];
+  for (let r = 0; r < 4; r++) if (modes.includes(r < 2 ? 'air' : 'sea') && dirs.includes(r % 2 === 0 ? 'exp' : 'imp')) set.push(r);
+  if (set.length === 4) delete S.sel.report; else S.sel.report = new Set(set); renderAll();
+}
+function renderStatic() {
+  const on = (el, v) => el.classList.toggle('on', v);
+  document.querySelectorAll('#qMode button').forEach((b) => on(b, S.qm.has(b.dataset.v)));
+  document.querySelectorAll('#qDir button').forEach((b) => on(b, S.qd.has(b.dataset.v)));
+  const vbtn = document.querySelector('#mSeg button[data-v="volume"]'); vbtn.disabled = R.mixed; vbtn.title = R.mixed ? 'Air and sea are never added together. Select only air or only sea reports to see volume.' : '';
+  document.querySelectorAll('#mSeg button').forEach((b) => on(b, (b.dataset.v === 'volume') === R.useVol));
+  $('cmp').checked = S.compare;
+  { const fm = S.def.fyStart, mn = (k) => d3.utcFormat('%b')(new Date(Date.UTC(2000, k - 1, 1)));
+    document.querySelector('#ybSeg button[data-v="fy"]').textContent = 'Accounting year (' + mn(fm) + '–' + mn(fm === 1 ? 12 : fm - 1) + ')';
+    document.querySelectorAll('#ybSeg button').forEach((b) => on(b, (b.dataset.v === 'fy') === FYB()));
+    document.querySelector('#presets button[data-v="ytd"]').textContent = FYB() ? 'Financial year to date' : 'Year to date';
+    const ys = $('yearSel'), cur = yearOfDay(asOfDay()), opts = [['all', 'All dates'], ['ytd', FYB() ? 'This financial year so far' : 'This year so far'], ['last', FYB() ? 'Last financial year' : 'Last year']];
+    for (let y = cur; y > cur - S.def.historyYears; y--) opts.push(['y:' + y, yearName(y)]);
+    const cv = S.rel && S.rel.kind === 'year' ? 'y:' + S.rel.y : S.rel && S.rel.kind === 'ytd' ? 'ytd' : S.rel && S.rel.kind === 'lastyear' ? 'last' : (!S.rel && S.from == null && S.to == null ? 'all' : '');
+    ys.replaceChildren(...(cv === '' ? [new Option('Custom or relative range', '')] : []), ...opts.map(([v, t]) => new Option(t, v))); ys.value = cv; }
+  if (S.rel && S.rel.kind === 'last') { if (document.activeElement !== $('relN')) $('relN').value = S.rel.n; $('relU').value = S.rel.unit; }
+  if (document.activeElement !== $('dFrom')) $('dFrom').value = fIso(dDate(R.w.from)); if (document.activeElement !== $('dTo')) $('dTo').value = fIso(dDate(R.w.to));
+  document.querySelectorAll('#tabs button[data-p]').forEach((b) => { const a = b.dataset.p === S.page; b.classList.toggle('on', a); b.setAttribute('aria-selected', String(a)); });
+}
+const menuEl = $('menu'), mq = $('mq'), ml = $('ml'), mh = $('mh');
+function openMenu(key, anchor) {
+  if (MENU.key === key && !menuEl.hidden) { closeMenu(); return; }
+  MENU.key = key; MENU.q = ''; mq.value = ''; menuEl.hidden = false; const r = anchor.getBoundingClientRect(), left = Math.min(r.left + window.scrollX, window.innerWidth - 330);
+  menuEl.style.left = Math.max(6, left) + 'px'; menuEl.style.top = (r.bottom + window.scrollY + 4) + 'px'; renderMenu(); mq.focus();
+}
+function closeMenu() { MENU.key = null; menuEl.hidden = true; }
+function renderMenu() {
+  if (!MENU.key) return; const key = MENU.key, needle = MENU.q.trim().toLowerCase(), scroll = ml.scrollTop;
+  document.querySelector('#menu .ma').style.display = key === '__add' ? 'none' : '';
+  if (key === '__add') {
+    mh.textContent = 'Add a filter'; const opts = EXTRA.filter((k) => !S.extra.includes(k) && (!needle || COLS[k].l.toLowerCase().includes(needle)));
+    ml.replaceChildren(...opts.map((k) => h('button', {type: 'button', class: 'mo pick', onclick: () => { S.extra.push(k); closeMenu(); renderAll(); const b = document.querySelector('.fbtn[data-key="' + k + '"]'); if (b) openMenu(k, b); }}, h('span', {class: 'mt'}, COLS[k].l), h('i', null, fInt(COLS[k].d.length) + ' values'))), opts.length ? null : h('p', {class: 'empty'}, 'No more columns match.'));
+    $('mf').textContent = 'Every other column of the ERP report can be added here in the live system.'; return;
+  }
+  mh.textContent = COLS[key].l; const m = mask({skip: key}), c = COLS[key].c, cnt = new Float64Array(COLS[key].d.length); for (let i = 0; i < N; i++) if (m[i]) cnt[c[i]]++;
+  const sel = S.sel[key] || new Set(); let ids = []; for (let j = 0; j < cnt.length; j++) if ((cnt[j] > 0 || sel.has(j)) && (!needle || COLS[key].d[j].toLowerCase().includes(needle))) ids.push(j);
+  ids.sort((a, b) => cnt[b] - cnt[a]); MENU.visible = ids; const shown = ids.slice(0, 300);
+  ml.replaceChildren(...shown.map((j) => h('label', {class: 'mo' + (cnt[j] === 0 ? ' zero' : '')}, h('input', {type: 'checkbox', checked: sel.has(j), onchange: () => toggle(key, j)}), h('span', {class: 'mt', title: COLS[key].d[j]}, COLS[key].d[j]), h('i', null, fInt(cnt[j])),
+    h('button', {type: 'button', class: 'only', onclick: (e) => { e.preventDefault(); e.stopPropagation(); setOnly(key, j); }}, 'Only'))), ids.length ? null : h('p', {class: 'empty'}, 'No matching values.'));
+  $('mf').textContent = fInt(ids.length) + ' values' + (ids.length > 300 ? ' (first 300 shown; type to narrow)' : '') + '. Counts follow the other filters. Select all ticks every value that matches the search.'; ml.scrollTop = scroll;
+}
+function menuAll() { const key = MENU.key; if (!key || key === '__add') return; if (key === 'report') { S.qm.clear(); S.qd.clear(); } const set = S.sel[key] || (S.sel[key] = new Set()); (MENU.visible || []).forEach((j) => set.add(j)); if (!set.size) delete S.sel[key]; renderAll(); }
+function menuClear() { const key = MENU.key; if (!key || key === '__add') return; if (key === 'report') { S.qm.clear(); S.qd.clear(); } delete S.sel[key]; renderAll(); }
+
+// ---------------------------------------------------------------- render loop
+function renderPage() { const p = $('page'); p.replaceChildren(PAGES[S.page]()); }
+function renderAll() { compute(); renderStatic(); renderFilterButtons(); renderPage(); renderMenu(); }
+const DEF_FIELDS = [
+  {k: 'topN', l: 'Top N', h: 'How many items the “top” lists show (customers, branches, lanes, carriers, ports) and what the top-N share uses.', t: 'num', min: 1, max: 200},
+  {k: 'heatN', l: 'Customers in the monthly heatmap', h: 'Rows in the customer-by-month grid.', t: 'num', min: 1, max: 60},
+  {k: 'tableRows', l: 'Rows shown in tables', h: 'Customer, lane and job-owner tables.', t: 'num', min: 5, max: 500},
+  {k: 'wlRows', l: 'Worklist rows shown', h: 'Open shipments listed on the Operations page.', t: 'num', min: 10, max: 3000},
+  {k: 'pageSize', l: 'Shipments per page', h: 'Rows per page on the Shipments page.', t: 'num', min: 10, max: 500},
+  {k: 'oldDays', l: 'Open for more than (days)', h: 'An open shipment older than this counts as overdue.', t: 'num', min: 1, max: 3650},
+  {k: 'buckets', l: 'Age bands (days)', h: 'Upper limit of each band, comma separated. Example: 30,60,90,180.', t: 'text'},
+  {k: 'activeMin', l: 'Active customer means at least (shipments)', h: 'A customer counts as active with this many shipments in the range.', t: 'num', min: 1, max: 1000},
+  {k: 'grain', l: 'Trend grouping', h: 'Automatic picks days or months from the length of the range.', t: 'sel', opts: [['auto', 'Automatic'], ['day', 'Day'], ['week', 'Week'], ['month', 'Month']]},
+  {k: 'autoDays', l: 'Automatic grouping switches to months above (days)', h: 'Only used when grouping is Automatic.', t: 'num', min: 7, max: 3650},
+  {k: 'relEnd', l: 'Relative dates end at', h: 'Last N days, this month, year to date and the Compare page count back from this day.', t: 'sel', opts: [['data', 'The latest data date'], ['today', 'Today']]},
+  {k: 'historyYears', l: 'Years of history (this year plus earlier)', h: 'The window moves by itself each January. In the live system an admin sets how many years are kept.', t: 'num', min: 1, max: 10},
+  {k: 'fyStart', l: 'Accounting year starts in month (1-12)', h: 'Used when the year setting at the top is Accounting year. 4 means April to March, as in India.', t: 'num', min: 1, max: 12},
+  {k: 'weekStart', l: 'Week starts on', h: 'Used by week-on-week comparisons and weekly grouping.', t: 'sel', opts: [[1, 'Monday'], [0, 'Sunday']], num: true},
+  {k: 'flatPct', l: 'Count as flat when change is within (%)', h: 'Compare page: changes this small are labelled flat.', t: 'num', min: 0, max: 100},
+  {k: 'varMinPct', l: 'Show changes of at least (%)', h: 'Compare page filter. 0 shows everything.', t: 'num', min: 0, max: 10000},
+  {k: 'varMinBase', l: 'Ignore items whose previous value is below', h: 'Compare page filter that stops tiny bases giving huge percentages. 0 keeps everything.', t: 'num', min: 0, max: 100000},
+  {k: 'varMinAbs', l: 'Show changes of at least (value)', h: 'Compare page filter on the size of the change itself.', t: 'num', min: 0, max: 100000},
+  {k: 'compare', l: 'Compare with', h: 'The period used for the change figures.', t: 'sel', opts: [['prev', 'The period just before'], ['yoy', 'Same period last year']]},
+];
+function renderDefs() {
+  const box = $('defs'); box.replaceChildren();
+  DEF_FIELDS.forEach((f) => {
+    let inp;
+    if (f.t === 'sel') { inp = h('select', {'aria-label': f.l}, f.opts.map((o) => h('option', {value: o[0], selected: String(S.def[f.k]) === String(o[0])}, o[1]))); inp.value = String(S.def[f.k]); }
+    else inp = h('input', {type: f.t === 'num' ? 'number' : 'text', value: S.def[f.k], 'aria-label': f.l, min: f.min, max: f.max, step: 1});
+    inp.addEventListener('change', () => {
+      let v = inp.value;
+      if (f.t === 'num') { v = parseInt(v, 10); if (isNaN(v)) v = DEFAULTS[f.k]; v = Math.min(f.max, Math.max(f.min, v)); inp.value = v; }
+      else if (f.k === 'buckets') { if (!String(v).split(',').some((x) => parseInt(x, 10) > 0)) v = DEFAULTS.buckets; inp.value = v; }
+      if (f.num) v = parseInt(v, 10); S.def[f.k] = v; saveDefs(); renderAll();
+    });
+    box.append(h('label', {class: 'df'}, h('span', {class: 'dl'}, f.l + (f.t !== 'sel' ? '  (default ' + DEFAULTS[f.k] + ')' : '')), inp, h('small', null, f.h)));
+  });
+  box.append(h('div', {class: 'df'}, h('button', {type: 'button', class: 'btn', id: 'defReset', onclick: () => { S.def = Object.assign({}, DEFAULTS); saveDefs(); renderDefs(); renderAll(); }}, 'Reset all to defaults'), h('small', null, 'Saved in this browser. In the live system each user keeps their own, and an admin sets the company defaults.')));
+}
+function wire() {
+  $('defBtn').addEventListener('click', () => { const open = $('defs').hidden; $('defs').hidden = !open; $('defBtn').setAttribute('aria-expanded', String(open)); });
+  document.querySelectorAll('#qMode button').forEach((b) => b.addEventListener('click', () => { const v = b.dataset.v; if (S.qm.has(v)) S.qm.delete(v); else S.qm.add(v); applyQuick(); }));
+  document.querySelectorAll('#qDir button').forEach((b) => b.addEventListener('click', () => { const v = b.dataset.v; if (S.qd.has(v)) S.qd.delete(v); else S.qd.add(v); applyQuick(); }));
+  document.querySelectorAll('#mSeg button').forEach((b) => b.addEventListener('click', () => { if (b.disabled) return; S.measure = b.dataset.v; renderAll(); }));
+  $('cmp').addEventListener('change', () => { S.compare = $('cmp').checked; renderAll(); });
+  const setDate = (which, el) => { if (!el.value) return; const d = isoD(el.value); if (isNaN(d)) return; S.rel = null; S[which] = d; renderAll(); };
+  $('dFrom').addEventListener('change', () => setDate('from', $('dFrom'))); $('dTo').addEventListener('change', () => setDate('to', $('dTo')));
+  document.querySelectorAll('#presets button').forEach((b) => b.addEventListener('click', () => { const p = b.dataset.v; S.from = null; S.to = null;
+    S.rel = p === '30' ? {kind: 'last', n: 30, unit: 'days'} : p === 'month' ? {kind: 'month'} : p === 'last' ? {kind: 'lastmonth'} : p === 'ytd' ? {kind: 'ytd'} : null; renderAll(); }));
+  document.querySelectorAll('#ybSeg button').forEach((b) => b.addEventListener('click', () => { S.def.yearBasis = b.dataset.v; saveDefs(); renderAll(); }));
+  $('yearSel').addEventListener('change', () => { const v = $('yearSel').value; if (v === '') return; S.from = null; S.to = null;
+    S.rel = v === 'all' ? null : v === 'ytd' ? {kind: 'ytd'} : v === 'last' ? {kind: 'lastyear'} : {kind: 'year', y: parseInt(v.slice(2), 10)}; renderAll(); });
+  const relGo = () => { let n = parseInt($('relN').value, 10); if (isNaN(n) || n < 1) n = 30; n = Math.min(3650, n); $('relN').value = n; S.from = null; S.to = null; S.rel = {kind: 'last', n, unit: $('relU').value}; renderAll(); };
+  $('relGo').addEventListener('click', relGo); $('relN').addEventListener('keydown', (e) => { if (e.key === 'Enter') relGo(); }); $('relU').addEventListener('change', relGo);
+  document.querySelectorAll('#tabs button[data-p]').forEach((b) => b.addEventListener('click', () => { S.page = b.dataset.p; renderAll(); window.scrollTo(0, 0); }));
+  mq.addEventListener('input', () => { MENU.q = mq.value; renderMenu(); });
+  $('mAll').addEventListener('click', menuAll); $('mClear').addEventListener('click', menuClear); $('mClose').addEventListener('click', closeMenu);
+  document.addEventListener('click', (e) => { if (!menuEl.hidden && !menuEl.contains(e.target) && !e.target.closest('.fbtn')) closeMenu(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
+  let t; window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(() => { compute(); renderPage(); }, 150); });
+}
+$('asof').textContent = fDay(MAXDATE); $('nrows').textContent = fInt(N);
+renderDefs(); wire(); renderAll();
+window.NG = {S, DEFAULTS, renderDefs, COLS, D, mask, compute, renderAll, toggle, csvOf, openMenu, menuAll, menuClear, get R() { return R; }, N, MAXDATE, MINDATE};
+})();

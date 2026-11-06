@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in · {{PRODUCT}}</title>
+<style>
+:root{--fg:#1d1c1a;--muted:#6b6963;--bg:#f6f5f1;--panel:#fff;--line:#dcdad3;--accent:#2f5d9b;--bad:#b3261e;--ok:#1b7a4b}
+@media (prefers-color-scheme:dark){:root{--fg:#ecebe6;--muted:#a3a19a;--bg:#1b1a18;--panel:#262522;--line:#3a3935;--accent:#9db7e0;--bad:#f0766b;--ok:#4cc38a}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;color:var(--fg);background:var(--bg);min-height:100vh;display:grid;place-items:center;padding:1rem}
+main{width:100%;max-width:26rem;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:1.5rem}
+h1{font-size:1.25rem;margin:.1rem 0 .2rem}p.sub{color:var(--muted);margin:0 0 1rem;font-size:.92rem}
+.tabs{display:flex;gap:.4rem;margin:0 0 1rem}.tabs button{flex:1;font:inherit;font-size:.9rem;padding:.55rem;border:1px solid var(--line);background:transparent;color:var(--fg);border-radius:8px;cursor:pointer}
+.tabs button[aria-selected=true]{background:var(--accent);color:#fff;border-color:var(--accent)}
+label{display:block;font-size:.85rem;color:var(--muted);margin:.7rem 0 .25rem}input{width:100%;font:inherit;padding:.7rem;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--fg)}
+input:focus,button:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 45%,transparent);outline-offset:1px}
+.go{width:100%;margin-top:1rem;font:inherit;padding:.8rem;border:0;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer;font-weight:600}.go[disabled]{opacity:.6;cursor:wait}
+#msg{min-height:1.4rem;margin-top:.8rem;font-size:.9rem}#msg.bad{color:var(--bad)}#msg.ok{color:var(--ok)}.hide{display:none}.small{font-size:.8rem;color:var(--muted);margin-top:1rem}
+</style></head><body>
+<main>
+  <h1>{{PRODUCT}}</h1><p class="sub">New Globe and Neutral Consolidation</p>
+  <div class="tabs" role="tablist"><button role="tab" id="t1" aria-selected="true">Email link</button><button role="tab" id="t2" aria-selected="false">User ID and password</button></div>
+  <section id="p1">
+    <form id="f1" autocomplete="on"><label for="email">Work email</label><input id="email" type="email" inputmode="email" autocomplete="username" required placeholder="you@company.com">
+      <button class="go" id="send">Send me a sign-in link</button></form>
+    <form id="f1b" class="hide"><label for="code">6-digit code from the email</label><input id="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="123456"><button class="go" id="codego">Sign in with the code</button>
+      <p class="small">You can also just open the link in the email and press Continue. A link or code works once and expires in 15 minutes.</p></form>
+  </section>
+  <section id="p2" class="hide"><form id="f2" autocomplete="on"><label for="login">User ID or email</label><input id="login" autocomplete="username" required><label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password" required><button class="go" id="pwgo">Sign in</button></form></section>
+  <div id="msg" role="status" aria-live="polite"></div>
+</main>
+<script>
+const $=id=>document.getElementById(id), msg=(t,c)=>{$('msg').textContent=t;$('msg').className=c||''};
+function tab(n){for(const i of [1,2]){$('p'+i).classList.toggle('hide',i!==n);$('t'+i).setAttribute('aria-selected',i===n)} msg('')}
+$('t1').onclick=()=>tab(1);$('t2').onclick=()=>tab(2);
+async function post(url,body){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});let j={};try{j=await r.json()}catch(e){}if(!r.ok)throw new Error(j.detail||'Something went wrong. Please try again.');return j}
+$('f1').onsubmit=async e=>{e.preventDefault();$('send').disabled=true;try{const j=await post('/auth/request',{email:$('email').value});msg(j.message,'ok');$('f1b').classList.remove('hide');$('code').focus()}catch(x){msg(x.message,'bad')}$('send').disabled=false};
+$('f1b').onsubmit=async e=>{e.preventDefault();$('codego').disabled=true;try{await post('/auth/code',{email:$('email').value,code:$('code').value});location.href='/'}catch(x){msg(x.message,'bad')}$('codego').disabled=false};
+$('f2').onsubmit=async e=>{e.preventDefault();$('pwgo').disabled=true;try{await post('/auth/login',{login:$('login').value,password:$('pw').value});location.href='/'}catch(x){msg(x.message,'bad')}$('pwgo').disabled=false};
+</script></body></html>
