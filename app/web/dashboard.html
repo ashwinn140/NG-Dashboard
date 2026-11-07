@@ -477,7 +477,7 @@ window.CHART_COLORS = ['#4c78a8', '#f58518', '#54a24b', '#b279a2', '#e45756', '#
 function card(title, note, body, cls) { return h('article', {class: 'card ' + (cls || '')}, h('h2', {class: 'h'}, title), note ? h('p', {class: 'note'}, note) : null, body); }
 function kpi(label, value, delta, note, tone, previousValue) {
   return h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, label), h('div', {class: 'kv' + (tone ? ' ' + tone : '')}, value),
-    delta == null ? null : h('div', {class: 'delta ' + (delta >= 0 ? 'ok' : 'bad')}, fDelta(delta) + ' · Current: ' + value + ' · Previous: ' + (previousValue == null ? 'not available' : previousValue) + ' · ' + cmpLabel()), note ? h('div', {class: 'kn'}, note) : null);
+    delta == null ? null : h('div', {class: 'delta ' + (delta >= 0 ? 'ok' : 'bad')}, fDelta(delta) + (previousValue == null ? ' · ' : ' · Current: ' + value + ' · Previous: ' + previousValue + ' · ') + cmpLabel()), note ? h('div', {class: 'kn'}, note) : null);
 }
 function activeCust(m) { const c = COLS.customer.c, a = new Uint32Array(COLS.customer.d.length); for (let i = 0; i < N; i++) if (m[i]) a[c[i]]++; let n = 0; for (let j = 0; j < a.length; j++) if (a[j] > 0 && a[j] >= S.def.activeMin) n++; return n; }
 function sumWhere(m, f) { let s = 0; for (let i = 0; i < N; i++) if (m[i]) s += f(i); return s; }
