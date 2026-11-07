@@ -409,6 +409,17 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                 "review_count": len(reviews), "reviews": [dict(x) for x in reviews],
                 "missing_coverage": gaps, "note": "Date coverage only; no financial reconciliation performed."}
 
+    @app.get("/api/admin/phase2/source-readiness")
+    def phase2_source_readiness(user: dict = Depends(admin)):
+        """Read-only Phase 2 field availability. Existing imports and reports unchanged."""
+        from .phase2_coverage import report_field_coverage
+        with engine.connect() as c:
+            rows = c.execute(select(imports.c.id, imports.c.company,
+                imports.c.report_type, imports.c.columns).where(
+                imports.c.status == "promoted")).mappings().all()
+        return {"report_fields": report_field_coverage(rows),
+                "note": "Metadata only; validate actual ERP identifiers before enabling customer intelligence."}
+
     @app.get("/api/admin/imports")
     def a_imports(status: str = "", user: dict = Depends(admin)):
         return df_json(P.list_imports(engine, status or None, 300))
