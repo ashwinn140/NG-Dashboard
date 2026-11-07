@@ -420,6 +420,10 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         return {"report_fields": report_field_coverage(rows),
                 "note": "Metadata only; validate actual ERP identifiers before enabling customer intelligence."}
 
+    @app.get("/phase2/opportunities", response_class=HTMLResponse)
+    def phase2_opportunities_page(user: dict = Depends(admin)):
+        return page("opportunities.html")
+
     @app.get("/api/admin/phase2/opportunities")
     def phase2_opportunities(user: dict = Depends(admin)):
         """Read-only customer whitespace candidates from the existing shipment register.
