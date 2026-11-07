@@ -21,7 +21,7 @@ from sqlalchemy import and_, bindparam, delete, insert, select, true, update
 
 from . import config
 from .db import imports, profit_lines
-from .processor import ReportError, _cell, _chunks, _hnorm, _record, _to_dates, sha256_file
+from .processor import ReportError, _cell, _chunks, _hnorm, _record, _to_dates, historical_freeze, sha256_file
 
 _KNOWN = {_hnorm(n): n for n in list(config.PROFIT_REQUIRED) + ["Job Date", "Trans No.", "Date", "Party Ref No.", "Party Ref Date", "Profit (INR)",
                                                               "Profit Margin %", "Trade Lane", "Commodity"]}
@@ -248,6 +248,18 @@ def process_profit(engine, rep: ProfitReport, file_name: str, file_sha: str, rep
                 chg_ids.append(oid)
                 add.append(r)
         gone = [r.id for r in in_jobs if r.key not in new_keys]
+        if config.static_history():
+            ranges = conn.execute(select(imports.c.range_from, imports.c.range_to).where(
+                imports.c.company == c, imports.c.report_type == "JP", imports.c.status == "promoted", imports.c.id != iid)).all()
+            cutoff, frozen = historical_freeze(conn, ranges)
+            protected = {r.id for r in held if r.trans_date and r.trans_date < cutoff}
+            add = [r for r in add if (old.get(r["key"], (None,))[0] not in protected)
+                   and (r["key"] in old or not frozen(r["trans_date"]))]
+            chg_ids = [i for i in chg_ids if i not in protected]
+            gone = [i for i in gone if i not in protected]
+            inplace = [r for r in inplace if r["b_id"] not in protected]
+            n_new = sum(r["key"] not in old for r in add)
+            n_chg = len(chg_ids)
         for ids, why in (() if replacing else ((chg_ids, "changed"), (gone, "not_present"))):
             for ch in _chunks(ids, 500):
                 conn.execute(update(profit_lines).where(profit_lines.c.id.in_(ch)).values(to_import=iid, ended_reason=why))

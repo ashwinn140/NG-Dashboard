@@ -9,6 +9,10 @@ def replace_reports() -> bool:
         raise ValueError("REPORT_STORAGE_MODE must be versioned or replace")
     return mode == "replace"
 
+
+def static_history() -> bool:
+    return os.environ.get("REPORT_STATIC_HISTORY", "0").strip().lower() in ("1", "true", "yes")
+
 # Company name printed in row 1 of each report  ->  short code used in the app.
 COMPANIES = {
     "new globe logistik llp": "NG",

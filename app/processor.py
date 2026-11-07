@@ -27,7 +27,7 @@ import pandas as pd
 from sqlalchemy import and_, bindparam, delete, insert, or_, select, true, update
 
 from . import config
-from .db import admin_log, current_import, imports, shipments
+from .db import admin_log, current_import, imports, shipments, settings
 
 
 class ReportError(Exception):
@@ -318,6 +318,46 @@ def _open_rows(conn, reg: Register):
         shipments.c.company == reg.company, shipments.c.report_type == reg.report_type, shipments.c.to_import.is_(None))).all()
 
 
+def historical_freeze(conn, ranges, today: date | None = None):
+    """Previously loaded past periods are static; missing periods can be seeded.
+
+    Uses the same financial-year start setting as the dashboard. Does not delete
+    or age out historical rows when the FY changes.
+    """
+    month = conn.execute(select(settings.c.value).where(settings.c.key == "fy_start_month")).scalar()
+    month = int(month or 4)
+    today = today or date.today()
+    fy = lambda d: d.year - int(d.month < month)
+    cutoff = date(fy(today), month, 1)
+    covered = [(a, b) for a, b in ranges if a is not None and b is not None]
+    return cutoff, lambda d: d is not None and d < cutoff and any(a <= d <= b for a, b in covered)
+
+
+def _freeze_shipment_history(conn, reg: Register, plan: dict):
+    if not config.static_history():
+        return plan
+    held = _open_rows(conn, reg)
+    incoming_branches = {b.lower() for b in reg.branches} if reg.branches else None
+    ranges = []
+    for previous in conn.execute(select(imports.c.range_from, imports.c.range_to, imports.c.scope_branches).where(
+            imports.c.company == reg.company, imports.c.report_type == reg.report_type, imports.c.status == "promoted")):
+        old_branches = {b.lower() for b in json.loads(previous.scope_branches)} if previous.scope_branches else None
+        if old_branches is None or (incoming_branches is not None and incoming_branches <= old_branches):
+            ranges.append((previous.range_from, previous.range_to))
+    cutoff, frozen = historical_freeze(conn, ranges)
+    protected = {r.id for r in held if r.shipment_date and r.shipment_date < cutoff}
+    plan["to_insert"] = [r for r in plan["to_insert"]
+                         if plan["existing_ids"].get(r["key"]) not in protected
+                         and (r["key"] in plan["existing_ids"] or not frozen(r["shipment_date"]))]
+    plan["changed_ids"] = [i for i in plan["changed_ids"] if i not in protected]
+    plan["ended_ids"] = [i for i in plan["ended_ids"] if i not in protected]
+    plan["inplace"] = [r for r in plan["inplace"] if r["b_id"] not in protected]
+    plan["new"] = sum(r["key"] not in plan["existing_ids"] for r in plan["to_insert"])
+    plan["changed"] = len(plan["changed_ids"])
+    plan["ended"] = len(plan["ended_ids"])
+    return plan
+
+
 def _decide(conn, reg: Register, file_sha: str, report_time: datetime, approve_review: bool, subject: str = ""):
     """Apply rules 1-4. Returns (status, message, current_row, rows, plan)."""
     c, t = reg.company, reg.report_type
@@ -346,7 +386,7 @@ def _decide(conn, reg: Register, file_sha: str, report_time: datetime, approve_r
     rows = standardise(reg)
     if config.replace_reports() and any(not _in_scope(reg, r["shipment_date"], r["branch"]) for r in rows):
         return "failed", "A shipment falls outside the report's dates or branches; existing data was kept", cur, None, None
-    return "ok", "", cur, rows, _plan(conn, reg, rows, cur)
+    return "ok", "", cur, rows, _freeze_shipment_history(conn, reg, _plan(conn, reg, rows, cur))
 
 
 def _record(conn, company, report_type, **values):

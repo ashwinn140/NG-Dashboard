@@ -41,6 +41,23 @@ The approved replacement rule would apply automatically to future valid imports.
 No database log settings, billing changes, volume resize, schema migration or data purge is included.
 The existing 500 MB trial volume may still need more capacity when 2026 data is loaded.
 
+## Static history and the daily financial-year refresh
+
+`REPORT_STATIC_HISTORY=1` protects previously loaded periods before the current financial year.
+The FY boundary uses the existing `fy_start_month` dashboard setting (default April).
+Existing historical rows cannot be updated or removed by a later report; new records within a
+previously covered historical report period are ignored. A missing historical period may still
+be seeded once. This also permits separate calendar-year files to complete an April–March FY.
+The current FY continues to update in place. At the FY rollover, the former current year's
+records become static automatically; nothing is aged out or deleted.
+
+Profit protection uses billing dates. Job-date summary reports do not substitute for charge-wise
+detail and are not loaded into the billing-date finance visuals. Replacement-mode Undo is disabled
+because earlier row versions are not retained; corrections use a replacement report instead.
+
+Two additional integration tests verify static shipment/profit history, calendar-year baselines,
+current-FY updates and protection from unsafe Undo: nine replacement tests in total.
+
 ## Validation
 
 `python -W ignore::DeprecationWarning scripts/test_daily_replacement.py`

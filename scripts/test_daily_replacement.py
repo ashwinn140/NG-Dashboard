@@ -163,6 +163,48 @@ class ReplacementTests(unittest.TestCase):
         self.assertNotEqual(first[0], different[0])
         self.assertEqual(Path(first[0]).read_bytes(), b'example workbook')
 
+    def test_past_financial_years_freeze_but_current_fy_updates(self):
+        with patch.dict(os.environ, REPORT_STATIC_HISTORY='1'):
+            self.load(self.register(2023))
+            self.load(self.register(2024))  # Jan-Mar completes the FY begun in 2023
+            self.load(self.register(2025))
+            self.load(self.register(customers=('Prior FY', 'Current FY')))
+            # Make the second 2026 shipment part of the current Apr-Mar FY.
+            report = self.register(customers=('Prior FY', 'Current FY'))
+            report.df.loc[1, 'Shipment Date'] = pd.Timestamp(2026, 6, 2)
+            self.load(report, approve=True)
+            before = self.rows()
+            for year in (2023, 2024, 2025):
+                outcome = self.load(self.register(year, customers=('Forbidden change', 'B')))
+                self.assertEqual((outcome['new'], outcome['changed'], outcome['ended']), (0, 0, 0))
+            report.df.loc[0, 'Customer'] = 'Forbidden prior FY change'
+            report.df.loc[1, 'Customer'] = 'Updated current FY'
+            outcome = self.load(report, approve=True)
+            self.assertEqual(outcome['changed'], 1)
+            held = self.rows()
+            self.assertEqual(sum(r['shipment_date'].year == 2024 for r in held), 2)
+            self.assertEqual(next(r['customer'] for r in held if r['shipment_date'] == date(2026, 1, 1)), 'Prior FY')
+            self.assertEqual(next(r['customer'] for r in held if r['shipment_date'] == date(2026, 6, 2)), 'Updated current FY')
+            from app.admin_ops import undo_last_import
+            with self.assertRaisesRegex(ValueError, 'unavailable in replacement mode'):
+                undo_last_import(self.engine, outcome['import_id'], 'admin', 'test')
+
+    def test_historical_profit_years_seed_once_and_current_fy_updates(self):
+        with patch.dict(os.environ, REPORT_STATIC_HISTORY='1'):
+            for year in (2023, 2024, 2025, 2026):
+                self.load_profit(self.profit(year))
+            self.assertEqual(len(self.rows(profit_lines)), 12)
+            historic = self.profit(2025)
+            historic.df.loc[0, 'Income (INR)'] = 999.
+            self.assertEqual(self.load_profit(historic)['changed'], 0)
+            current = self.profit()
+            current.df.loc[:, 'Income (INR)'] = 125.
+            result = self.load_profit(current)
+            self.assertEqual(result['changed'], 1)  # only June; January belongs to the previous FY
+            rows = self.rows(profit_lines)
+            self.assertEqual(next(r['income'] for r in rows if r['job_no'] == '2026-JOB-0'), 100.)
+            self.assertEqual(next(r['income'] for r in rows if r['job_no'] == '2026-JOB-2'), 125.)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -38,6 +38,7 @@ def preview_profit(engine, path: str, report_time: datetime) -> dict:
 
 def undo_last_import(engine, import_id: int, by: str, reason: str) -> dict:
     """Takes back the latest load of a report: removes what it added and re-opens what it closed."""
+    if config.replace_reports(): raise ValueError("Undo is unavailable in replacement mode because previous row versions are not kept. Upload a corrected current-period report instead.")
     if not reason.strip(): raise ValueError("Please give a reason.")
     with engine.begin() as conn:
         imp = conn.execute(select(imports).where(imports.c.id == import_id)).first()
