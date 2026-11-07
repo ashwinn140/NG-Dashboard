@@ -29,10 +29,11 @@ class IntelligenceFieldTests(unittest.TestCase):
         self.assertNotIn("opt.demo && S.demo", ui)
         self.assertNotIn("opt.demo && S.pdemo", ui)
 
-    def test_yoy_not_certified_without_report_coverage(self):
+    def test_yoy_uses_actual_imported_baseline(self):
         ui = (ROOT / "app" / "web" / "dashboard.html").read_text()
-        self.assertIn("previous-year source completeness not verified", ui)
-        self.assertIn("S.compare && S.def.compare === 'yoy'", ui)
+        self.assertNotIn("previous-year source completeness not verified", ui)
+        self.assertIn("Current: ' + value + ' · Previous: ' + previousValue", ui)
+        self.assertIn("No percentage (zero or unavailable baseline)", ui)
 
     def test_intelligence_date_and_customer_filters(self):
         ui = (ROOT / "app" / "web" / "intelligence.html").read_text()
