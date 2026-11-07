@@ -53,22 +53,60 @@ th,td{padding:.8rem .85rem}tbody tr:hover{background:color-mix(in srgb,var(--acc
 @media(max-width:700px){header{position:relative}header h1{flex-basis:100%}nav{margin:.75rem .65rem;overflow-x:auto;flex-wrap:nowrap}main{padding:0 .75rem 3rem}.card{padding:1rem}.row{align-items:stretch}.row label{min-width:0;flex:1 1 10rem}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}th,td{padding:.65rem}.btn{min-height:42px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;scroll-behavior:auto!important}}
 
+
+/* Shared application shell, fluid admin layouts and accessible activity indicator */
+:root{--sidebar-width:246px;--header-height:66px}
+body{min-height:100vh}
+.admin-shell{display:grid;grid-template-columns:var(--sidebar-width) minmax(0,1fr);min-height:100vh}
+.admin-sidebar{position:sticky;top:0;height:100vh;overflow:auto;background:var(--panel);border-right:1px solid var(--line);padding:1rem .75rem;z-index:12;transition:width .2s ease}
+.admin-brand{display:flex;align-items:center;gap:.75rem;padding:.5rem .65rem 1.25rem;font-weight:800;letter-spacing:-.025em}
+.admin-brand-mark{width:34px;height:34px;display:grid;place-items:center;border-radius:11px;background:var(--accent);color:#fff;font-size:.9rem;flex-shrink:0}
+.admin-brand-text{white-space:nowrap;overflow:hidden}
+.admin-sidebar nav{display:flex;flex-direction:column;gap:.25rem;overflow:visible;background:none;border:0;padding:0;margin:0;max-width:none}
+.admin-sidebar nav button{text-align:left;width:100%;border:0;background:transparent;min-height:42px;display:flex;align-items:center;gap:.75rem;padding:.65rem .85rem;font-weight:600;white-space:normal}
+.admin-sidebar nav button[aria-selected=true]{background:color-mix(in srgb,var(--accent) 12%,var(--panel));color:var(--accent);border:0}
+.admin-sidebar nav button:hover:not([aria-selected=true]){background:var(--bg)}
+.admin-sidebar nav button::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.45;flex-shrink:0}
+.admin-sidebar nav button[aria-selected=true]::before{opacity:1}
+.admin-main{min-width:0}
+.admin-main header{height:var(--header-height);padding:.75rem clamp(1rem,2vw,2rem);margin:0}
+.admin-main main{max-width:none;width:100%;padding:1rem clamp(1rem,2vw,2rem) 3rem}
+.admin-main main>.card,.admin-main main>div>.card{max-width:100%}
+.admin-main .kpis{grid-template-columns:repeat(auto-fit,minmax(min(100%,185px),1fr))}
+.admin-main .card{box-shadow:0 2px 10px rgba(22,43,73,.035)}
+.admin-main .scroll{max-width:100%;overflow-x:auto;overscroll-behavior-inline:contain}
+.admin-main table{font-variant-numeric:tabular-nums}
+.admin-main table th{position:sticky;top:0;background:var(--panel);z-index:1}
+#sidebarToggle{display:inline-flex;align-items:center;justify-content:center;width:40px;min-width:40px;padding:0}
+body.sidebar-compact{--sidebar-width:76px}
+body.sidebar-compact .admin-brand-text{display:none}
+body.sidebar-compact .admin-sidebar nav button{font-size:0;justify-content:center;padding:.6rem}
+body.sidebar-compact .admin-sidebar nav button::before{width:12px;height:12px}
+#appLoader{position:fixed;top:0;left:0;right:0;height:3px;z-index:100;pointer-events:none;overflow:hidden;opacity:0;transition:opacity .15s}
+#appLoader.active{opacity:1}
+#appLoader::after{content:"";display:block;width:35%;height:100%;background:var(--accent);animation:loadSweep 1s ease-in-out infinite}
+@keyframes loadSweep{from{transform:translateX(-110%)}to{transform:translateX(400%)}}
+.loading-panel{display:flex;gap:.8rem;align-items:center;padding:1.5rem;color:var(--muted)}
+.loading-spinner{width:19px;height:19px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:900px){body{--sidebar-width:0px}.admin-shell{display:block}.admin-sidebar{position:fixed;left:0;top:0;width:min(280px,85vw);transform:translateX(-105%);box-shadow:0 15px 45px rgba(0,0,0,.14);transition:transform .2s ease}.sidebar-open .admin-sidebar{transform:translateX(0)}.sidebar-compact .admin-sidebar nav button{font-size:inherit;justify-content:flex-start}.sidebar-compact .admin-brand-text{display:block}.admin-main header{height:auto;min-height:var(--header-height)}#sidebarBackdrop{display:none;position:fixed;inset:0;background:rgba(7,19,36,.5);z-index:11}.sidebar-open #sidebarBackdrop{display:block}}
+@media(min-width:901px){#sidebarBackdrop{display:none!important}}
+@media(prefers-reduced-motion:reduce){.admin-sidebar,#appLoader{transition:none}#appLoader::after,.loading-spinner{animation:none}}
 </style></head><body>
-<header><h1>{{PRODUCT}} · Administration</h1><span id="who" class="muted"></span><a href="/">Open the dashboard</a><button class="btn" id="out">Sign out</button></header>
-<nav id="nav" role="tablist"></nav><main id="main" aria-live="polite"></main><div id="toast" role="status"></div>
+<div id="appLoader" role="progressbar" aria-label="Loading application data"></div><div id="sidebarBackdrop" aria-hidden="true"></div><div class="admin-shell"><aside class="admin-sidebar" id="sidebar" aria-label="Administration navigation"><div class="admin-brand"><span class="admin-brand-mark">NG</span><span class="admin-brand-text">Performance Hub</span></div><nav id="nav" role="tablist" aria-label="Administration sections"></nav></aside><div class="admin-main"><header><button class="btn" id="sidebarToggle" aria-label="Toggle navigation" aria-expanded="true" aria-controls="sidebar">☰</button><h1>{{PRODUCT}} · Administration</h1><span id="who" class="muted"></span><a href="/">Dashboard</a><button class="btn" id="out">Sign out</button></header><main id="main" aria-live="polite"></main></div></div><div id="toast" role="status"></div>
 <script>
-let CSRF='',ME=null;
+let CSRF='',ME=null;let pendingRequests=0;const setBusy=()=>document.getElementById('appLoader')?.classList.toggle('active',pendingRequests>0);
 const $=s=>document.querySelector(s);
 const h=(t,a,...k)=>{const e=document.createElement(t);for(const x in a||{}){if(x==='class')e.className=a[x];else if(x.startsWith('on'))e.addEventListener(x.slice(2),a[x]);else if(a[x]!==false&&a[x]!=null)e.setAttribute(x,a[x]===true?'':a[x])}for(const c of k.flat()){if(c==null||c===false)continue;e.append(c.nodeType?c:document.createTextNode(String(c)))}return e};
 const toast=(t)=>{const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',4500)};
 async function api(path,opt){opt=opt||{};const o={method:opt.method||'GET',headers:{},credentials:'same-origin'};if(o.method!=='GET')o.headers['X-CSRF-Token']=CSRF;
  if(opt.json!==undefined){o.headers['Content-Type']='application/json';o.body=JSON.stringify(opt.json)}if(opt.form)o.body=opt.form;
- const r=await fetch(path,o);if(r.status===401){location.href='/login';return}let j=null;try{j=await r.json()}catch(e){}if(!r.ok)throw new Error((j&&j.detail)||'Something went wrong ('+r.status+')');return j}
+ pendingRequests++;setBusy();let r;try{r=await fetch(path,o)}finally{pendingRequests--;setBusy()}if(r.status===401){location.href='/login';return}let j=null;try{j=await r.json()}catch(e){}if(!r.ok)throw new Error((j&&j.detail)||'Something went wrong ('+r.status+')');return j}
 const fd=d=>{if(!d)return '';const s=String(d),dt=new Date(/[zZ]$|[+-]\d\d:?\d\d$/.test(s)?s:s+'Z');return isNaN(dt)?s.slice(0,16).replace('T',' '):dt.toLocaleString([],{dateStyle:'medium',timeStyle:'short'})};const pill=(s)=>h('span',{class:'pill '+({promoted:'ok',done:'ok',approved:'ok',ready:'ok',duplicate:'muted',stale:'warn',needs_review:'warn',failed:'bad',rejected:'bad',queued:'warn',processing:'warn',undone:'muted',retried:'muted'}[s]||'')},String(s||'').replace('_',' '));
 const SECTIONS=[['overview','Overview'],['imports','Imports'],['upload','Upload a report'],['history','Previous reports'],['master','Organization master'],['users','Users'],['settings','Settings'],['audit','Activity log']];
 let cur='overview';
-function nav(){const n=$('#nav');n.replaceChildren(...SECTIONS.map(([k,l])=>h('button',{role:'tab','aria-selected':k===cur,onclick:()=>{cur=k;nav();show()}},l)))}
-async function show(){const m=$('#main');m.replaceChildren(h('p',{class:'note'},'Loading…'));try{m.replaceChildren(await VIEW[cur]())}catch(e){m.replaceChildren(h('div',{class:'card'},h('p',{class:'bad'},e.message)))}}
+function nav(){const n=$('#nav');n.replaceChildren(...SECTIONS.map(([k,l])=>h('button',{role:'tab','aria-selected':k===cur,onclick:()=>{cur=k;document.body.classList.remove('sidebar-open');document.getElementById('sidebarToggle')?.setAttribute('aria-expanded',String(!window.matchMedia('(max-width:900px)').matches&&!document.body.classList.contains('sidebar-compact')));nav();show()}},l)))}
+async function show(){const m=$('#main');m.replaceChildren(h('div',{class:'loading-panel',role:'status'},h('span',{class:'loading-spinner','aria-hidden':'true'}),h('span',null,'Loading '+(SECTIONS.find(s=>s[0]===cur)||['','section'])[1]+'…')));try{m.replaceChildren(await VIEW[cur]())}catch(e){m.replaceChildren(h('div',{class:'card'},h('p',{class:'bad'},e.message)))}}
 const table=(cols,rows)=>h('div',{class:'scroll'},h('table',null,h('thead',null,h('tr',null,cols.map(c=>h('th',null,c)))),h('tbody',null,rows.map(r=>h('tr',null,r.map(c=>h('td',null,c)))))));
 const VIEW={
  async overview(){const o=await api('/api/admin/overview');const w=h('div');
@@ -113,5 +151,6 @@ async function uploader(kind,title,blurb){const w=h('div');const files=h('input'
  const status=h('div');const go=async()=>{const fm=new FormData();[...files.files].forEach(f=>fm.append('files',f));fm.append('kind',kind);if(approve.checked){fm.append('approve','1');fm.append('reason',reason.value)}try{const x=await api('/api/admin/upload',{method:'POST',form:fm});toast(x.queued.length+' file(s) queued');poll(x.queued)}catch(e){toast(e.message)}};
  const poll=async(ids)=>{const rows=await api('/api/admin/uploads');const mine=rows.filter(r=>ids.includes(r.id));status.replaceChildren(table(['File','Status','Result'],mine.map(r=>[r.file_name,pill(r.status),h('span',{class:'note'},r.result?(r.result.status+(r.result.message?': '+String(r.result.message).slice(0,140):'')+(r.result.new!=null?' · '+r.result.new+' new, '+r.result.changed+' changed, '+r.result.ended+' gone':'')):'')])));if(mine.some(r=>r.status==='queued'||r.status==='processing'))setTimeout(()=>poll(ids),2000)};
  w.append(h('div',{class:'card',style:'margin-top:.8rem'},h('h2',null,title),h('p',{class:'note'},blurb),drop,h('div',{class:'row'},check),out));return w}
+(()=>{const t=$('#sidebarToggle'),b=$('#sidebarBackdrop');const small=()=>window.matchMedia('(max-width:900px)').matches;const sync=()=>t.setAttribute('aria-expanded',String(small()?document.body.classList.contains('sidebar-open'):!document.body.classList.contains('sidebar-compact')));if(localStorage.getItem('ng-admin-sidebar')==='compact')document.body.classList.add('sidebar-compact');t.onclick=()=>{if(small())document.body.classList.toggle('sidebar-open');else{document.body.classList.toggle('sidebar-compact');localStorage.setItem('ng-admin-sidebar',document.body.classList.contains('sidebar-compact')?'compact':'expanded')}sync()};b.onclick=()=>{document.body.classList.remove('sidebar-open');sync()};document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.body.classList.contains('sidebar-open')){document.body.classList.remove('sidebar-open');sync();t.focus()}});window.addEventListener('resize',sync);sync()})();
 (async()=>{try{ME=await api('/api/me');CSRF=ME.csrf;$('#who').textContent=ME.name;nav();show()}catch(e){document.body.append(h('p',null,e.message))}$('#out').onclick=async()=>{await api('/auth/logout',{method:'POST'});location.href='/login'}})();
 </script></body></html>
