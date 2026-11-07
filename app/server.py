@@ -420,6 +420,10 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         return {"report_fields": report_field_coverage(rows),
                 "note": "Metadata only; validate actual ERP identifiers before enabling customer intelligence."}
 
+    @app.get("/phase2/intelligence", response_class=HTMLResponse)
+    def phase2_intelligence_page(user: dict = Depends(me)):
+        return page("intelligence.html")
+
     @app.get("/phase2/opportunities", response_class=HTMLResponse)
     def phase2_opportunities_page(user: dict = Depends(admin)):
         return page("opportunities.html")
