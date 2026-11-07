@@ -316,7 +316,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             ("ingest", bool(os.environ.get("INGEST_SECRET")), "INGEST_SECRET is set (the Gmail script's password)", "Add INGEST_SECRET under Variables and put the same value in the Gmail script."),
             ("db", engine.dialect.name != "sqlite" or not on_rail, "The database is PostgreSQL", "Add PostgreSQL to the Railway project and set DATABASE_URL to its reference."),
             ("uploads", not store.upload_warning, "Original files are kept on a volume", store.upload_warning or ""),
-            ("smtp", mailer.configured(), "Email sign-in links can be sent", "Add SMTP_HOST, SMTP_USER and SMTP_PASSWORD (a Google App Password) under Variables. Until then people sign in with a user ID and password."),
+            ("smtp", mailer.configured(), "Email sign-in links can be sent", "For Resend, add MAIL_PROVIDER=resend, RESEND_API_KEY and RESEND_FROM_EMAIL under Railway Variables. Use a verified sender domain for other users. Until email is tested, keep password sign-in available."),
             ("pw", not os.environ.get("ADMIN_PASSWORD"), "The first-sign-in password variable has been removed", "Once you can sign in (and email works), delete the ADMIN_PASSWORD variable."),
             ("reports", n_ship > 0, "Reports are loaded", "Open Upload a report (or Previous reports) and load the ERP files."),
             ("master", n_master > 0, "The Organization master is loaded", "Open Organization master and load the export for each company."),
@@ -444,7 +444,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         r = auth.request_link(engine, u.email)
         if not r: raise HTTPException(429, "Too many links requested for this address. Try again in an hour.")
         token, code, ud = r; sent = mailer.send(u.email, f"Your {product} sign-in link", f"Open this link to sign in (works once, {auth.LINK_MINUTES} minutes):\n{public_base(request)}/auth/verify?t={token}\n\nOr use the code {code} on the sign-in page.")
-        return {"sent": sent, "message": "Link sent." if sent else "Email is not set up yet, so nothing was sent. Set the SMTP settings first."}
+        return {"sent": sent, "message": "Link sent." if sent else "Email could not be sent. Check email provider settings and delivery logs; password sign-in is still available."}
 
     @app.get("/api/admin/settings")
     def a_settings(user: dict = Depends(admin)): return ops.get_settings(engine)

@@ -24,7 +24,9 @@ Nothing secret is written into the code. Logins, passwords, email addresses and 
 | `ADMIN_NAME` | that administrator's display name (default "Administrator") | no |
 | `ADMIN_PASSWORD` | the first administrator's first password (10+ characters, letters and a number); delete it once you can sign in | no |
 | `PRODUCT_NAME` | the name on the pages and in emails (default "Performance Dashboard") | no |
-| `SMTP_HOST`, `SMTP_PORT` (587), `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` | the mailbox that sends sign-in links (Gmail with a Google App Password) | for email sign-in |
+| `MAIL_PROVIDER` | `resend` for HTTPS email; default `smtp` for older installations | for provider selection |
+| `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | Resend sending key (entered privately) and sender address; see RESEND_SETUP.md | for Resend email sign-in |
+| `SMTP_HOST`, `SMTP_PORT` (587), `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` | SMTP email transport; on Railway requires Pro or above | for SMTP only |
 | `ALERT_EMAIL` | who is told when a report fails or is held | no |
 | `UPLOAD_DIR` | where original files are kept (default `/data/uploads`, the volume) | no |
 | `BASE_URL` | normally unnecessary: the app uses the address people open. Set it only for a custom domain. | no |

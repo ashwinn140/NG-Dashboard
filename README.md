@@ -1,3 +1,9 @@
+# Railway email update
+
+For Railway Free, Trial and Hobby, use Resend HTTPS instead of the Gmail SMTP
+instructions below. Follow [RESEND_SETUP.md](RESEND_SETUP.md). SMTP requires
+Railway Pro or above. Gmail ERP ingestion is configured separately and is unchanged.
+
 # Performance Dashboard
 Shipments, profit, billing and agent reports for New Globe and Neutral Consolidation in one place. The product name shown on the pages is the `PRODUCT_NAME` setting (default: Performance Dashboard).
 
