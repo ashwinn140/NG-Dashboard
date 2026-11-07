@@ -428,7 +428,7 @@ const $ = (id) => document.getElementById(id);
 // ---------------------------------------------------------------- filtering
 function win() { let from, to; if (S.rel) { const r = resolveRel(S.rel); from = r.from; to = r.to; } else { from = S.from == null ? MINDATE : S.from; to = S.to == null ? MAXDATE : S.to; } const n = Math.max(1, to - from + 1); return S.def.compare === 'yoy' ? {from, to, n, pfrom: from - 365, pto: to - 365} : {from, to, n, pfrom: from - n, pto: from - 1}; }
 function mask(opt) {
-  opt = opt || {}; const skip = new Set([].concat(opt.skip || [])), NN = opt.demo && S.demo ? NA : N, m = new Uint8Array(NA); m.fill(1, 0, NN);
+  opt = opt || {}; const skip = new Set([].concat(opt.skip || [])), NN = N, m = new Uint8Array(NA); m.fill(1, 0, NN);
   for (const k in S.sel) { if (skip.has(k) || !COLS[k].own) continue; const set = S.sel[k]; if (!set || !set.size) continue;
     const L = new Uint8Array(COLS[k].d.length); set.forEach((v) => { L[v] = 1; }); const c = COLS[k].c; for (let i = 0; i < NN; i++) if (!L[c[i]]) m[i] = 0; }
   if (opt.dates !== 'none') { const w = win(), lo = opt.dates === 'prev' ? w.pfrom : w.from, hi = opt.dates === 'prev' ? w.pto : w.to; for (let i = 0; i < NN; i++) if (date[i] < lo || date[i] > hi) m[i] = 0; }
@@ -476,8 +476,10 @@ const CI = {customer: 0, branch: 1, carrier: 3, origin: 2, destination: 4, x_tra
 window.CHART_COLORS = ['#4c78a8', '#f58518', '#54a24b', '#b279a2', '#e45756', '#72b7b2', '#eeca3b', '#9d755d'];
 function card(title, note, body, cls) { return h('article', {class: 'card ' + (cls || '')}, h('h2', {class: 'h'}, title), note ? h('p', {class: 'note'}, note) : null, body); }
 function kpi(label, value, delta, note, tone, previousValue) {
+  const unverifiedYoY = S.def.compare === 'yoy';
+  const comparison = unverifiedYoY ? 'Year-on-year unavailable · previous-year source completeness not verified' + (previousValue != null ? ' · Available previous rows: ' + previousValue : '') : (delta == null ? '' : fDelta(delta) + (previousValue == null ? ' · ' : ' · Current: ' + value + ' · Previous: ' + previousValue + ' · ') + cmpLabel());
   return h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, label), h('div', {class: 'kv' + (tone ? ' ' + tone : '')}, value),
-    delta == null ? null : h('div', {class: 'delta ' + (delta >= 0 ? 'ok' : 'bad')}, fDelta(delta) + (previousValue == null ? ' · ' : ' · Current: ' + value + ' · Previous: ' + previousValue + ' · ') + cmpLabel()), note ? h('div', {class: 'kn'}, note) : null);
+    (unverifiedYoY || delta != null) ? h('div', {class: 'delta' + (!unverifiedYoY && delta >= 0 ? ' ok' : '')}, comparison) : null, note ? h('div', {class: 'kn'}, note) : null);
 }
 function activeCust(m) { const c = COLS.customer.c, a = new Uint32Array(COLS.customer.d.length); for (let i = 0; i < N; i++) if (m[i]) a[c[i]]++; let n = 0; for (let j = 0; j < a.length; j++) if (a[j] > 0 && a[j] >= S.def.activeMin) n++; return n; }
 function sumWhere(m, f) { let s = 0; for (let i = 0; i < N; i++) if (m[i]) s += f(i); return s; }
@@ -800,7 +802,7 @@ function filterSummary() {
 
 // ================================================================ Compare periods
 S.cmp = {unit: 'month', against: 'prev', basis: 'todate', anchor: null, custom: false, A: {from: null, to: null}, B: {from: null, to: null}, dim: 'customer', show: 'all', tsort: {sort: 'adelta', dir: -1}};
-S.demo = false;
+S.demo = false; S.pdemo = false;
 const UNITS = [['week', 'Week'], ['month', 'Month'], ['quarter', 'Quarter'], ['year', 'Year (follows the year setting above)']];
 const ymd = (d) => { const x = dDate(d); return [x.getUTCFullYear(), x.getUTCMonth(), x.getUTCDate()]; };
 const dayOf = (y, m, dd) => Math.round(Date.UTC(y, m, dd) / DMS);
@@ -932,9 +934,7 @@ function pageCompare() {
       h('label', {class: 'f'}, h('span', null, 'Basis'), sel([['todate', 'To date (like for like)'], ['full', 'Full period']], c.basis, (v) => { c.basis = v; renderAll(); })), h('label', {class: 'f'}, h('span', null, 'As at'), dateIn(c.anchor == null ? asOfDay() : c.anchor, (v) => { c.anchor = v; c.custom = false; })),
       h('button', {type: 'button', class: 'btn', onclick: () => { c.anchor = null; renderAll(); }}, 'Reset to as-of date'), h('label', {class: 'f'}, h('input', {type: 'checkbox', checked: c.custom, onchange: (e) => { c.custom = e.target.checked; if (c.custom) prefill(); renderAll(); }}), 'Custom date ranges')));
   if (c.custom) controls.append(h('div', {class: 'frow'}, h('span', {class: 'lbl2'}, 'Current'), dateIn(c.A.from, (v) => { c.A.from = v; }), dateIn(c.A.to, (v) => { c.A.to = v; }), h('span', {class: 'lbl2'}, 'compared with'), dateIn(c.B.from, (v) => { c.B.from = v; }), dateIn(c.B.to, (v) => { c.B.to = v; })));
-  controls.append(h('div', {class: 'frow'}, h('label', {class: 'f'}, h('input', {type: 'checkbox', checked: S.demo, onchange: (e) => { S.demo = e.target.checked; renderAll(); }}), 'Show demo history (simulated earlier years, so you can preview year-on-year before the real years are loaded)')));
   root.append(controls);
-  if (S.demo) root.append(h('div', {class: 'card warnbar'}, h('b', null, 'Demo history is on. '), '2025 and 2024 figures on this page are simulated from 2026 data, so they are not real. Downloads are switched off while this is on.'));
   if (pr.err) { root.append(h('div', {class: 'card'}, h('p', {class: 'empty'}, pr.err))); return root; }
 
   const m = mask({dates: 'none', demo: true}), tot = scanTotals(m, pr), mixed = tot.hasAir && tot.hasSea, useVol = S.measure === 'volume' && !mixed;
@@ -1035,7 +1035,7 @@ function totalsP(m, from, to) {
   return {inc, exp, profit: inc - exp, margin: marginOf(inc, exp), jobs: jobs.size, booked: booked.size, lines, neg};
 }
 function maskP(opt) {
-  opt = opt || {}; const skip = new Set([].concat(opt.skip || [])), NN = opt.demo && S.pdemo ? NPA : NP, m = new Uint8Array(NPA); m.fill(1, 0, NN);
+  opt = opt || {}; const skip = new Set([].concat(opt.skip || [])), NN = NP, m = new Uint8Array(NPA); m.fill(1, 0, NN);
   for (const k in S.sel) { if (skip.has(k)) continue; const set = S.sel[k]; if (!set || !set.size) continue; const L = new Uint8Array(COLS[k].d.length); set.forEach((v) => { L[v] = 1; }); const c = COLS[k].pc; for (let i = 0; i < NN; i++) if (!L[c[i]]) m[i] = 0; }
   if (opt.dates !== 'none') { const w = win(), lo = opt.dates === 'prev' ? w.pfrom : w.from, hi = opt.dates === 'prev' ? w.pto : w.to; for (let i = 0; i < NN; i++) if (pdate[i] < lo || pdate[i] > hi) m[i] = 0; }
   return m;
