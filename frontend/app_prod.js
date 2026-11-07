@@ -396,7 +396,7 @@ function pageStatus() {
       h('li', null, 'Customer, shipper, consignee and carrier spellings are cleaned so variants count together. Port names are matched on the port code.'),
       h('li', null, 'History: each report covers the dates and branches stated in its title rows, and a shipment can only be marked not present inside them, so loading this year never touches earlier years. The plan keeps this year and the two years before it for year-on-year comparison.'),
       h('li', null, 'The comparison period, the top N, the age limit for open shipments, the age bands and the other definitions can all be changed under Definitions; the defaults are shown there.'),
-      h('li', null, 'Profit is not shown yet because the registers carry no profit; it will be added from the profit analysis report.')), 'full'));
+      h('li', null, 'Profit comes from the uploaded charge-wise profit reports. Shipment counts and financial amounts use their respective date bases and the current filters.')), 'full'));
 }
 // ================================================================ Excel (.xlsx) writer: real formulas, no library needed beyond fflate
 function xlsxBytes(sheets) {
@@ -1482,7 +1482,7 @@ function reportingContext() {
   }
   const overlap = Math.min(current.to, previous.to) - Math.max(current.from, previous.from) + 1;
   if (S.compare && overlap > 0) notes.push('The selected comparison ranges overlap by ' + overlap + ' days. Select one calendar or accounting year for an annual comparison.');
-  if (FIN && S.group !== 'ops') {
+  if (FIN && S.group !== 'ops' && S.def.pBasis === 'bill') {
     const selected = S.sel.company;
     for (const meta of D.p.meta || []) {
       const co = meta.co === 'NG' ? 0 : 1;
