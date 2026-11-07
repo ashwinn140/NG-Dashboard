@@ -19,12 +19,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 
 import pandas as pd
-from sqlalchemy import and_, bindparam, delete, insert, or_, select, true, update
+from sqlalchemy import and_, bindparam, delete, func, insert, or_, select, text, true, update
 
 from . import config
 from .db import admin_log, current_import, imports, shipments, settings
@@ -361,6 +362,9 @@ def _freeze_shipment_history(conn, reg: Register, plan: dict):
 def _decide(conn, reg: Register, file_sha: str, report_time: datetime, approve_review: bool, subject: str = ""):
     """Apply rules 1-4. Returns (status, message, current_row, rows, plan)."""
     c, t = reg.company, reg.report_type
+    cutoff = config.history_start()
+    if cutoff and reg.range_to and reg.range_to < cutoff:
+        return "outside_history", f"Report predates the retained dashboard history ({cutoff}); original file retained", None, None, None
     dup = conn.execute(select(imports.c.id).where(imports.c.file_sha256 == file_sha, imports.c.status == "promoted")).first()
     if dup:
         return "duplicate", f"Identical file already loaded as import {dup[0]}", None, None, None
@@ -398,6 +402,9 @@ def process_register(engine, reg: Register, file_name: str, file_sha: str, repor
                      approve_review: bool = False, file_path: str = "", source: str = "email", uploaded_by: str = "",
                      approved_by: str = "", override_reason: str = "", subject: str = "") -> dict:
     """Run the full rule set. Returns {import_id, status, message, new, changed, ended}."""
+    cutoff = config.history_start()
+    if cutoff and reg.range_from and reg.range_from < cutoff and reg.range_to and reg.range_to >= cutoff:
+        reg = replace(reg, df=reg.df[pd.to_datetime(reg.df["Shipment Date"]) >= pd.Timestamp(cutoff)].copy(), range_from=cutoff)
     c, t = reg.company, reg.report_type
     base = dict(report_time=report_time, file_name=file_name, file_sha256=file_sha, source_ref=source_ref, row_count=len(reg.df),
                 range_from=reg.range_from, range_to=reg.range_to, scope_branches=json.dumps(reg.branches) if reg.branches else None,
@@ -615,8 +622,22 @@ def retention_preview(engine, today: date | None = None, years: int = 3, fy_star
     """What would be removed if history were limited to the window: shipment versions dated before its first day."""
     start, _ = history_window(today, years, fy_start_month)
     with engine.connect() as conn:
-        n = conn.execute(select(shipments.c.id).where(shipments.c.shipment_date < start)).all()
-    return dict(window_start=start, rows_before_window=len(n))
+        n = conn.execute(select(func.count()).select_from(shipments).where(shipments.c.shipment_date < start)).scalar()
+    return dict(window_start=start, rows_before_window=n)
+
+
+def _retention_maintenance(engine, configure=False):
+    """Reclaim reusable space without a second copy of the database or weaker durability."""
+    if engine.dialect.name != "postgresql":
+        return
+    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+        if configure and os.environ.get("REPORT_SMALL_DATABASE") == "1":
+            conn.execute(text("ALTER SYSTEM SET min_wal_size = '32MB'"))
+            conn.execute(text("ALTER SYSTEM SET max_wal_size = '64MB'"))
+            conn.execute(text("SELECT pg_reload_conf()"))
+        if not configure:
+            conn.execute(text("VACUUM (ANALYZE) shipments"))
+        conn.execute(text("CHECKPOINT"))
 
 
 def apply_retention(engine, approved_by: str, reason: str, today: date | None = None, years: int = 3, fy_start_month: int = 1) -> dict:
@@ -625,7 +646,18 @@ def apply_retention(engine, approved_by: str, reason: str, today: date | None = 
         return dict(status="error", message="A reason is required")
     from sqlalchemy import delete
     start, _ = history_window(today, years, fy_start_month)
+    _retention_maintenance(engine, configure=True)
+    removed, batches = 0, 0
+    while True:
+        with engine.begin() as conn:
+            ids = conn.execute(select(shipments.c.id).where(shipments.c.shipment_date < start).limit(250)).scalars().all()
+            if not ids:
+                break
+            removed += conn.execute(delete(shipments).where(shipments.c.id.in_(ids))).rowcount
+        batches += 1
+        if batches % 32 == 0:
+            _retention_maintenance(engine)
+    _retention_maintenance(engine)
     with engine.begin() as conn:
-        res = conn.execute(delete(shipments).where(shipments.c.shipment_date < start))
-        conn.execute(insert(admin_log).values(at=datetime.utcnow(), user=approved_by, action="retention", detail=f"Removed {res.rowcount} shipment versions dated before {start}. Years kept: {years}. Year starts in month {fy_start_month}. Reason: {reason}"))
-    return dict(status="done", removed=res.rowcount, window_start=start)
+        conn.execute(insert(admin_log).values(at=datetime.utcnow(), user=approved_by, action="retention", detail=f"Removed {removed} shipment versions dated before {start}. Years kept: {years}. Year starts in month {fy_start_month}. Reason: {reason}"))
+    return dict(status="done", removed=removed, window_start=start)

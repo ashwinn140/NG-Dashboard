@@ -73,3 +73,13 @@ built the dashboard in 5.78 seconds, with 301.2 MiB peak process RSS. This is a 
 not proof of production PostgreSQL performance or a future Railway bill.
 
 Eight existing mailer tests also pass. Live import and dashboard checks remain required after deployment.
+
+## Approved calendar history reduction (7 November 2026)
+
+Retain 1 January 2025 onward: static calendar 2025 plus daily calendar 2026.
+The user approved deletion of pre-2025 dashboard records; source workbooks and Gmail remain intact.
+Set history_years=2 and fy_start_month=1. REPORT_HISTORY_START=2025-01-01 prevents older report replay.
+Retention deletes in batches of 250, vacuums reusable space, and checkpoints PostgreSQL.
+REPORT_SMALL_DATABASE=1 opts into min_wal_size=32MB and max_wal_size=64MB for the 500 MB volume; durability stays enabled.
+IMPORTS_PAUSED=1 pauses the queue during maintenance; set 0 to resume after cleanup.
+11 data integration checks and 8 mailer checks pass. The sample-based year test is unavailable without its original workbook fixture.

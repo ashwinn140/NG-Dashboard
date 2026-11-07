@@ -84,6 +84,8 @@ class Store:
 
     def _worker(self):
         while not self.stop:
+            if os.environ.get("IMPORTS_PAUSED") == "1":
+                self.wake.wait(2); self.wake.clear(); continue
             r = self._next()
             if not r:
                 self.warm()  # build once after a batch, never alongside the import worker
@@ -466,7 +468,10 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
     async def a_ret_apply(request: Request, user: dict = Depends(admin_unsafe)):
         b = await request.json(); s = ops.get_settings(engine)
         if not str(b.get("reason", "")).strip(): raise HTTPException(400, "A reason is required.")
-        res = P.apply_retention(engine, user["email"], str(b["reason"]), date.today(), int(s["history_years"]), int(s["fy_start_month"])); store.bump(); return json.loads(json.dumps(res, default=str))
+        with store.lock:
+            store.full = None; store.full_version = -1; store.cache.clear(); gc.collect()
+            res = P.apply_retention(engine, user["email"], str(b["reason"]), date.today(), int(s["history_years"]), int(s["fy_start_month"])); store.bump()
+        return json.loads(json.dumps(res, default=str))
 
     @app.get("/api/admin/audit")
     def a_audit(user: dict = Depends(admin)):

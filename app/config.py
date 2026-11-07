@@ -1,5 +1,11 @@
 """Settings you may need to change. Everything else reads from here."""
 import os
+from datetime import date
+
+
+def history_start():
+    value = os.environ.get("REPORT_HISTORY_START", "").strip()
+    return date.fromisoformat(value) if value else None
 
 
 def replace_reports() -> bool:

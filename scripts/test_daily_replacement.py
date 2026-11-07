@@ -17,6 +17,23 @@ from app.server import Store, save_file
 
 
 class ReplacementTests(unittest.TestCase):
+    def test_calendar_retention_and_old_report_replay(self):
+        for year in (2023, 2024, 2025, 2026):
+            self.load(self.register(year))
+        preview = P.retention_preview(self.engine, date(2026, 11, 7), 2, 1)
+        self.assertEqual((preview['window_start'], preview['rows_before_window']), (date(2025, 1, 1), 4))
+        result = P.apply_retention(self.engine, 'admin', 'User approved calendar history from 2025', date(2026, 11, 7), 2, 1)
+        self.assertEqual(result['removed'], 4)
+        with patch.dict(os.environ, REPORT_HISTORY_START='2025-01-01'):
+            self.assertEqual(self.load(self.register(2024))['status'], 'outside_history')
+            mixed = self.register(2024)
+            mixed.df.loc[1, 'Shipment Date'] = pd.Timestamp(2025, 2, 1)
+            mixed.range_to = date(2025, 12, 31)
+            self.assertEqual(self.load(mixed, approve=True)['status'], 'promoted')
+            self.assertTrue(all(r['shipment_date'] >= date(2025, 1, 1) for r in self.rows()))
+            old_profit = self.profit(2024)
+            self.assertEqual(self.load_profit(old_profit)['status'], 'outside_history')
+
     def test_streamed_profit_workbook_preserves_lines_and_totals(self):
         from openpyxl import Workbook
         workbook = Workbook(); sheet = workbook.active

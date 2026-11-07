@@ -179,6 +179,9 @@ def process_profit(engine, rep: ProfitReport, file_name: str, file_sha: str, rep
     with engine.begin() as conn:
         def stop(status, msg):
             return dict(import_id=_record(conn, c, "JP", status=status, message=msg, **base), status=status, message=msg)
+        cutoff = config.history_start()
+        if cutoff and rep.range_to and rep.range_to < cutoff:
+            return stop("outside_history", f"Report predates the retained dashboard history ({cutoff}); original file retained")
         dup = conn.execute(select(imports.c.id).where(imports.c.file_sha256 == file_sha, imports.c.status == "promoted")).first()
         if dup:
             return stop("duplicate", f"Identical file already loaded as import {dup[0]}")
