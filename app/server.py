@@ -360,6 +360,55 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         return {"queue": q, "users": nu, "needs_attention": held, "health": P.health(engine, date.today(), datetime.utcnow(), float(s["max_age_hours"])), "coverage": df_json(P.coverage(engine, date.today(), yrs, fy)),
                 "profit_coverage": df_json(J.profit_coverage(engine, date.today(), yrs, fy)), "settings": s, "mail_configured": mailer.configured(), "data_version": store.version, "setup": setup_checks()}
 
+    @app.get("/api/admin/reconciliation")
+    def a_reconciliation(user: dict = Depends(admin)):
+        """Temporary read-only import diagnostics; administrator session required."""
+        from datetime import timedelta
+        from .processor import year_slots
+        s = ops.get_settings(engine)
+        yrs, fy = int(s["history_years"]), int(s["fy_start_month"])
+        today = date.today()
+        slots = year_slots(today, yrs, fy)
+        with engine.connect() as c:
+            pending = c.execute(select(uploads.c.id, uploads.c.file_name, uploads.c.status,
+                uploads.c.received_at, uploads.c.result).where(
+                uploads.c.status.in_(["queued", "processing"])).order_by(uploads.c.id)).mappings().all()
+            reviews = c.execute(select(imports.c.id, imports.c.company, imports.c.report_type,
+                imports.c.file_name, imports.c.status, imports.c.message, imports.c.range_from,
+                imports.c.range_to).where(imports.c.status.in_(["needs_review", "failed"])).order_by(imports.c.id.desc())).mappings().all()
+            accepted = c.execute(select(imports.c.company, imports.c.report_type,
+                imports.c.range_from, imports.c.range_to).where(
+                imports.c.status == "promoted", imports.c.range_from.is_not(None),
+                imports.c.range_to.is_not(None))).all()
+        def missing(ranges, start, end):
+            cursor = start
+            gaps = []
+            for a, b in sorted(ranges):
+                if b < cursor or a > end:
+                    continue
+                if a > cursor:
+                    gaps.append([cursor.isoformat(), (a-timedelta(days=1)).isoformat()])
+                cursor = max(cursor, b+timedelta(days=1))
+                if cursor > end:
+                    break
+            if cursor <= end:
+                gaps.append([cursor.isoformat(), end.isoformat()])
+            return gaps
+        groups = sorted(set((x.company, x.report_type) for x in accepted))
+        gaps = []
+        for company, kind in groups:
+            ranges = [(x.range_from, x.range_to) for x in accepted if x.company == company and x.report_type == kind]
+            for sl in slots:
+                end = min(sl["end"], today)
+                if sl["start"] <= end:
+                    absent = missing(ranges, sl["start"], end)
+                    if absent:
+                        gaps.append(dict(company=company, report=kind, period=sl["label"], missing=absent))
+        return {"generated_at": datetime.utcnow().isoformat(), "pending_count": len(pending),
+                "pending": [dict(x) for x in pending],
+                "review_count": len(reviews), "reviews": [dict(x) for x in reviews],
+                "missing_coverage": gaps, "note": "Date coverage only; no financial reconciliation performed."}
+
     @app.get("/api/admin/imports")
     def a_imports(status: str = "", user: dict = Depends(admin)):
         return df_json(P.list_imports(engine, status or None, 300))
