@@ -105,6 +105,28 @@ footer{margin-top:1.2rem;font-size:.78rem;color:var(--muted)}
   .tbl td:first-child,.tbl th:first-child{position:sticky;left:0;background:var(--panel);z-index:1}
 }
 @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+
+/* Visual refinement only; no dashboard filters, charts or interactions removed */
+:root{--fg:#172338;--muted:#63748b;--bg:#f3f6fb;--panel:#fff;--line:#e2e9f2;--grid:#edf1f7;--axis:#a9b6c8;--pop:#fff;--sel:#e9f0ff;--accent:#2755c7;--r:13px;--sans:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+@media(prefers-color-scheme:dark){:root{--fg:#edf3ff;--muted:#a3b3cc;--bg:#101827;--panel:#19253a;--line:#30415a;--grid:#26354a;--axis:#8293ab;--pop:#19253a;--sel:#263e68;--accent:#85a8ff}}
+html,body{line-height:1.55;letter-spacing:-.008em}
+#app{max-width:1520px;padding:clamp(.85rem,2.2vw,2rem)}
+h1{font-family:var(--sans);font-weight:780;letter-spacing:-.045em;font-size:clamp(1.55rem,2.5vw,2.25rem)}
+header.top{align-items:center;margin-bottom:1.35rem}
+.sub{font-size:.87rem}
+.card{border-radius:17px;box-shadow:0 3px 16px #12274409;padding:clamp(1rem,1.7vw,1.4rem)}
+.tabs{padding:.35rem;border:1px solid var(--line);background:var(--panel);border-radius:14px;gap:.25rem;margin:.8rem 0 1.2rem}
+.tabs button{border:0;border-radius:10px;font-weight:650;color:var(--muted);padding:.6rem .9rem;transition:background .15s,color .15s}
+.tabs button:hover:not(:disabled){background:color-mix(in srgb,var(--accent) 8%,var(--panel));color:var(--fg)}
+.tabs button.on{background:color-mix(in srgb,var(--accent) 13%,var(--panel));color:var(--accent);border-color:transparent}
+.btn{border-radius:9px;min-height:34px;font-weight:600;transition:border-color .15s,background .15s}
+.btn:hover:not(:disabled){border-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,var(--panel))}
+.ribbon{font-weight:650;padding:.35rem .8rem}
+#filters{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:clamp(.8rem,1.5vw,1.15rem);box-shadow:0 3px 14px #12274407}
+:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 45%,transparent);outline-offset:2px}
+@media(max-width:760px){#app{padding:.7rem}.tabs{overflow-x:auto;flex-wrap:nowrap}.tabs button{white-space:nowrap}.card{padding:.9rem}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;scroll-behavior:auto!important}}
+
 </style></head>
 <body>
 <a class="skip" href="#page">Skip to the content</a>
