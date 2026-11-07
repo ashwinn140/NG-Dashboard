@@ -755,25 +755,30 @@ function exportVisibleVisuals(){
    const width=Math.max(headers.length,...rows.map(r=>r.length),1);
    sheets.push({name:'Table '+(i+1),cols:Array(width).fill(20),rows:[headers.map(HDR),...rows]});
  });
- // Charts expose their series in SVG marks. Export available mark labels, values, and
- // accessible descriptions; do not invent numbers from pixel positions.
+ // Export D3-bound numerical chart series where available, never pixel positions.
  [...page.querySelectorAll('svg')].forEach((svg,i)=>{
-   const items=[...svg.querySelectorAll('[data-value], [aria-label], title')].map(el=>{
-     const label=el.getAttribute('aria-label')||el.querySelector('title')?.textContent||el.textContent?.trim()||'';
-     const val=el.getAttribute('data-value')||'';
-     return [label,val];
-   }).filter(([a,b])=>a||b);
-   if(!items.length)return;
-   const key=JSON.stringify(items);if(seen.has(key))return;seen.add(key);
-   sheets.push({name:'Chart '+(i+1),cols:[65,22],rows:[[HDR('Label / accessible series'),HDR('Source value (if exposed)')],...items]});
+   const items=[],unique=new Set();
+   for(const el of svg.querySelectorAll('rect,path,circle,line,g')){
+     const d=el.__data__;if(d==null)continue;
+     let values=[];
+     if(typeof d==='number')values=[['Value',d]];
+     else if(Array.isArray(d))values=d.slice(0,12).map((v,j)=>[String(j),v]).filter(([,v])=>typeof v==='number'&&Number.isFinite(v));
+     else if(typeof d==='object')values=Object.entries(d).filter(([,v])=>typeof v==='number'&&Number.isFinite(v)).slice(0,12);
+     if(!values.length)continue;
+     const label=el.getAttribute('aria-label')||el.querySelector('title')?.textContent||el.getAttribute('data-label')||'Series '+(items.length+1);
+     const key=label+'|'+JSON.stringify(values);if(unique.has(key))continue;unique.add(key);
+     for(const [field,value] of values)items.push([label,field,value]);
+     if(items.length>=15000)break;
+   }
+   if(items.length)sheets.push({name:'Chart '+(i+1),cols:[52,24,22],rows:[[HDR('Series / mark'),HDR('Measure'),HDR('Value')],...items]});
  });
  if(!sheets.length){alert('This view has no exposed table or chart data to export. Use the report-specific Excel export where available.');return}
- sheets.push({name:'Export context',cols:[30,70],rows:[[HDR('Page'),title],[HDR('Current date range'),fRange({from:R.w.from,to:R.w.to})],[HDR('Comparison date range'),fRange({from:R.w.pfrom,to:R.w.pto})],[HDR('Filters'),filterSummary()],[HDR('Note'),'Visible table rows and available chart metadata only. Use report-specific Excel export for full underlying records.']]});
+ sheets.push({name:'Export context',cols:[30,70],rows:[[HDR('Page'),title],[HDR('Current date range'),fRange({from:R.w.from,to:R.w.to})],[HDR('Comparison date range'),fRange({from:R.w.pfrom,to:R.w.pto})],[HDR('Filters'),filterSummary()],[HDR('Note'),'Visible table rows and D3-bound numeric chart series where available. Use report-specific Excel export for full underlying records.']]});
  downloadXlsx('NG_'+title.replace(/[^a-z0-9]+/gi,'_')+'_'+fIso(dDate(R.w.to))+'.xlsx',sheets);
 }
 function addUniversalExport(){
  const anchor=document.getElementById('printBtn')||document.getElementById('grpRow');if(!anchor)return;
- let b=document.getElementById('uxExportCurrent');if(!b){b=document.createElement('button');b.id='uxExportCurrent';b.type='button';b.className='btn';b.textContent='Export current view · Excel';b.addEventListener('click',exportVisibleVisuals);anchor.insertAdjacentElement('afterend',b)}
+ let b=document.getElementById('uxExportCurrent');if(!b){b=document.createElement('button');b.id='uxExportCurrent';b.type='button';b.className='btn';b.textContent='Export visible data · Excel';b.addEventListener('click',exportVisibleVisuals);anchor.insertAdjacentElement('afterend',b)}
 }
 
 function dlButton(label, build, disabledWhy) {
