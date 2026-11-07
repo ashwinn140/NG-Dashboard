@@ -17,6 +17,42 @@ input,select,textarea{font:inherit;padding:.5rem;border:1px solid var(--line);bo
 .drop{border:2px dashed var(--line);border-radius:12px;padding:1.2rem;text-align:center;color:var(--muted)}.drop.over{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent)}
 #toast{position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:.6rem 1rem;border-radius:8px;display:none;max-width:90vw}
 :focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 45%,transparent);outline-offset:1px}
+
+/* 2026 UX refresh: progressive enhancement, existing controls and workflows retained */
+:root{--fg:#172338;--muted:#63748b;--bg:#f3f6fb;--panel:#fff;--line:#e2e9f2;--accent:#2755c7;--bad:#c23945;--ok:#087f62;--warn:#a96a00}
+@media(prefers-color-scheme:dark){:root{--fg:#edf3ff;--muted:#a3b3cc;--bg:#101827;--panel:#19253a;--line:#30415a;--accent:#85a8ff;--bad:#ff8895;--ok:#6de0b8;--warn:#ffd17e}}
+body{font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.55;letter-spacing:-.008em}
+header{padding:1rem clamp(1rem,3vw,2.5rem);gap:1rem;box-shadow:0 1px 0 var(--line);backdrop-filter:blur(16px);background:var(--panel)}
+header h1{font-size:1.1rem;letter-spacing:-.025em;font-weight:750}
+header a{font-size:.85rem;text-decoration:none;font-weight:650}
+header a:hover{text-decoration:underline}
+nav{max-width:86rem;margin:1.25rem auto .35rem;padding:.4rem;gap:.25rem;background:var(--panel);border:1px solid var(--line);border-radius:15px;box-shadow:0 2px 12px #17233808}
+nav button{border:0;background:transparent;border-radius:10px;font-weight:600;color:var(--muted);transition:background .15s,color .15s,transform .15s}
+nav button:hover{background:color-mix(in srgb,var(--accent) 9%,var(--panel));color:var(--fg)}
+nav button[aria-selected=true]{background:color-mix(in srgb,var(--accent) 13%,var(--panel));color:var(--accent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 25%,transparent)}
+main{max-width:86rem;padding:0 clamp(1rem,2vw,1.75rem) 4rem}
+.card,.kpi{border-radius:17px;border-color:var(--line);box-shadow:0 3px 16px #12274409}
+.card{padding:clamp(1rem,2vw,1.5rem);margin:1rem 0}
+.card h2{font-size:1.1rem;letter-spacing:-.025em;margin:0 0 .9rem;font-weight:750}
+.kpis{gap:.85rem;grid-template-columns:repeat(auto-fit,minmax(11rem,1fr))}
+.kpi{padding:1.15rem;border-top:3px solid color-mix(in srgb,var(--accent) 65%,transparent)}
+.kpi b{font-size:clamp(1.5rem,2.5vw,2.1rem);letter-spacing:-.055em;font-variant-numeric:tabular-nums}
+.kpi span{font-size:.82rem;font-weight:600}
+.btn{border-radius:10px;font-weight:650;transition:background .15s,border-color .15s}
+.btn:hover:not(:disabled){border-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,var(--panel))}
+.btn.primary:hover:not(:disabled){background:color-mix(in srgb,var(--accent) 80%,#111)}
+input,select,textarea{background:var(--panel);border-radius:10px;transition:border-color .15s,box-shadow .15s}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);outline:0;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 15%,transparent)}
+.scroll{border:1px solid var(--line);border-radius:12px;max-width:100%;background:var(--panel)}
+table{font-size:.84rem}th{background:color-mix(in srgb,var(--bg) 75%,var(--panel));position:sticky;top:0;z-index:1;font-size:.75rem;text-transform:uppercase;letter-spacing:.045em}
+th,td{padding:.8rem .85rem}tbody tr:hover{background:color-mix(in srgb,var(--accent) 4%,var(--panel))}
+.pill{font-weight:700;padding:.2rem .65rem;background:color-mix(in srgb,var(--bg) 65%,var(--panel))}
+.pill.ok{background:color-mix(in srgb,var(--ok) 10%,var(--panel))}.pill.bad{background:color-mix(in srgb,var(--bad) 10%,var(--panel))}.pill.warn{background:color-mix(in srgb,var(--warn) 10%,var(--panel))}
+.drop{padding:2rem;border-radius:15px;background:color-mix(in srgb,var(--bg) 60%,var(--panel))}
+#toast{z-index:50;box-shadow:0 12px 40px #0003;padding:.9rem 1.25rem;border-radius:12px}
+@media(max-width:700px){header{position:relative}header h1{flex-basis:100%}nav{margin:.75rem .65rem;overflow-x:auto;flex-wrap:nowrap}main{padding:0 .75rem 3rem}.card{padding:1rem}.row{align-items:stretch}.row label{min-width:0;flex:1 1 10rem}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}th,td{padding:.65rem}.btn{min-height:42px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;scroll-behavior:auto!important}}
+
 </style></head><body>
 <header><h1>{{PRODUCT}} · Administration</h1><span id="who" class="muted"></span><a href="/">Open the dashboard</a><button class="btn" id="out">Sign out</button></header>
 <nav id="nav" role="tablist"></nav><main id="main" aria-live="polite"></main><div id="toast" role="status"></div>
