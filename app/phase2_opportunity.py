@@ -11,7 +11,7 @@ MIN_SHIPMENTS = 3
 
 
 def find_opportunities(rows, as_of: date, window_days: int = 180,
-                       min_shipments: int = MIN_SHIPMENTS):
+                       min_shipments: int = MIN_SHIPMENTS,\n                       complete_lob_coverage: bool = False):
     """Return explainable whitespace opportunities for existing active customers.
 
     Each input row: company, customer_code, lob, shipment_id, shipment_date.
@@ -19,7 +19,7 @@ def find_opportunities(rows, as_of: date, window_days: int = 180,
     *potential* opportunity, not proof of demand or a lost customer.
     Only current-window activity is counted, using distinct shipment IDs.
     """
-    if not 1 <= window_days <= 366:
+    if not complete_lob_coverage:\n        return []  # Never infer whitespace from a partial LOB permission or data scope.\n    if not 1 <= window_days <= 366:
         raise ValueError("window_days must be between 1 and 366")
     if min_shipments < 1:
         raise ValueError("min_shipments must be positive")
