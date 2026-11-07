@@ -16,20 +16,8 @@ ERP -> Gmail -> Apps Script (every 15 min) -> /api/ingest -> queue -> database -
 * **Organization master:** upload the ERP export about every two weeks. Contact name and email show up in the Variation Report once the export has those columns.
 * **Dashboards:** owner's summary, operations, finance, agent variation report, sales performance report, "build your own visual" with saving per person.
 
-## Put it live (about 30 minutes, no coding)
-1. **GitHub:** create a *private* repository (for example `newglobe-dashboard`) and upload everything in this folder to it (GitHub: *Add file > Upload files*).
-2. **Railway:** *New Project > Deploy from GitHub repo* and pick the repository. Railway builds it from the `Dockerfile`.
-3. In the same project press *New > Database > Add PostgreSQL*.
-4. Open the app service > **Variables** and add the values from `.env.example`:
-   `DATABASE_URL` (choose *Add reference* > the PostgreSQL service's `DATABASE_URL`), `SECRET_KEY`, `INGEST_SECRET`, `ADMIN_EMAIL`, the `SMTP_*` lines and `UPLOAD_DIR=/data/uploads`.
-5. Service > **Settings > Volumes**: add a volume mounted at `/data` (it keeps the original files).
-6. Service > **Settings > Networking > Generate Domain**. Copy the address and set the variable `BASE_URL` to it (with `https://`). Railway redeploys.
-7. Open the address. Sign in with **Email link** using your `ADMIN_EMAIL`. (To sign in before email is set up, set `ADMIN_PASSWORD` once, use *User ID and password*, then remove it.)
-8. **Admin portal** (the link at the top of the dashboard): add users, then *Previous reports* to load earlier years, then *Organization master*.
-9. **Gmail script:** in Apps Script set the properties `APP_URL` = `https://your-address/api/ingest` and `INGEST_SECRET` = the same secret, run `testSetup`, then `installTrigger` (see the comments in `gmail/ERP_Mail_Collector.gs`).
-10. In Railway set a **usage alert** (about $20) and invite a second person to the project and to GitHub, so access never depends on one login.
-
-**Gmail app password for sign-in emails:** Google Account > Security > 2-Step Verification (turn on) > App passwords > create one named "dashboard". Use that 16-character password as `SMTP_PASSWORD`.
+## Put it live
+Follow **`DEPLOY_FROM_SCRATCH.md`** step by step (GitHub, Railway, variables, first sign-in, loading data, Gmail script, go-live checklist, and a troubleshooting table). Project background and the decisions behind the reports are in **`PROJECT_CONTEXT.md`**.
 
 ## Cost and backups
 Railway Hobby (about $5 a month plus usage; expect roughly $10 to $15 all in). The database holds history for every report; a full file arrives every day, so the data can always be rebuilt, and the original files are kept on the volume.

@@ -29,6 +29,7 @@ input:focus,button:focus-visible{outline:3px solid color-mix(in srgb,var(--accen
 const $=id=>document.getElementById(id), msg=(t,c)=>{$('msg').textContent=t;$('msg').className=c||''};
 function tab(n){for(const i of [1,2]){$('p'+i).classList.toggle('hide',i!==n);$('t'+i).setAttribute('aria-selected',i===n)} msg('')}
 $('t1').onclick=()=>tab(1);$('t2').onclick=()=>tab(2);
+fetch('/auth/options').then(r=>r.json()).then(o=>{if(!o.email){$('t1').style.display='none';tab(2);msg('Email sign-in links are not set up yet: use your user ID and password.')}}).catch(()=>{});
 async function post(url,body){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});let j={};try{j=await r.json()}catch(e){}if(!r.ok)throw new Error(j.detail||'Something went wrong. Please try again.');return j}
 $('f1').onsubmit=async e=>{e.preventDefault();$('send').disabled=true;try{const j=await post('/auth/request',{email:$('email').value});msg(j.message,'ok');$('f1b').classList.remove('hide');$('code').focus()}catch(x){msg(x.message,'bad')}$('send').disabled=false};
 $('f1b').onsubmit=async e=>{e.preventDefault();$('codego').disabled=true;try{await post('/auth/code',{email:$('email').value,code:$('code').value});location.href='/'}catch(x){msg(x.message,'bad')}$('codego').disabled=false};

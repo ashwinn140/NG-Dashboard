@@ -4,8 +4,8 @@ WORKDIR /srv
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 COPY app ./app
-RUN useradd -m appuser && mkdir -p /data/uploads && chown -R appuser /data /srv
-USER appuser
+COPY entrypoint.sh /entrypoint.sh
+RUN useradd -m appuser && chmod +x /entrypoint.sh && mkdir -p /data/uploads && chown -R appuser /data /srv
 EXPOSE 8000
 # One worker on purpose: the importer runs inside the app and loads one file at a time.
-CMD ["sh", "-c", "uvicorn app.server:app_factory --factory --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --proxy-headers --forwarded-allow-ips='*'"]
+ENTRYPOINT ["/entrypoint.sh"]

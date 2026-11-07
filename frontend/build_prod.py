@@ -62,6 +62,7 @@ boot = r"""
       const [dr, pr] = await Promise.all([fetch('/api/dataset', {credentials: 'same-origin'}), fetch('/api/prefs', {credentials: 'same-origin'})]);
       if (dr.status === 401) { location.href = '/login'; return; } if (!dr.ok) throw new Error('data');
       window.__D = await dr.json(); const prefs = pr.ok ? await pr.json() : {};
+      if (window.__D.empty) { boot.textContent = 'No reports have been loaded yet. '; const me = window.__ME; if (me.role === 'admin') { const a = document.createElement('a'); a.href = '/admin'; a.textContent = 'Open Administration to upload the first reports.'; boot.append(a); } else boot.append('Please ask an administrator to load them.'); boot.append(document.createElement('br')); const rb = document.createElement('button'); rb.textContent = 'Check again'; rb.onclick = () => location.reload(); boot.append(rb); return; }
       try { [['visuals', 'ngVisuals'], ['views', 'ngViews'], ['defs', 'ngDefs']].forEach(([n, k]) => { if (prefs[n] !== undefined) localStorage.setItem(k, JSON.stringify(prefs[n])); else localStorage.removeItem(k); }); } catch (e) { /* storage blocked */ }
       const s = document.createElement('script'); s.textContent = document.getElementById('appsrc').textContent; document.body.appendChild(s);
       boot.remove(); if (window.NG_BOOT) window.NG_BOOT();
