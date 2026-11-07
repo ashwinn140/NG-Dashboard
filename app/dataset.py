@@ -9,6 +9,8 @@ from .db import imports, shipments, profit_lines, org_master
 REPS = [("NG", "AE"), ("NG", "AI"), ("NG", "OE"), ("NG", "OI"), ("NCS", "AE"), ("NCS", "AI"), ("NCS", "OE"), ("NCS", "OI")]
 EXTRAS = ["Sales Person", "Trade Lane Name", "Loading Country", "Discharge Country", "Collection Executive", "Business Dimension", "Inco Terms", "Freight Type", "Contract Type",
           "Commodity Type", "Co-Load Type", "Origin Agent", "Customer Branch", "Document Executive (UDF)", "Place Of Execution", "Container Types"]
+DASHBOARD_COLUMNS = sorted(set(EXTRAS) | {c for cols in CFG.SOURCE_COLUMNS.values() for c in cols} |
+                           {"Booking Thru", "Invoice No. & Date", "Billing Details", "Buy Rate (UDF)", "Sell Rate (UDF)"})
 norm = lambda s: re.sub(r"[^a-z0-9]", "", str(s).lower())
 INV_RE = re.compile(r"([A-Za-z0-9/\-\.]+?)\s*dt\.?\s*(\d{1,2})[-/ ]([A-Za-z]{3})[A-Za-z]*[-/ ](\d{4})", re.I)
 RATE_NUM = re.compile(r"\d[\d,]*\.?\d*")
@@ -58,20 +60,27 @@ def load_master(engine):
 
 
 def _open_frame(engine, company, rt):
-    q = select(shipments.c.id, shipments.c.extra).where(shipments.c.company == company, shipments.c.report_type == rt, shipments.c.to_import.is_(None)).order_by(shipments.c.id)
-    with engine.connect() as c: rows = c.execute(q).all()
-    return pd.DataFrame([dict(r.extra) for r in rows]) if rows else pd.DataFrame()
+    # Project only displayed columns. Sorting full JSON rows in PostgreSQL caused
+    # temporary-disk exhaustion; sort the projected rows in memory instead.
+    q = select(shipments.c.id, *(shipments.c.extra[col].as_string().label(col) for col in DASHBOARD_COLUMNS)).where(
+        shipments.c.company == company, shipments.c.report_type == rt, shipments.c.to_import.is_(None))
+    with engine.connect() as c:
+        rows = [dict(r) for r in c.execution_options(stream_results=True).execute(q).mappings()]
+    rows.sort(key=lambda r: r.pop("id"))
+    return pd.DataFrame(rows)
 
 
 def _changes(engine, company, rt):
     """What the latest load of this report changed: new, no longer present, changed (with the columns that differ)."""
+    if CFG.replace_reports():
+        return None
     with engine.connect() as c:
         ids = [r[0] for r in c.execute(select(imports.c.id).where(imports.c.company == company, imports.c.report_type == rt, imports.c.status == "promoted").order_by(imports.c.id.desc()).limit(2)).all()]
         if len(ids) < 2: return None
         cur = ids[0]
-        newv = c.execute(select(shipments.c.key, shipments.c.shipment_no, shipments.c.shipment_date, shipments.c.customer, shipments.c.branch, shipments.c.status, shipments.c.extra).where(
+        newv = c.execute(select(shipments.c.id, shipments.c.key, shipments.c.shipment_no, shipments.c.shipment_date, shipments.c.customer, shipments.c.branch, shipments.c.status).where(
             shipments.c.company == company, shipments.c.report_type == rt, shipments.c.from_import == cur)).all()
-        oldv = c.execute(select(shipments.c.key, shipments.c.shipment_no, shipments.c.shipment_date, shipments.c.customer, shipments.c.branch, shipments.c.status, shipments.c.extra, shipments.c.ended_reason).where(
+        oldv = c.execute(select(shipments.c.id, shipments.c.key, shipments.c.shipment_no, shipments.c.shipment_date, shipments.c.customer, shipments.c.branch, shipments.c.status, shipments.c.ended_reason).where(
             shipments.c.company == company, shipments.c.report_type == rt, shipments.c.to_import == cur)).all()
         n_old = c.execute(select(func.count()).select_from(shipments).where(shipments.c.company == company, shipments.c.report_type == rt, shipments.c.from_import <= ids[1],
                           (shipments.c.to_import.is_(None)) | (shipments.c.to_import > ids[1]))).scalar()
@@ -79,8 +88,13 @@ def _changes(engine, company, rt):
     brief = lambda r: [r.shipment_no, r.shipment_date.strftime("%Y-%m-%d"), r.customer, r.branch, r.status]
     oldmap = {r.key: r for r in oldv if r.ended_reason == "changed"}; gone = [r for r in oldv if r.ended_reason == "not_present"]
     new = [r for r in newv if r.key not in oldmap]; chg = [r for r in newv if r.key in oldmap]
+    extras = {}
+    detail_ids = [i for r in chg for i in (r.id, oldmap[r.key].id)]
+    with engine.connect() as c:
+        for start in range(0, len(detail_ids), 500):
+            extras.update((r.id, r.extra) for r in c.execute(select(shipments.c.id, shipments.c.extra).where(shipments.c.id.in_(detail_ids[start:start + 500]))))
     def details(r):
-        a, b = oldmap[r.key].extra, r.extra
+        a, b = extras[oldmap[r.key].id], extras[r.id]
         cols = sorted(k for k in set(a) | set(b) if a.get(k, "") != b.get(k, ""))
         return [brief(r), [[k, str(a.get(k, ""))[:60], str(b.get(k, ""))[:60]] for k in cols]]
     return {"new": [brief(r) for r in new], "gone": [brief(r) for r in gone], "changed": [details(r) for r in chg], "old_rows": int(n_old), "new_rows": int(n_new)}
@@ -100,6 +114,7 @@ def build_full(engine) -> dict:
         df["_carrier"] = df["Airline"] if "Airline" in df.columns and rt in ("AE", "AI") else df.get("Shipping Line")
         frames.append(df); ranges.append(rng.get((co, rt), (None, None)))
     A = pd.concat(frames, ignore_index=True)
+    del frames, df
     N = len(A)
     if N == 0: raise ValueError("No shipments are loaded yet, so there is no dashboard data to build.")
     S = lambda col: A[col].fillna("").astype(str).str.strip().str.replace(r"\s+", " ", regex=True) if col in A.columns else pd.Series([""] * N)
@@ -142,7 +157,9 @@ def build_full(engine) -> dict:
 
     # ---- job profit lines joined to the registers
     with engine.connect() as c:
-        pl_rows = c.execute(select(profit_lines).where(profit_lines.c.to_import.is_(None)).order_by(profit_lines.c.id)).mappings().all()
+        fields = ["id", "company", "job_date", "job_no", "lob", "customer", "party", "branch", "charge", "income", "expense", "trans_date", "trade_lane"]
+        pl_rows = list(c.execute(select(*(profit_lines.c[k] for k in fields)).where(profit_lines.c.to_import.is_(None))).mappings())
+        pl_rows.sort(key=lambda r: r["id"])
         jp = c.execute(select(imports.c.company, imports.c.range_from, imports.c.range_to, imports.c.file_name, imports.c.columns).where(imports.c.report_type == "JP", imports.c.status == "promoted").order_by(imports.c.id)).all()
     reg_co = np.where(A["_rep"] < 4, "NG", "NCS") if N else np.array([]); reg_no = A["Shipment No"].astype(str).str.strip().values if N else []; reg_date = sd.dt.strftime("%Y-%m-%d").values if N else []
     by_key, by_no = {}, collections.defaultdict(list)
@@ -209,6 +226,7 @@ def build_full(engine) -> dict:
         c_ = _changes(engine, co, rt)
         if c_: ch[str(ri)] = c_
     out["changes"] = ch
+    out["storage_mode"] = "replace" if CFG.replace_reports() else "versioned"
     out["built_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
     return out
 
@@ -269,5 +287,6 @@ def restrict(D: dict, user: dict) -> dict:
     out["meta"] = [m if i in allowed_rep else dict(m, **blank) for i, m in enumerate(D["meta"])]
     out["changes"] = {k: v for k, v in D["changes"].items() if int(k) in allowed_rep}
     out["built_at"] = D.get("built_at")
+    out["storage_mode"] = D.get("storage_mode", "versioned")
     out["user"] = {"finance": bool(user["finance"]), "companies": user["companies"], "lobs": user["lobs"]}
     return out

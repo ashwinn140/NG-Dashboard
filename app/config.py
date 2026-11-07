@@ -1,4 +1,13 @@
 """Settings you may need to change. Everything else reads from here."""
+import os
+
+
+def replace_reports() -> bool:
+    """Opt-in replacement; existing installations keep version history by default."""
+    mode = os.environ.get("REPORT_STORAGE_MODE", "versioned").strip().lower()
+    if mode not in ("versioned", "replace"):
+        raise ValueError("REPORT_STORAGE_MODE must be versioned or replace")
+    return mode == "replace"
 
 # Company name printed in row 1 of each report  ->  short code used in the app.
 COMPANIES = {

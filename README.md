@@ -110,3 +110,17 @@ A shipment is identified by Shipment No + Shipment Date together (Shipment No al
 ## Settings
 `app/config.py`: company names, report names, key columns, required columns and the 10% row-drop limit.
 Database: SQLite locally; on Railway set DATABASE_URL to the Postgres address. No code change.
+# Daily ERP refresh and historical comparisons
+
+For New Globe and Neutral Consolidation Services, keep earlier reporting years once
+and refresh eight department shipment registers and two job profitability reports daily.
+The Gmail collector checks for new reports every three hours.
+
+Set `REPORT_STORAGE_MODE=replace` on the app service to update existing records in place.
+Shipments missing from the new report are removed only inside its dates and branches;
+other periods remain available for month-on-month and year-on-year comparisons.
+Profit reports must declare their billing-date range. Suspicious reductions still require
+admin review. The default `versioned` mode retains previous row versions instead.
+Replacement mode does not offer before/after row-version comparisons.
+
+See `DAILY_REPLACEMENT_REVIEW.md` for the approved scope, safeguards and validation.

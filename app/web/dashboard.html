@@ -545,6 +545,7 @@ function pageShip() {
   return h('div', {class: 'grid'}, card('Shipments', 'Every shipment in the current selection. The CSV carries all filtered rows with the extra columns, and opens in Excel.', h('div', null, h('div', {class: 'frow'}, q, dx, dl), note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody)), pager), 'full'));
 }
 function pageChanges() {
+  if (D.storage_mode === 'replace') return card('Daily report replacement', 'The latest data is kept for each reporting period.', h('p', {class: 'empty'}, 'Daily reports update the dates and branches they cover. Other periods stay available. Earlier versions of changed or removed records are not retained, so a before-and-after comparison is unavailable.'), 'full');
   const avail = Object.keys(D.changes).map(Number);
   if (!avail.length) return card('Changes since the last report', 'What each new load added, changed or removed.', h('p', {class: 'empty'}, 'Nothing to compare yet. A report needs to have been loaded at least twice; after the next daily load this page lists the new, changed and no-longer-present shipments.'), 'full');
   if (S.ch == null || !avail.includes(S.ch)) S.ch = avail[0]; const c = D.changes[String(S.ch)], m = D.meta[S.ch];

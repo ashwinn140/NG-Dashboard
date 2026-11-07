@@ -37,7 +37,6 @@ class Store:
         if start_worker:
             self.thread = threading.Thread(target=self._worker, daemon=True, name="importer"); self.thread.start()
         self.wake.set()
-        if start_worker: threading.Thread(target=self.warm, daemon=True, name="warm").start()
 
     # ---- dataset
     def dataset_for(self, user: dict) -> bytes:
@@ -87,6 +86,7 @@ class Store:
         while not self.stop:
             r = self._next()
             if not r:
+                self.warm()  # build once after a batch, never alongside the import worker
                 self.idle.set(); self.wake.wait(2); self.wake.clear(); continue
             self.idle.clear(); changed = False
             try:
@@ -100,7 +100,7 @@ class Store:
                                     status="failed", message=msg, file_path=r.path, source=r.source or "email", uploaded_by=r.uploaded_by or "", subject=r.subject or "")
                 res = dict(import_id=iid, status="failed", message=msg)
             with self.engine.begin() as c: c.execute(update(uploads).where(uploads.c.id == r.id).values(status=status, result=json.loads(json.dumps(res, default=str))))
-            if changed: self.bump(); self.warm()
+            if changed: self.bump()
             if res.get("status") in ("failed", "needs_review"): self._alert(r, res)
 
     def _alert(self, r, res):
@@ -477,8 +477,12 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
 
 def save_file(store: Store, data: bytes, name: str):
     sha = hashlib.sha256(data).hexdigest(); d = store.upload_dir / datetime.utcnow().strftime("%Y/%m"); d.mkdir(parents=True, exist_ok=True)
-    safe = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in name)[:120]; p = d / f"{datetime.utcnow():%d%H%M%S}_{sha[:8]}_{safe}"
-    p.write_bytes(data); return str(p), sha
+    safe = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in name)[:120]; p = d / f"{sha}_{safe}"
+    try:
+        with p.open("xb") as f: f.write(data)
+    except FileExistsError:
+        pass  # repeated deliveries reuse the exact same archived workbook
+    return str(p), sha
 
 
 def app_factory():

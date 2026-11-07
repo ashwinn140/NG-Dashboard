@@ -14,6 +14,7 @@
  *   ALLOWED_SENDERS : address(es) the report emails come from (the ERP's sending address), comma separated.
  *                     Use * to accept any sender: the script only ever reads emails that carry the ERP-Reports label,
  *                     so the Gmail filter (subject line) alone decides what is taken. Safer: keep the ERP's address(es) listed.
+ *   REPORT_QUERY    : optional Gmail search for report emails; the collector labels matches from the last 48 hours.
  *   ALERT_EMAIL     : who is emailed when something fails repeatedly
  *   SUBJECT_CONTAINS: optional. Only emails whose subject contains this text are used, e.g.  Shipment Register
  *   APP_URL         : the dashboard app's ingest address, for example https://your-app.up.railway.app/api/ingest (leave empty until the app is live)
@@ -38,7 +39,10 @@ function collectReports() {
     const p = props_();
     if (!p.ALLOWED_SENDERS) { alert_('Report collector is not set up', 'ALLOWED_SENDERS is empty, so no email is accepted. Set it in Script properties.'); return; }
     if (!p.APP_URL || !p.INGEST_SECRET) { console.log('APP_URL / INGEST_SECRET not set yet: nothing is sent. Run testSetup to check the email side.'); return; }
-    if (!GmailApp.getUserLabelByName(CONFIG.LABEL_TODO)) { alert_('Gmail label missing', 'The label "' + CONFIG.LABEL_TODO + '" does not exist. Create it and the filter again.'); return; }
+    const reportLabel = label_(CONFIG.LABEL_TODO);
+    if (p.REPORT_QUERY) {
+      GmailApp.search('(' + p.REPORT_QUERY + ') newer_than:2d', 0, 100).forEach(t => t.addLabel(reportLabel));
+    }
     const allowed = p.ALLOWED_SENDERS.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
     const st = state_(), failedLabel = label_(CONFIG.LABEL_FAILED);
     const found = candidates_(st);
@@ -131,27 +135,27 @@ function testSetup() {
   const p = props_(), out = [];
   out.push(p.ALLOWED_SENDERS ? 'OK   ALLOWED_SENDERS = ' + p.ALLOWED_SENDERS : 'FAIL ALLOWED_SENDERS is empty');
   out.push(p.ALERT_EMAIL ? 'OK   ALERT_EMAIL = ' + p.ALERT_EMAIL : 'NOTE ALERT_EMAIL is empty (alerts will go to this Gmail account)');
-  out.push(p.APP_URL && p.INGEST_SECRET ? 'OK   APP_URL and INGEST_SECRET are set' : 'NOTE APP_URL / INGEST_SECRET not set yet (expected before the app is live): nothing will be sent');
-  if (!GmailApp.getUserLabelByName(CONFIG.LABEL_TODO)) out.push('FAIL Gmail label "' + CONFIG.LABEL_TODO + '" does not exist');
-  else {
-    const allowed = (p.ALLOWED_SENDERS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-    const threads = GmailApp.search('label:' + CONFIG.LABEL_TODO + ' newer_than:3d', 0, 30); let reports = 0, n = 0;
-    out.push('OK   Gmail label found. Report emails of the last 3 days:');
-    threads.forEach(t => t.getMessages().forEach(m => {
-      if (m.getDate().getTime() < Date.now() - 3 * 86400000) return;
-      const s = email_(m.getFrom()), xl = m.getAttachments({includeInlineImages: false}).filter(a => /\.xlsx$/i.test(a.getName()));
-      reports += xl.length; n++;
-      out.push('       - ' + Utilities.formatDate(m.getDate(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm') + ' | from ' + s + (allowed.includes('*') || allowed.includes(s) ? '' : '  <-- NOT in ALLOWED_SENDERS') + ' | subject "' + m.getSubject() + '" | Excel files: ' + (xl.map(a => a.getName() + ' (' + Math.round(a.getSize() / 1024) + ' KB)').join('; ') || 'none'));
-    }));
-    out.push(reports ? 'OK   ' + n + ' email(s) with ' + reports + ' Excel attachment(s) found' : 'FAIL no Excel attachments found in the last 3 days: check that the ERP sends to this address and that the Gmail filter applies the label');
-  }
+  out.push(p.APP_URL && p.INGEST_SECRET ? 'OK   APP_URL and INGEST_SECRET are set' : 'NOTE APP_URL / INGEST_SECRET not set yet: nothing will be sent');
+  if (p.REPORT_QUERY) out.push('OK   REPORT_QUERY is set: matching reports from the last 48 hours are labelled automatically on collection.');
+  const allowed = (p.ALLOWED_SENDERS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  const query = p.REPORT_QUERY ? '(' + p.REPORT_QUERY + ') newer_than:2d' : 'label:' + CONFIG.LABEL_TODO + ' newer_than:3d';
+  const threads = GmailApp.search(query, 0, 30); let reports = 0, n = 0;
+  threads.forEach(t => t.getMessages().forEach(m => {
+    if (m.getDate().getTime() < Date.now() - CONFIG.FIRST_RUN_LOOKBACK_HOURS * 3600000) return;
+    const s = email_(m.getFrom()), xl = m.getAttachments({includeInlineImages: false}).filter(a => /\.xlsx$/i.test(a.getName()));
+    if (!allowed.includes('*') && !allowed.includes(s)) return;
+    reports += xl.length; n++;
+    out.push('       - ' + Utilities.formatDate(m.getDate(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm') + ' | from ' + s + ' | subject "' + m.getSubject() + '" | Excel files: ' + (xl.map(a => a.getName() + ' (' + Math.round(a.getSize() / 1024) + ' KB)').join('; ') || 'none'));
+  }));
+  out.push(reports ? 'OK   ' + n + ' email(s) with ' + reports + ' Excel attachment(s) found' : 'FAIL no Excel attachments found: check the report query and incoming ERP emails');
   console.log(out.join('\n'));
   return out.join('\n');
 }
 
 /** Run once after testSetup looks right AND the app is live: checks for new report emails every 3 hours. */
 function installTrigger() {
-  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'collectReports').forEach(t => ScriptApp.deleteTrigger(t));
+  const existing = ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'collectReports');
+  if (existing.length) { console.log('Collector trigger already exists; inspect Triggers before adding another.'); return; }
   ScriptApp.newTrigger('collectReports').timeBased().everyHours(CONFIG.TRIGGER_HOURS).create();
   console.log('Installed: collectReports now runs every ' + CONFIG.TRIGGER_HOURS + ' hours.');
 }

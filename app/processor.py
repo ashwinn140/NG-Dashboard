@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 
 import pandas as pd
-from sqlalchemy import and_, bindparam, insert, or_, select, true, update
+from sqlalchemy import and_, bindparam, delete, insert, or_, select, true, update
 
 from . import config
 from .db import admin_log, current_import, imports, shipments
@@ -285,7 +285,7 @@ def _plan(conn, reg: Register, rows: list[dict], cur) -> dict:
             changed_ids.append(oid)
             to_insert.append(r)
     ended_ids = [i for k, i in in_scope_ids.items() if k not in new_keys]   # only shipments this report was supposed to contain
-    return dict(old_count=len(old), to_insert=to_insert, changed_ids=changed_ids, ended_ids=ended_ids, inplace=inplace,
+    return dict(old_count=len(old), existing_ids={k: v[0] for k, v in old.items()}, to_insert=to_insert, changed_ids=changed_ids, ended_ids=ended_ids, inplace=inplace,
                 new=n_new, changed=n_changed, ended=len(ended_ids), added=added, removed=removed)
 
 
@@ -344,6 +344,8 @@ def _decide(conn, reg: Register, file_sha: str, report_time: datetime, approve_r
         if drop > config.MAX_ROW_DROP:
             return "needs_review", f"{len(reg.df)} rows vs {held} currently held for the same dates and branches ({drop:.0%} fewer): held for review", cur, None, None
     rows = standardise(reg)
+    if config.replace_reports() and any(not _in_scope(reg, r["shipment_date"], r["branch"]) for r in rows):
+        return "failed", "A shipment falls outside the report's dates or branches; existing data was kept", cur, None, None
     return "ok", "", cur, rows, _plan(conn, reg, rows, cur)
 
 
@@ -366,12 +368,25 @@ def process_register(engine, reg: Register, file_name: str, file_sha: str, repor
             return dict(import_id=_record(conn, c, t, status=status, message=msg, **base), status=status, message=msg)
         note = _notes(reg, plan, subject)
         import_id = _record(conn, c, t, status="promoted", message=note, columns=json.dumps(reg.hash_cols), **base)
-        for ids, reason in ((plan["changed_ids"], "changed"), (plan["ended_ids"], "not_present")):
+        replacing = config.replace_reports()
+        for ids, reason in (() if replacing else ((plan["changed_ids"], "changed"), (plan["ended_ids"], "not_present"))):
             for chunk in _chunks(ids, 500):
                 conn.execute(update(shipments).where(shipments.c.id.in_(chunk)).values(to_import=import_id, ended_reason=reason))
         if plan["inplace"]:      # same business data, only the column set changed: refresh stored columns without a new version
             conn.execute(update(shipments).where(shipments.c.id == bindparam("b_id")).values(extra=bindparam("b_extra"), row_hash=bindparam("b_hash")), plan["inplace"])
-        for chunk in _chunks(plan["to_insert"], 2000):
+        inserts = plan["to_insert"]
+        if replacing:
+            # Only missing shipments inside this report's dates/branches are removed.
+            for chunk in _chunks(plan["ended_ids"], 500):
+                conn.execute(delete(shipments).where(shipments.c.id.in_(chunk)))
+            inserts = []
+            for row in plan["to_insert"]:
+                oid = plan["existing_ids"].get(row["key"])
+                if oid is None:
+                    inserts.append(row)
+                else:
+                    conn.execute(update(shipments).where(shipments.c.id == oid).values(**row, from_import=import_id, to_import=None, ended_reason=None))
+        for chunk in _chunks(inserts, 2000):
             conn.execute(insert(shipments), [dict(r, company=c, report_type=t, from_import=import_id) for r in chunk])
         conn.execute(update(imports).where(imports.c.id == import_id).values(new_rows=plan["new"], changed_rows=plan["changed"], ended_rows=plan["ended"]))
         if cur:
@@ -461,6 +476,8 @@ def current_import_id(engine, company: str, report_type: str):
 
 def snapshot(engine, company: str, report_type: str, import_id: int | None = None) -> pd.DataFrame:
     """The report exactly as it stood at a given import (default: the current one)."""
+    if config.replace_reports() and import_id is not None:
+        raise ReportError("Past snapshots are unavailable in replacement mode")
     import_id = import_id or current_import_id(engine, company, report_type)
     q = select(shipments).where(
         shipments.c.company == company, shipments.c.report_type == report_type,

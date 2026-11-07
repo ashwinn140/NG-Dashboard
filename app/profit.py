@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 
 import pandas as pd
-from sqlalchemy import and_, bindparam, insert, select, true, update
+from sqlalchemy import and_, bindparam, delete, insert, select, true, update
 
 from . import config
 from .db import imports, profit_lines
@@ -51,7 +51,12 @@ def _sheet_rows(path):
 def is_profit_report(path: str) -> bool:
     """True if the first cell says "... Charge wise Detail From ... to ...": the job profit report."""
     try:
-        rows = _sheet_rows(path)[:3]
+        import openpyxl
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        try:
+            rows = list(wb.worksheets[0].iter_rows(max_row=3, values_only=True))
+        finally:
+            wb.close()
         return bool(rows) and "charge wise detail" in str(rows[0][0]).lower()
     except Exception:
         return False
@@ -182,9 +187,20 @@ def process_profit(engine, rep: ProfitReport, file_name: str, file_sha: str, rep
             return stop("failed", "; ".join(problems))
         rows = standardise_profit(rep)
         jobs = {r["job_no"] for r in rows}
-        held = conn.execute(select(profit_lines.c.id, profit_lines.c.key, profit_lines.c.row_hash, profit_lines.c.job_no, profit_lines.c.from_import).where(
+        replacing = config.replace_reports()
+        held = conn.execute(select(profit_lines.c.id, profit_lines.c.key, profit_lines.c.row_hash, profit_lines.c.job_no, profit_lines.c.from_import, profit_lines.c.trans_date).where(
             profit_lines.c.company == c, profit_lines.c.to_import.is_(None))).all()
-        if rep.range_from is not None:
+        if replacing:
+            if rep.range_from is None or rep.range_to is None or "billing" not in rep.basis.lower():
+                return stop("needs_review", "Replacement requires an explicit billing-date range; existing profit data was kept")
+            if any(r["trans_date"] is None or not rep.range_from <= r["trans_date"] <= rep.range_to for r in rows):
+                return stop("needs_review", "A profit line has no billing date or falls outside the report range; existing data was kept")
+            in_jobs = [h for h in held if h.trans_date and rep.range_from <= h.trans_date <= rep.range_to]
+            scoped = {h.id for h in in_jobs}
+            incoming_keys = {r["key"] for r in rows}
+            if any(h.key in incoming_keys and h.id not in scoped for h in held):
+                return stop("needs_review", "A profit key conflicts with data outside the replacement range; existing data was kept")
+        elif rep.range_from is not None:
             spans = {r.id: (r.range_from, r.range_to) for r in conn.execute(select(imports.c.id, imports.c.range_from, imports.c.range_to).where(imports.c.id.in_({h.from_import for h in held})))} if held else {}
             def covered(h):                 # was this line loaded by a file whose dates overlap this one?
                 a = spans.get(h.from_import)
@@ -232,11 +248,22 @@ def process_profit(engine, rep: ProfitReport, file_name: str, file_sha: str, rep
                 chg_ids.append(oid)
                 add.append(r)
         gone = [r.id for r in in_jobs if r.key not in new_keys]
-        for ids, why in ((chg_ids, "changed"), (gone, "not_present")):
+        for ids, why in (() if replacing else ((chg_ids, "changed"), (gone, "not_present"))):
             for ch in _chunks(ids, 500):
                 conn.execute(update(profit_lines).where(profit_lines.c.id.in_(ch)).values(to_import=iid, ended_reason=why))
         if inplace:
             conn.execute(update(profit_lines).where(profit_lines.c.id == bindparam("b_id")).values(extra=bindparam("b_extra"), row_hash=bindparam("b_hash")), inplace)
+        if replacing:
+            for ch in _chunks(gone, 500):
+                conn.execute(delete(profit_lines).where(profit_lines.c.id.in_(ch)))
+            inserts = []
+            for row in add:
+                previous = old.get(row["key"])
+                if previous is None:
+                    inserts.append(row)
+                else:
+                    conn.execute(update(profit_lines).where(profit_lines.c.id == previous[0]).values(**row, from_import=iid, to_import=None, ended_reason=None))
+            add = inserts
         for ch in _chunks(add, 2000):
             conn.execute(insert(profit_lines), [dict(r, from_import=iid) for r in ch])
         conn.execute(update(imports).where(imports.c.id == iid).values(new_rows=n_new, changed_rows=n_chg, ended_rows=len(gone), columns=json.dumps(rep.columns)))
