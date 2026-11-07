@@ -476,8 +476,8 @@ const CI = {customer: 0, branch: 1, carrier: 3, origin: 2, destination: 4, x_tra
 window.CHART_COLORS = ['#4c78a8', '#f58518', '#54a24b', '#b279a2', '#e45756', '#72b7b2', '#eeca3b', '#9d755d'];
 function card(title, note, body, cls) { return h('article', {class: 'card ' + (cls || '')}, h('h2', {class: 'h'}, title), note ? h('p', {class: 'note'}, note) : null, body); }
 function kpi(label, value, delta, note, tone, previousValue) {
-  const unverifiedYoY = S.def.compare === 'yoy';
-  const comparison = unverifiedYoY ? 'Year-on-year unavailable · previous-year source completeness not verified' + (previousValue != null ? ' · Available previous rows: ' + previousValue : '') : (delta == null ? '' : fDelta(delta) + (previousValue == null ? ' · ' : ' · Current: ' + value + ' · Previous: ' + previousValue + ' · ') + cmpLabel());
+  const unverifiedYoY = Boolean(S.compare && S.def.compare === 'yoy' && delta != null);
+  const comparison = unverifiedYoY ? 'Year-on-year unavailable · previous-year source completeness not verified' + (previousValue != null ? ' · Available previous-period value (not certified): ' + previousValue : '') : (delta == null ? '' : fDelta(delta) + (previousValue == null ? ' · ' : ' · Current: ' + value + ' · Previous: ' + previousValue + ' · ') + cmpLabel());
   return h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, label), h('div', {class: 'kv' + (tone ? ' ' + tone : '')}, value),
     (unverifiedYoY || delta != null) ? h('div', {class: 'delta' + (!unverifiedYoY && delta >= 0 ? ' ok' : '')}, comparison) : null, note ? h('div', {class: 'kn'}, note) : null);
 }
