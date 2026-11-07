@@ -1,6 +1,6 @@
 /**
  * ERP Mail Collector  (Google Apps Script)
- * Runs inside ashwin0project@gmail.com. Every 15 minutes it:
+ * Runs inside ashwin0project@gmail.com. Every 3 hours it:
  *   1. finds report emails carrying the Gmail label "ERP-Reports" that arrived since its last bookmark,
  *   2. sends each Excel attachment to the dashboard app on Railway,
  *   3. moves the bookmark forward only after the app has answered.
@@ -20,6 +20,7 @@
  *   INGEST_SECRET   : the shared password between this script and the app (given to you once the app is live)
  */
 const CONFIG = {
+  TRIGGER_HOURS: 3,                  // automatic mailbox refresh interval
   LABEL_TODO: 'ERP-Reports',          // the Gmail filter puts this label on incoming report emails
   LABEL_FAILED: 'ERP-Reports-Failed', // emails that could not be processed after all tries
   MAX_ATTEMPTS: 5,                    // tries per email before it is parked and you are alerted
@@ -148,9 +149,9 @@ function testSetup() {
   return out.join('\n');
 }
 
-/** Run once after testSetup looks right AND the app is live: checks for new report emails every 15 minutes. */
+/** Run once after testSetup looks right AND the app is live: checks for new report emails every 3 hours. */
 function installTrigger() {
   ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'collectReports').forEach(t => ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger('collectReports').timeBased().everyMinutes(15).create();
-  console.log('Installed: collectReports now runs every 15 minutes.');
+  ScriptApp.newTrigger('collectReports').timeBased().everyHours(CONFIG.TRIGGER_HOURS).create();
+  console.log('Installed: collectReports now runs every ' + CONFIG.TRIGGER_HOURS + ' hours.');
 }

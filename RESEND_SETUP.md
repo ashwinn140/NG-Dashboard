@@ -39,7 +39,7 @@ that bootstrap variable does not erase existing users' stored passwords.
 - HTTP 429: check Resend rate limits. Request a fresh link later; the app does
   not retry automatically, to avoid sending duplicates.
 - Gmail continues receiving ERP reports. Its Apps Script posts to `/api/ingest`
-  every 15 minutes after the separate feed setup; no Resend key is used there.
+  every 3 hours after the separate feed setup; no Resend key is used there.
 
 References: https://resend.com/docs/api-reference/emails/send-email and
 https://resend.com/docs/knowledge-base/403-error-resend-dev-domain
