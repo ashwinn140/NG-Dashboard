@@ -127,6 +127,20 @@ header.top{align-items:center;margin-bottom:1.35rem}
 @media(max-width:760px){#app{padding:.7rem}.tabs{overflow-x:auto;flex-wrap:nowrap}.tabs button{white-space:nowrap}.card{padding:.9rem}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;scroll-behavior:auto!important}}
 
+
+/* Second pass: task-oriented filter workspace, compact overview and clear information hierarchy */
+.filter-toolbar{display:flex;align-items:center;justify-content:space-between;gap:1rem 1.5rem;padding:1.05rem 1.25rem;margin:.85rem 0;border:1px solid var(--line);border-radius:18px;background:var(--panel);box-shadow:0 3px 18px #1227440a;flex-wrap:wrap}
+.filter-toolbar-copy{display:flex;flex-direction:column;gap:.12rem;min-width:14rem}.filter-toolbar-copy strong{font-size:1.08rem;letter-spacing:-.03em}.filter-eyebrow{font-size:.65rem;letter-spacing:.14em;font-weight:800;color:var(--accent)}.filter-hint{font-size:.78rem;color:var(--muted)}
+.filter-toolbar-actions{display:flex;align-items:center;gap:.85rem;flex-wrap:wrap}.quick-summary{font-size:.82rem;color:var(--muted);font-weight:600}.filter-trigger{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:750;min-height:43px;padding:.6rem 1rem;display:flex;align-items:center;gap:.5rem;box-shadow:0 4px 12px #2755c72a}.filter-trigger:hover:not(:disabled){background:color-mix(in srgb,var(--accent) 82%,#000);color:#fff}
+#filters{margin:0 0 1.25rem;padding:0;overflow:visible;box-shadow:0 10px 34px #12274413}#filters[hidden]{display:none!important}
+.filter-panel-head{padding:1.25rem 1.5rem;display:flex;align-items:start;justify-content:space-between;gap:1rem;border-bottom:1px solid var(--line)}.filter-panel-head h2{font-size:1.4rem;margin:.2rem 0;letter-spacing:-.045em}.filter-panel-head p{margin:0;color:var(--muted);font-size:.82rem}.filter-close{min-height:38px}
+.filter-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0}.filter-group{padding:1.3rem 1.5rem;min-width:0;border-bottom:1px solid var(--line)}.filter-group:nth-child(odd){border-right:1px solid var(--line)}.filter-group h3{margin:0;font-size:.93rem;font-weight:760;letter-spacing:-.02em}.filter-group>p{margin:.15rem 0 .85rem;color:var(--muted);font-size:.76rem}.filter-group .frow{gap:.65rem;margin:.4rem 0!important;align-items:center}.filter-group .lbl2{display:block;width:100%;font-weight:750;font-size:.73rem;text-transform:uppercase;letter-spacing:.04em;margin-top:.4rem}
+.filter-group .btn{min-height:37px;padding:.4rem .75rem}.filter-group .btn.on{background:var(--accent);color:#fff;border-color:var(--accent)}.filter-group .f{font-size:.8rem}.filter-group #presets{gap:.4rem}.filter-group #presets .btn{border-radius:999px}.filter-group #fbtns{align-items:flex-start}
+.filter-panel-bottom{display:flex;justify-content:space-between;gap:1rem;align-items:center;padding:1rem 1.5rem;background:color-mix(in srgb,var(--bg) 55%,var(--panel));border-radius:0 0 18px 18px}.filter-panel-bottom strong{font-size:.8rem}.filter-panel-bottom #chips{margin:.4rem 0}.filter-done{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:750;padding:.6rem 1.1rem;min-height:42px}
+#defs{padding:1rem 1.5rem}#status{font-size:.75rem}
+@media(max-width:920px){.filter-grid{grid-template-columns:1fr}.filter-group:nth-child(odd){border-right:0}.filter-toolbar-actions{width:100%;justify-content:space-between}}
+@media(max-width:760px){.filter-toolbar{padding:.85rem;gap:.75rem}.filter-toolbar-copy{min-width:0}.filter-toolbar-actions{gap:.5rem}.filter-trigger{min-height:44px}.filter-panel-head,.filter-group,.filter-panel-bottom{padding:1rem}.filter-panel-bottom{align-items:stretch;flex-direction:column}.filter-group .frow{flex-wrap:wrap}#filters.collapsed>*:not(#chips):not(#status){display:initial}#filters[hidden]{display:none!important}}
+
 </style></head>
 <body>
 <a class="skip" href="#page">Skip to the content</a>
@@ -176,10 +190,15 @@ header.top{align-items:center;margin-bottom:1.35rem}
     <button type="button" data-p="p_status" aria-selected="false">Finance data status</button>
   </nav>
   </div>
-  <button type="button" class="btn fToggle" id="fToggle" aria-expanded="false" aria-controls="filters">Filters <span id="fCount"></span></button>
-  <section class="card collapsed" id="filters" aria-label="Filters">
+  <div class="filter-toolbar" aria-label="Dashboard filters">
+    <div class="filter-toolbar-copy"><span class="filter-eyebrow">EXPLORE YOUR DATA</span><strong>Refine your view</strong><span class="filter-hint">Use quick filters or open all options to explore by company, period, mode and more.</span></div>
+    <div class="filter-toolbar-actions"><div id="quickSummary" class="quick-summary" aria-live="polite">All available data</div><button type="button" class="btn filter-trigger" id="fToggle" aria-expanded="false" aria-controls="filters">☷ &nbsp; All filters <span id="fCount"></span><span aria-hidden="true">⌄</span></button></div>
+  </div>
+  <section class="card collapsed" id="filters" aria-label="Advanced filters" hidden>
+    <div class="filter-panel-head"><div><span class="filter-eyebrow">FILTER BUILDER</span><h2>Choose what to see</h2><p>Changes apply immediately across charts and tables.</p></div><button type="button" class="btn filter-close" id="fClose" aria-label="Close filters">Close ✕</button></div>
+    <div class="filter-grid"><div class="filter-group filter-group-period"><h3>01 · Reporting period</h3><p>Choose the reporting year and time window.</p>
     <div class="frow" id="yearRow"><span class="lbl2">Year</span><div id="ybSeg" title="Calendar year runs January to December. Accounting year follows the start month set under Definitions."><button type="button" class="btn" data-v="cal">Calendar year</button><button type="button" class="btn" data-v="fy">Accounting year</button></div><label class="f"><span>Show</span><select id="yearSel" aria-label="Year"></select></label></div>
-    <div class="frow">
+    </div><div class="filter-group filter-group-scope"><h3>02 · Business scope</h3><p>Pick a company and the shipment types to include.</p><div class="frow">
       <span class="lbl2">Company</span>
       <div id="coSeg"><button type="button" class="btn" data-v="both">Both</button><button type="button" class="btn" data-v="ng">New Globe</button><button type="button" class="btn" data-v="ncs">Neutral Consolidation</button></div>
       <span class="lbl2">Reports</span>
@@ -192,16 +211,15 @@ header.top{align-items:center;margin-bottom:1.35rem}
       <label class="f"><input type="checkbox" id="cmp" checked> Show change vs comparison period</label>
       <button type="button" class="btn" id="defBtn" aria-expanded="false">Definitions ⚙</button>
     </div>
-    <div class="frow">
+    </div><div class="filter-group filter-group-dates"><h3>03 · Date range</h3><p>Use a shortcut or enter exact dates.</p><div class="frow">
       <label class="f"><span>From</span><input type="date" id="dFrom" aria-label="From date"></label>
       <label class="f"><span>To</span><input type="date" id="dTo" aria-label="To date"></label>
       <div id="presets"><button type="button" class="btn" data-v="30">Last 30 days</button><button type="button" class="btn" data-v="month">This month</button><button type="button" class="btn" data-v="last">Last month</button><button type="button" class="btn" data-v="ytd">Year to date</button><button type="button" class="btn" data-v="all">All dates</button></div>
       <span class="f" id="relBox">Last <input type="number" id="relN" min="1" max="3650" value="30" aria-label="How many"> <select id="relU" aria-label="Unit"><option value="days">days</option><option value="weeks">weeks</option><option value="months">months</option><option value="years">years</option><option value="cweeks">complete weeks</option><option value="cmonths">complete months</option></select> <button type="button" class="btn" id="relGo">Apply</button></span>
     </div>
-    <div class="frow" id="fbtns"></div>
-    <div class="frow" id="chips"></div>
+    </div><div class="filter-group filter-group-breakdown"><h3>04 · Drill-down filters</h3><p>Filter by customer, agent, location and other available dimensions.</p><div class="frow" id="fbtns"></div></div></div>
+    <div class="filter-panel-bottom"><div><strong>Active selections</strong><div class="frow" id="chips"></div><div id="status"></div></div><button type="button" class="btn filter-done" id="fDone">View results</button></div>
     <div id="defs" class="defs" hidden></div>
-    <div id="status"></div>
   </section>
   <main id="page"></main>
   <footer>Review version. Click any bar, row, legend item or cell to filter everything; click again to remove. Air and sea are never added together. Every definition (top N, age limits, bands, comparison period) can be changed under Definitions. Profit is not shown yet because the registers carry no profit.</footer>
@@ -1752,9 +1770,18 @@ window.NG = {agentRows, runVisual, visGet, visSave, defCfg, VTEMPLATES, rateOK, 
         const r = await fetch('/api/me/password', {method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json', 'X-CSRF-Token': u.csrf}, body: JSON.stringify({current: cur, new: nw})}); alert(r.ok ? 'Password saved.' : (await r.json()).detail); }; box.append(pw);
       const out = document.createElement('button'); out.textContent = 'Sign out'; out.onclick = async () => { await fetch('/auth/logout', {method: 'POST', credentials: 'same-origin'}); location.href = '/login'; }; box.append(out);
       const f = document.getElementById('filters'), tg = document.getElementById('fToggle'), cnt = document.getElementById('fCount');
-      tg.onclick = () => { const c = f.classList.toggle('collapsed'); tg.setAttribute('aria-expanded', String(!c)); };
-      new MutationObserver(() => { const n = document.querySelectorAll('#chips .chip').length; cnt.textContent = n ? '(' + n + ' on)' : ''; }).observe(document.getElementById('chips'), {childList: true, subtree: true});
-      if (!window.matchMedia('(max-width:760px)').matches) f.classList.remove('collapsed');
+      const setFilterOpen = open => { f.hidden = !open; f.classList.toggle('collapsed', !open); tg.setAttribute('aria-expanded', String(open)); tg.classList.toggle('on', open); if (open) f.scrollIntoView({block:'nearest',behavior:window.matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'}); };
+      tg.onclick = () => setFilterOpen(f.hidden);
+      document.getElementById('fClose').onclick = () => { setFilterOpen(false); tg.focus(); };
+      document.getElementById('fDone').onclick = () => { setFilterOpen(false); tg.focus(); };
+      document.addEventListener('keydown', e => { if (e.key === 'Escape' && !f.hidden && document.getElementById('menu').hidden) { setFilterOpen(false); tg.focus(); } });
+      const summary = document.getElementById('quickSummary');
+      const updateFilterSummary = () => { const n = document.querySelectorAll('#chips .chip').length; cnt.textContent = n ? '(' + n + ')' : ''; const company = document.querySelector('#coSeg .on')?.textContent?.trim() || 'Both companies'; const year = document.getElementById('yearSel')?.selectedOptions?.[0]?.textContent?.trim() || 'All years'; summary.textContent = company + ' · ' + year + (n ? ' · ' + n + ' detailed filters' : ''); };
+      new MutationObserver(updateFilterSummary).observe(document.getElementById('chips'), {childList:true,subtree:true});
+      ['coSeg','yearSel','ybSeg'].forEach(id => document.getElementById(id)?.addEventListener('click', () => requestAnimationFrame(updateFilterSummary)));
+      document.getElementById('yearSel')?.addEventListener('change', updateFilterSummary);
+      updateFilterSummary();
+      setFilterOpen(false);
     } catch (e) { fail('The dashboard could not load its data.'); }
   })();
 })();
