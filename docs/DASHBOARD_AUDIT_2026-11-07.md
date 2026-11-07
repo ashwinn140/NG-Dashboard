@@ -57,9 +57,10 @@ variance, visual-builder measures and operational Excel visibility.
 
 The initial release used synthetic data. On 8 November (IST), the user supplied an
 explicitly authorized superadmin account, resolving the production sign-in blocker.
-The live continuation below supersedes that limitation. Original workbook bytes
-were not available through the current administration API or filename searches,
-so a fresh row-by-row source-workbook reconstruction is still not claimed.
+The live continuation below supersedes that limitation. Original workbook bytes were initially unavailable through the administration API
+and filename searches. The source-workbook continuation below recovered two
+originals and reconciled 187,805 rows. The other two accepted finance source
+workbooks remain outside that row-level verification.
 
 The live dashboard and expanded filters were subsequently inspected in a real
 browser. The old sticky overlap was absent in the inspected desktop layout;
@@ -143,3 +144,65 @@ The latest shipment date is 7 November 2026.
    visible under their actual or unmatched classification rather than being guessed.
 
 No source totals were changed by these follow-up context/footer corrections.
+
+
+## Original-workbook continuation — 8 November 2026 (IST)
+
+### Recovered originals and row-level results
+
+The NCS FY2025 original was located by browsing uploaded workbook metadata after
+filename search missed its non-breaking spaces. The NG current-year original was
+recovered from the project's Gmail attachment. SHA-256 matches the corresponding
+promoted import metadata for both files.
+
+| Original source | Billing-date window | Raw/API charge lines | Income (INR) | Expense (INR) | Raw/API unmatched rows |
+| --- | --- | ---: | ---: | ---: | ---: |
+| NG current FY | 1 Apr 2026–31 Mar 2027 | 134,655 | 3,066,992,924.29 | 2,607,633,027.47 | 0 |
+| NCS FY2025 | 1 Apr 2025–31 Mar 2026 | 53,150 | 544,429,246.68 | 455,505,680.74 | 0 |
+
+**187,805 charge lines reconcile row by row.** Comparison used multisets, preserving
+repeated lines, across job number, job date, billing date, charge, party, branch,
+LOB, income and expense at paise precision. The source/API empty-label convention
+was normalized (blank source values appear as '(blank)' in dictionary labels).
+Both source reports also pass their own grand-total validation.
+
+This supersedes the prior absence of source-workbook verification for these two
+specific imports. It does not certify the remaining NG FY2025 or NCS current-FY
+originals. Their internal API/metadata reconciliations remain as recorded above.
+The supplied SharePoint folder returned HTTP 403 to direct read access; that
+restriction was not bypassed and no unrelated Microsoft credentials were used.
+
+### Why the historical uploads cannot fill the billing gap
+
+The actual emailed 2025 originals contain **Job Profit Analysis Report** with
+**Basis: Job Date**, one row per job, and no Charge or billing Date columns.
+They contain 23,823 NG job rows and 5,522 NCS job rows. Their January–March 2025
+activity is job-dated, so those amounts cannot be inserted as January–March
+billing-date charge lines. Existing billing-date source coverage remains the
+correct disclosed limit until suitable charge-wise exports are supplied.
+
+### Import-flow correction
+
+- Added content-based detection of the known job-summary layout. Preview now
+  explains that charge-wise detail with Billing Date and a From/to range is
+  required. Ingestion records it as an unsupported JP import with the same clear
+  message, instead of attempting to parse it as a Shipment Register.
+- Summary uploads cannot overwrite active finance data, including when an upload
+  attempts an approval override. Original source-reference metadata is retained.
+- Preview and ingestion now share replacement-date validation. Job-date charge
+  reports, missing billing dates and lines outside the declared billing range
+  show needs_review in both paths, closing the 'ready in preview, held on upload'
+  discrepancy.
+- Valid shipment registers and valid billing-date charge reports keep their
+  existing flow. Whitespace-normalized charge-detail titles are recognized.
+- **48 Python regression checks pass**, including seven new layout, preservation,
+  approval-override, end-of-day timestamp and preview/import parity checks. The four actual recovered
+  workbook layouts also classify as expected.
+
+### Salesperson source quality
+
+25,273 of 47,424 shipment records have Administrator as salesperson; none have
+a blank salesperson. Administrator assignments are retained as actual source values. An ERP job owner,
+master-sales owner or another employee is not substituted without a documented
+business mapping. The existing unassigned-sales warnings remain appropriate;
+these source values are not a calculation defect.

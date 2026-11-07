@@ -12,7 +12,10 @@ def log(engine, user, action, detail=""):
 def preview_any(engine, path: str, report_time: datetime | None = None, subject: str = "") -> dict:
     """What loading this file would do, without changing anything (registers and the job profit report)."""
     report_time = report_time or datetime.utcnow()
-    if J.is_profit_report(path): return preview_profit(engine, path, report_time)
+    layout = J.profit_layout(path)
+    if layout == "charge_detail": return preview_profit(engine, path, report_time)
+    if layout == "job_summary":
+        return dict(kind="Job-level profit summary", report_type="JP", verdict="rejected", message=J.JOB_SUMMARY_MESSAGE)
     out = P.preview_file(engine, path, report_time, subject); out.setdefault("kind", "Shipment register"); out["kind"] = "Shipment register"; return out
 
 
@@ -30,6 +33,7 @@ def preview_profit(engine, path: str, report_time: datetime) -> dict:
     if dup: out.update(verdict="duplicate", message=f"Identical file already loaded as import {dup[0]}")
     elif last and report_time <= last.report_time: out.update(verdict="stale", message=f"A newer report for the same dates is already loaded ({last.report_time:%Y-%m-%d %H:%M})")
     elif problems: out.update(verdict="failed", message="; ".join(problems))
+    elif J.replacement_issue(rep): out.update(verdict="needs_review", message=J.replacement_issue(rep))
     else:
         out["notes"].append(f"{len(rep.df):,} charge lines for {rep.range_from} to {rep.range_to}, {out['jobs']:,} jobs. Lines already held for other dates are left untouched.")
         if held and rep.range_from is None: out["notes"].append("The date range could not be read, so only the jobs in this file are compared.")
@@ -88,3 +92,4 @@ def get_flag(engine, key: str, default: str = "") -> str:
 def set_flag(engine, key: str, value: str) -> None:
     with engine.begin() as c:
         c.execute(delete(settings).where(settings.c.key == key)); c.execute(insert(settings).values(key=key, value=value))
+

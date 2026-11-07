@@ -447,10 +447,17 @@ def ingest_file(engine, path: str, report_time: datetime, source_ref: str = "", 
                 source: str = "email", uploaded_by: str = "", approved_by: str = "", override_reason: str = "", subject: str = "") -> dict:
     """Entry point for an email attachment or a manual upload: read, identify, check, load."""
     from . import profit            # the job profit report has its own layout and rules
-    if profit.is_profit_report(path):
+    layout = profit.profit_layout(path)
+    if layout == "charge_detail":
         return profit.ingest_profit(engine, path, report_time, source, uploaded_by, approve_review, subject)
     name = path.replace("\\", "/").rsplit("/", 1)[-1]
     sha = sha256_file(path)
+    if layout == "job_summary":
+        with engine.begin() as conn:
+            iid = _record(conn, None, "JP", report_time=report_time, file_name=name, file_sha256=sha,
+                          source_ref=source_ref, status="failed", message=profit.JOB_SUMMARY_MESSAGE,
+                          file_path=path, source=source, uploaded_by=uploaded_by, subject=subject)
+        return dict(import_id=iid, status="failed", message=profit.JOB_SUMMARY_MESSAGE)
     try:
         reg = read_register(path)
     except ReportError as e:
@@ -661,3 +668,4 @@ def apply_retention(engine, approved_by: str, reason: str, today: date | None = 
     with engine.begin() as conn:
         conn.execute(insert(admin_log).values(at=datetime.utcnow(), user=approved_by, action="retention", detail=f"Removed {removed} shipment versions dated before {start}. Years kept: {years}. Year starts in month {fy_start_month}. Reason: {reason}"))
     return dict(status="done", removed=removed, window_start=start)
+

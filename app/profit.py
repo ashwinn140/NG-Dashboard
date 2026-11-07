@@ -50,24 +50,54 @@ def _sheet_rows(path):
         wb.close()
 
 
-def is_profit_report(path: str) -> bool:
-    """True if the first cell says "... Charge wise Detail From ... to ...": the job profit report."""
+JOB_SUMMARY_MESSAGE = (
+    "This file is a job-level profit summary. Finance imports require the "
+    "charge-wise detail report, with Basis: Billing Date and an explicit From/to range."
+)
+
+
+def profit_layout(path: str) -> str | None:
+    """Identify supported charge detail and known job-summary layouts by contents."""
     try:
-        import openpyxl
-        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
-        try:
-            rows = list(wb.worksheets[0].iter_rows(max_row=3, values_only=True))
-        finally:
-            wb.close()
-        return bool(rows) and "charge wise detail" in str(rows[0][0]).lower()
+        rows = list(islice(_sheet_rows(path), 12))
+        if not rows:
+            return None
+        title = re.sub(r"\s+", " ", str(rows[0][0] or "")).lower()
+        if "charge wise detail" in title:
+            return "charge_detail"
+        if "job profit analysis report" in title:
+            for row in rows:
+                fields = {_hnorm(c) for c in row if c is not None}
+                if {"jobno", "incomeinr", "expenseinr"}.issubset(fields) and "charge" not in fields:
+                    return "job_summary"
     except Exception:
-        return False
+        return None
+    return None
+
+
+def is_profit_report(path: str) -> bool:
+    return profit_layout(path) == "charge_detail"
+
+
+def replacement_issue(rep: ProfitReport) -> str | None:
+    """Shared, read-only preview/import validation for replacement date scope."""
+    if not config.replace_reports():
+        return None
+    if rep.range_from is None or rep.range_to is None or "billing" not in rep.basis.lower():
+        return "Replacement requires an explicit billing-date range; existing profit data was kept"
+    dates = rep.df.get("Date")
+    if dates is None:
+        return "A profit line has no billing date or falls outside the report range; existing data was kept"
+    dates = pd.to_datetime(dates, errors="coerce").dt.normalize()
+    if dates.isna().any() or ((dates < pd.Timestamp(rep.range_from)) | (dates > pd.Timestamp(rep.range_to))).any():
+        return "A profit line has no billing date or falls outside the report range; existing data was kept"
+    return None
 
 
 def read_profit(path: str) -> ProfitReport:
     stream = _sheet_rows(path)
     rows = list(islice(stream, 12))
-    if not rows or "charge wise detail" not in str(rows[0][0]).lower():
+    if not rows or "charge wise detail" not in re.sub(r"\s+", " ", str(rows[0][0])).lower():
         raise ReportError("Not a job profit report: the title row does not say 'Charge wise Detail'")
     title = str(rows[0][0])
     first = re.sub(r"\s+", " ", title.split("\n")[0]).strip().lower()
@@ -194,18 +224,15 @@ def process_profit(engine, rep: ProfitReport, file_name: str, file_sha: str, rep
         if problems:
             return stop("failed", "; ".join(problems))
         replacing = config.replace_reports()
-        if replacing and (rep.range_from is None or rep.range_to is None or "billing" not in rep.basis.lower()):
-            return stop("needs_review", "Replacement requires an explicit billing-date range; existing profit data was kept")
+        issue = replacement_issue(rep)
+        if issue:
+            return stop("needs_review", issue)
         rows = standardise_profit(rep)
         jobs = {r["job_no"] for r in rows}
         replacing = config.replace_reports()
         held = conn.execute(select(profit_lines.c.id, profit_lines.c.key, profit_lines.c.row_hash, profit_lines.c.job_no, profit_lines.c.from_import, profit_lines.c.trans_date).where(
             profit_lines.c.company == c, profit_lines.c.to_import.is_(None))).all()
         if replacing:
-            if rep.range_from is None or rep.range_to is None or "billing" not in rep.basis.lower():
-                return stop("needs_review", "Replacement requires an explicit billing-date range; existing profit data was kept")
-            if any(r["trans_date"] is None or not rep.range_from <= r["trans_date"] <= rep.range_to for r in rows):
-                return stop("needs_review", "A profit line has no billing date or falls outside the report range; existing data was kept")
             in_jobs = [h for h in held if h.trans_date and rep.range_from <= h.trans_date <= rep.range_to]
             scoped = {h.id for h in in_jobs}
             incoming_keys = {r["key"] for r in rows}
@@ -326,3 +353,4 @@ def profit_coverage(engine, today: date | None = None, years: int = 3, fy_start_
         for sl in slots:
             out.append(dict(company=c, year=sl["year"], label=sl["label"], lines=sum(1 for d in mine if sl["start"] <= d <= sl["end"]), import_covers_year=_covered(ranges, sl["start"], sl["end"])))
     return pd.DataFrame(out)
+
