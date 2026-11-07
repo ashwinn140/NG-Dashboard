@@ -6,18 +6,18 @@
 header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
 a{color:inherit}p{color:gray}table{border-collapse:collapse;width:100%;font-size:14px}td,th{padding:12px;border-bottom:1px solid #8885;text-align:left}th{position:sticky;top:0;background:Canvas}
 section{overflow-x:auto}input{padding:9px;font:inherit;border-radius:6px;border:1px solid #888}small{color:gray}
-</style></head><body><header><h1>Opportunity Finder</h1><a href="/">Back to dashboard</a></header>
+</style></head><body><header><h1>Opportunity Finder <small>BETA</small></h1><a href="/">Back to dashboard</a></header>
 <p>Potential cross-service opportunities from the existing Shipment Register. These are signals for sales review, not confirmed customer demand. Admin-only preview.</p>
 <label>Filter customers <input id="search" type="search" placeholder="Customer name"></label>
 <p id="status" role="status">Loading authorized data…</p><section><table><thead><tr><th>Company</th><th>Customer</th><th>Recent shipments</th><th>Existing LOBs</th><th>Potential LOBs</th><th>Action</th></tr></thead><tbody id="results"></tbody></table></section>
 <script>
-let candidates=[];
+let candidates=[],coverage=[];\nconst normalize=s=>String(s||"").normalize("NFKC").toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu," ").trim().replace(/\s+/g," ");
 const status=document.getElementById('status'),body=document.getElementById('results');
-function render(){const q=document.getElementById('search').value.trim().toLowerCase();body.replaceChildren();let shown=0;
-for(const x of candidates){if(q&&!x.customer.toLowerCase().includes(q))continue;shown++;const tr=document.createElement('tr');
+function render(){const q=normalize(document.getElementById('search').value);body.replaceChildren();let shown=0;
+for(const x of candidates){if(q&&!normalize(x.customer).includes(q)&&!normalize(x.company).includes(q))continue;shown++;const tr=document.createElement('tr');
 const cells=[x.company,x.customer,String(x.shipment_count),Object.entries(x.active_lobs).map(([k,v])=>k+': '+v).join(', '),x.candidate_lobs.join(', '),'Needs sales review'];
 for(const value of cells){const td=document.createElement('td');td.textContent=value;tr.append(td)}body.append(tr)}
-status.textContent=shown+' potential opportunities shown. Review with sales before acting.'}
+status.textContent=shown+' of '+candidates.length+' potential opportunities shown (top 200 maximum). '+coverage.map(x=>x.company+': '+(x.status==='ready'?'ready as of '+x.as_of:x.status==='missing_lob_source'?'missing '+x.missing_lobs.join(', '):x.status.replaceAll('_',' '))).join(' · ')+'. Review with sales before acting.'}
 document.getElementById('search').addEventListener('input',render);
-fetch('/api/admin/phase2/opportunities',{credentials:'same-origin',cache:'no-store'}).then(async r=>{if(!r.ok)throw Error(r.status===401?'Please sign in to the dashboard first.':r.status===403?'Administrator access required.':'Could not load opportunities ('+r.status+').');return r.json()}).then(d=>{candidates=d.candidates||[];render();if(!candidates.length)status.textContent='No qualified opportunities available. Check that all four LOB reports are loaded.'}).catch(e=>{status.textContent=e.message});
+fetch('/api/admin/phase2/opportunities',{credentials:'same-origin',cache:'no-store'}).then(async r=>{if(!r.ok)throw Error(r.status===401?'Please sign in to the dashboard first.':r.status===403?'Administrator access required.':'Could not load opportunities ('+r.status+').');return r.json()}).then(d=>{candidates=d.candidates||[];coverage=d.coverage||[];render();if(!candidates.length)status.textContent='No qualified opportunities in the latest 180-day source window. '+coverage.map(x=>x.company+': '+(x.status==='missing_lob_source'?'missing '+x.missing_lobs.join(', '):x.status==='ready'?'all LOBs available; no qualifying customer activity':x.status.replaceAll('_',' '))).join(' · ')}).catch(e=>{status.textContent=e.message});
 </script></body></html>
