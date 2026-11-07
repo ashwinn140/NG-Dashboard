@@ -1,0 +1,22 @@
+name: Phase 2 isolated unit tests
+on:
+  pull_request:
+    paths:
+      - 'app/phase2_*.py'
+      - 'app/server.py'
+      - 'app/web/opportunities.html'
+      - 'tests/test_phase2_*.py'
+      - '.github/workflows/phase2-tests.yml'
+  workflow_dispatch:
+jobs:
+  phase2-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test Phase 2 pure modules
+        run: python -m unittest discover -s tests -p 'test_phase2_*.py' -v
+      - name: Compile server without executing it
+        run: python -m py_compile app/server.py app/phase2_metrics.py app/phase2_coverage.py

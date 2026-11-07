@@ -409,6 +409,58 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                 "review_count": len(reviews), "reviews": [dict(x) for x in reviews],
                 "missing_coverage": gaps, "note": "Date coverage only; no financial reconciliation performed."}
 
+    @app.get("/api/admin/phase2/source-readiness")
+    def phase2_source_readiness(user: dict = Depends(admin)):
+        """Read-only Phase 2 field availability. Existing imports and reports unchanged."""
+        from .phase2_coverage import report_field_coverage
+        with engine.connect() as c:
+            rows = c.execute(select(imports.c.id, imports.c.company,
+                imports.c.report_type, imports.c.columns).where(
+                imports.c.status == "promoted")).mappings().all()
+        return {"report_fields": report_field_coverage(rows),
+                "note": "Metadata only; validate actual ERP identifiers before enabling customer intelligence."}
+
+    @app.get("/phase2/opportunities", response_class=HTMLResponse)
+    def phase2_opportunities_page(user: dict = Depends(admin)):
+        return page("opportunities.html")
+
+    @app.get("/api/admin/phase2/opportunities")
+    def phase2_opportunities(user: dict = Depends(admin)):
+        """Read-only customer whitespace candidates from the existing shipment register.
+
+        Administrator-only until salesperson-level assignment and permission
+        checks are validated. Incomplete company/LOB imports yield no candidates.
+        """
+        from datetime import timedelta
+        from .phase2_opportunity import find_opportunities
+        today = date.today()
+        cutoff = today - timedelta(days=179)
+        output = []
+        with engine.connect() as c:
+            for company in ("NG", "NCS"):
+                if user["companies"] and company not in user["companies"]:
+                    continue
+                if user["lobs"] and set(user["lobs"]) != {"AE", "AI", "OE", "OI"}:
+                    continue
+                available = set(c.execute(select(current_import.c.report_type).where(
+                    current_import.c.company == company)).scalars().all())
+                if not {"AE", "AI", "OE", "OI"}.issubset(available):
+                    continue
+                records = c.execute(select(shipments.c.company, shipments.c.report_type,
+                    shipments.c.customer, shipments.c.shipment_no, shipments.c.shipment_date).where(
+                    shipments.c.company == company,
+                    shipments.c.report_type.in_(["AE", "AI", "OE", "OI"]),
+                    shipments.c.to_import.is_(None),
+                    shipments.c.shipment_date >= cutoff,
+                    shipments.c.shipment_date <= today)).mappings().all()
+                rows = [{"company": r["company"], "lob": r["report_type"],
+                         "customer": r["customer"], "shipment_id": r["shipment_no"],
+                         "shipment_date": r["shipment_date"]} for r in records]
+                output.extend(find_opportunities(rows, today, complete_lob_coverage=True))
+        return {"as_of": today.isoformat(), "window_days": 180,
+                "candidates": output[:200], "total_candidates": len(output),
+                "note": "Potential cross-service whitespace, not verified demand. Uses shipment-register Customer; sales attribution pending verification."}
+
     @app.get("/api/admin/imports")
     def a_imports(status: str = "", user: dict = Depends(admin)):
         return df_json(P.list_imports(engine, status or None, 300))
