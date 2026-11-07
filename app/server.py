@@ -437,33 +437,56 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         """
         from datetime import timedelta
         from .phase2_opportunity import find_opportunities
-        today = date.today()
-        cutoff = today - timedelta(days=179)
-        output = []
+        # The latest promoted register rows are authoritative. Do not require
+        # current_import entries: historical imports can be promoted without
+        # having all four pointers populated.
+        output, coverage = [], []
         with engine.connect() as c:
             for company in ("NG", "NCS"):
                 if user["companies"] and company not in user["companies"]:
                     continue
-                if user["lobs"] and set(user["lobs"]) != {"AE", "AI", "OE", "OI"}:
+                allowed_lobs = set(user["lobs"]) if user["lobs"] else {"AE", "AI", "OE", "OI"}
+                if allowed_lobs != {"AE", "AI", "OE", "OI"}:
+                    coverage.append({"company": company, "status": "restricted_lob_access",
+                                     "available_lobs": sorted(allowed_lobs)})
                     continue
-                available = set(c.execute(select(current_import.c.report_type).where(
-                    current_import.c.company == company)).scalars().all())
+                available = set(c.execute(select(shipments.c.report_type).distinct().where(
+                    shipments.c.company == company,
+                    shipments.c.report_type.in_(["AE", "AI", "OE", "OI"]),
+                    shipments.c.to_import.is_(None))).scalars().all())
                 if not {"AE", "AI", "OE", "OI"}.issubset(available):
+                    coverage.append({"company": company, "status": "missing_lob_source",
+                                     "available_lobs": sorted(available),
+                                     "missing_lobs": sorted({"AE", "AI", "OE", "OI"} - available)})
                     continue
+                latest = c.execute(select(func.max(shipments.c.shipment_date)).where(
+                    shipments.c.company == company,
+                    shipments.c.report_type.in_(["AE", "AI", "OE", "OI"]),
+                    shipments.c.to_import.is_(None))).scalar()
+                if not latest:
+                    coverage.append({"company": company, "status": "no_shipment_dates"})
+                    continue
+                as_of = min(latest, date.today())
+                cutoff = as_of - timedelta(days=179)
                 records = c.execute(select(shipments.c.company, shipments.c.report_type,
                     shipments.c.customer, shipments.c.shipment_no, shipments.c.shipment_date).where(
                     shipments.c.company == company,
                     shipments.c.report_type.in_(["AE", "AI", "OE", "OI"]),
                     shipments.c.to_import.is_(None),
                     shipments.c.shipment_date >= cutoff,
-                    shipments.c.shipment_date <= today)).mappings().all()
+                    shipments.c.shipment_date <= as_of)).mappings().all()
                 rows = [{"company": r["company"], "lob": r["report_type"],
                          "customer": r["customer"], "shipment_id": r["shipment_no"],
                          "shipment_date": r["shipment_date"]} for r in records]
-                output.extend(find_opportunities(rows, today, complete_lob_coverage=True))
-        return {"as_of": today.isoformat(), "window_days": 180,
-                "candidates": output[:200], "total_candidates": len(output),
-                "note": "Potential cross-service whitespace, not verified demand. Uses shipment-register Customer; sales attribution pending verification."}
+                candidates = find_opportunities(rows, as_of, complete_lob_coverage=True)
+                output.extend(candidates)
+                coverage.append({"company": company, "status": "ready",
+                                 "available_lobs": sorted(available), "as_of": as_of.isoformat(),
+                                 "window_rows": len(rows), "candidate_count": len(candidates)})
+        output.sort(key=lambda r: (-r["shipment_count"], r["company"], r["customer"]))
+        return {"window_days": 180, "candidates": output[:200],
+                "total_candidates": len(output), "coverage": coverage,
+                "note": "Potential cross-service whitespace, not verified demand. Company-scoped, latest available 180-day shipment window. Only companies with all four LOBs loaded qualify."}
 
     @app.get("/api/admin/imports")
     def a_imports(status: str = "", user: dict = Depends(admin)):
