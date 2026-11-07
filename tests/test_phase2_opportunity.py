@@ -14,7 +14,7 @@ def shipment(company, customer, lob, ident, days=0):
 class OpportunityTests(unittest.TestCase):
     def test_cross_sell_whitespace(self):
         rows = [shipment("NG", "C001", "AE", str(i)) for i in range(3)]
-        found = find_opportunities(rows, TODAY)
+        found = find_opportunities(rows, TODAY, complete_lob_coverage=True)
         self.assertEqual(len(found), 1)
         self.assertEqual(found[0]["candidate_lobs"], ["AI", "OE", "OI"])
         self.assertEqual(found[0]["confidence"], "review_required")
@@ -41,9 +41,9 @@ class OpportunityTests(unittest.TestCase):
         rows = [shipment("NG", "C001", lob, lob) for lob in ("AE", "AI", "OE", "OI")]
         self.assertEqual(find_opportunities(rows, TODAY), [])
 
-    def test_bad_window_rejected(self):
+    def test_partial_scope_produces_no_inference(self):\n        rows = [shipment('NG', 'C001', 'AE', str(i)) for i in range(3)]\n        self.assertEqual(find_opportunities(rows, TODAY), [])\n\n    def test_bad_window_rejected(self):
         with self.assertRaises(ValueError):
-            find_opportunities([], TODAY, window_days=0)
+            find_opportunities([], TODAY, window_days=0, complete_lob_coverage=True)
 
 
 if __name__ == "__main__":
