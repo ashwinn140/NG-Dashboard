@@ -7,12 +7,12 @@
 const pages=[['brief','Management Briefing'],['retention','Customer Retention'],['sales','Salesperson Scorecard'],['heatmap','Profitability Heatmap'],['variance','Explain the Variance'],['shipments','Shipment Drill-Down']];
 let D=null,active='brief',query='',period=180;
 const $=id=>document.getElementById(id), day=86400000,epoch=Date.UTC(1970,0,1), today=Math.floor((Date.now()-epoch)/day);
-const name=(key,i)=>{const c=D.cols[key];return c&&c.c&&c.c[i]!==undefined?c.d[c.c[i]]||'':'(unknown)'};
+const name=(key,i)=>{const c=D.cols[key];return c&&c.c&&c.c[i]!==undefined?c.d[c.c[i]]||'':'(not supplied)'};
 const company=i=>(D.reps[D.rep[i]]||[])[0]||'';
 const lob=i=>(D.reps[D.rep[i]]||[])[1]||'';
 const money=n=>new Intl.NumberFormat('en-IN',{maximumFractionDigits:0}).format(n);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function rows(){const cutoff=today-period+1;return D.no.map((id,i)=>({i,id,date:D.date[i],customer:name('customer',i),company:company(i),lob:lob(i),sales:name('x_sales_person',i)})).filter(r=>r.date>=cutoff&&r.date<=today&&(!query||r.customer.toLowerCase().includes(query)))}
+function rows(){const cutoff=today-period+1;return D.no.map((id,i)=>({i,id,date:D.date[i],customer:name('customer',i),company:company(i),lob:lob(i),sales:name('x_salesperson',i)})).filter(r=>r.date>=cutoff&&r.date<=today&&(!query||r.customer.toLowerCase().includes(query)))}
 function table(head,rows){return '<section class="scroll"><table><thead><tr>'+head.map(x=>'<th>'+esc(x)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(v=>'<td>'+esc(v)+'</td>').join('')+'</tr>').join('')+'</tbody></table></section>'}
 function card(label,val,detail=''){return '<div class="card"><small>'+esc(label)+'</small><div class="big">'+esc(val)+'</div><small>'+esc(detail)+'</small></div>'}
 function grouped(rs,key){const m=new Map();for(const r of rs){const k=key(r);if(!m.has(k))m.set(k,[]);m.get(k).push(r)}return [...m].sort((a,b)=>b[1].length-a[1].length)}
