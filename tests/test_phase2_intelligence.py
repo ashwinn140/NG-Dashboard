@@ -23,5 +23,21 @@ class IntelligenceFieldTests(unittest.TestCase):
         source = (ROOT / "app" / "server.py").read_text()
         self.assertIn('def phase2_intelligence_page(user: dict = Depends(me)):', source)
 
+    def test_production_dashboard_has_no_demo_toggle_or_demo_mask(self):
+        ui = (ROOT / "app" / "web" / "dashboard.html").read_text()
+        self.assertNotIn("Show demo history", ui)
+        self.assertNotIn("opt.demo && S.demo", ui)
+        self.assertNotIn("opt.demo && S.pdemo", ui)
+
+    def test_yoy_not_certified_without_report_coverage(self):
+        ui = (ROOT / "app" / "web" / "dashboard.html").read_text()
+        self.assertIn("previous-year source completeness not verified", ui)
+        self.assertIn("S.compare && S.def.compare === 'yoy'", ui)
+
+    def test_intelligence_date_and_customer_filters(self):
+        ui = (ROOT / "app" / "web" / "intelligence.html").read_text()
+        self.assertIn("asOf=Math.min(today,d.date.reduce(", ui)
+        self.assertIn("r.date<=asOf-period&&(!query||r.customer.toLowerCase().includes(query))", ui)
+
 if __name__ == "__main__":
     unittest.main()
