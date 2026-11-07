@@ -12,11 +12,11 @@ from statistics import median
 
 @dataclass(frozen=True)
 class GPBridge:
-    previous_gp: float
-    current_gp: float
+    previous_gp: float | None
+    current_gp: float | None
     volume_impact: float | None
     yield_impact: float | None
-    change: float
+    change: float | None
     status: str
 
 
@@ -29,7 +29,7 @@ def gp_bridge(previous_shipments: int, previous_gp: float | None,
     if previous_shipments < 0 or current_shipments < 0:
         raise ValueError("Shipment counts cannot be negative")
     if previous_gp is None or current_gp is None:
-        return GPBridge(previous_gp, current_gp, None, None, 0.0, "incomplete_gp")
+        return GPBridge(previous_gp, current_gp, None, None, None, "incomplete_gp")
     change = current_gp - previous_gp
     if previous_shipments == 0 or current_shipments == 0:
         return GPBridge(previous_gp, current_gp, None, None, change, "not_comparable")
