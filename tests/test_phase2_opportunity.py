@@ -7,7 +7,7 @@ TODAY = date(2026, 11, 7)
 
 
 def shipment(company, customer, lob, ident, days=0):
-    return {"company": company, "customer_code": customer, "lob": lob,
+    return {"company": company, "customer": customer, "lob": lob,
             "shipment_id": ident, "shipment_date": TODAY - timedelta(days=days)}
 
 
