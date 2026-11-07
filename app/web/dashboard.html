@@ -374,7 +374,7 @@ S.def = Object.assign({}, DEFAULTS);
 try { const st = JSON.parse(localStorage.getItem('ngDefs') || '{}'); for (const k in DEFAULTS) if (st[k] !== undefined && typeof st[k] === typeof DEFAULTS[k]) S.def[k] = st[k]; } catch (e) { /* storage not available: defaults are used */ }
 function saveDefs() { try { localStorage.setItem('ngDefs', JSON.stringify(S.def)); } catch (e) { /* ignore */ } srvPut('defs', S.def); }
 function bucketList() { const u = [...new Set(String(S.def.buckets).split(',').map((x) => parseInt(x, 10)).filter((x) => x > 0))].sort((x, y) => x - y); return u.length ? u : [30, 60, 90, 180]; }
-function cmpLabel() { return S.def.compare === 'yoy' ? 'same period last year' : 'previous ' + R.w.n + ' days'; }
+function cmpLabel() { const w=R.w; return 'current '+fRange({from:w.from,to:w.to})+' vs '+fRange({from:w.pfrom,to:w.pto})+(S.def.compare==='yoy'?' (year-on-year)':' ('+w.n+' days each)'); }
 function grainOf(w) { const g = S.def.grain; return g === 'auto' ? (w.n > S.def.autoDays ? 'month' : 'day') : g; }
 function asOfDay() { return S.def.relEnd === 'today' ? Math.floor(Date.now() / DMS) : MAXDATE; }
 function dayClamped(y, m, d) { const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate(); return dayOf(y, m, Math.min(d, last)); }
@@ -741,6 +741,41 @@ const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.s
 const serial = (d) => d + 25569;                       // days since 1970 -> Excel date serial
 const HDR = (t) => ({v: t, s: 1});
 function downloadXlsx(name, sheets) { saveBytes(name, xlsxBytes(sheets), XLSX_TYPE); }
+
+/* Export every rendered report table and chart data currently exposed in the DOM. */
+function exportVisibleVisuals(){
+ const page=document.getElementById('page');if(!page)return;
+ const title=(document.querySelector('#tabs [data-p="'+S.page+'"]')?.textContent||'Dashboard').trim();
+ const sheets=[],seen=new Set();
+ const tables=[...page.querySelectorAll('table')];
+ tables.forEach((table,i)=>{
+   const headers=[...table.querySelectorAll('thead tr')].flatMap(tr=>[...tr.cells].map(c=>c.innerText.trim()));
+   const rows=[...table.querySelectorAll('tbody tr')].map(tr=>[...tr.cells].map(c=>{const t=c.innerText.trim();const n=Number(t.replace(/,/g,''));return t!==''&&/^[-+]?\d[\d,]*(?:\.\d+)?$/.test(t)?n:t}));
+   if(!rows.length&&!headers.length)return;
+   const width=Math.max(headers.length,...rows.map(r=>r.length),1);
+   sheets.push({name:'Table '+(i+1),cols:Array(width).fill(20),rows:[headers.map(HDR),...rows]});
+ });
+ // Charts expose their series in SVG marks. Export available mark labels, values, and
+ // accessible descriptions; do not invent numbers from pixel positions.
+ [...page.querySelectorAll('svg')].forEach((svg,i)=>{
+   const items=[...svg.querySelectorAll('[data-value], [aria-label], title')].map(el=>{
+     const label=el.getAttribute('aria-label')||el.querySelector('title')?.textContent||el.textContent?.trim()||'';
+     const val=el.getAttribute('data-value')||'';
+     return [label,val];
+   }).filter(([a,b])=>a||b);
+   if(!items.length)return;
+   const key=JSON.stringify(items);if(seen.has(key))return;seen.add(key);
+   sheets.push({name:'Chart '+(i+1),cols:[65,22],rows:[[HDR('Label / accessible series'),HDR('Source value (if exposed)')],...items]});
+ });
+ if(!sheets.length){alert('This view has no exposed table or chart data to export. Use the report-specific Excel export where available.');return}
+ sheets.push({name:'Export context',cols:[30,70],rows:[[HDR('Page'),title],[HDR('Current date range'),fRange({from:R.w.from,to:R.w.to})],[HDR('Comparison date range'),fRange({from:R.w.pfrom,to:R.w.pto})],[HDR('Filters'),filterSummary()],[HDR('Note'),'Visible table rows and available chart metadata only. Use report-specific Excel export for full underlying records.']]});
+ downloadXlsx('NG_'+title.replace(/[^a-z0-9]+/gi,'_')+'_'+fIso(dDate(R.w.to))+'.xlsx',sheets);
+}
+function addUniversalExport(){
+ const anchor=document.getElementById('printBtn')||document.getElementById('grpRow');if(!anchor)return;
+ let b=document.getElementById('uxExportCurrent');if(!b){b=document.createElement('button');b.id='uxExportCurrent';b.type='button';b.className='btn';b.textContent='Export current view · Excel';b.addEventListener('click',exportVisibleVisuals);anchor.insertAdjacentElement('afterend',b)}
+}
+
 function dlButton(label, build, disabledWhy) {
   return h('button', {type: 'button', class: 'btn on', disabled: !!disabledWhy, title: disabledWhy || '', onclick: build}, label);
 }
@@ -1931,4 +1966,4 @@ row.insertAdjacentElement('afterend',links);
 const apply=()=>{const current=document.querySelector('#grpSeg .on')?.dataset.v;links.hidden=current!=='summary'};
 document.getElementById('grpSeg')?.addEventListener('click',()=>requestAnimationFrame(apply));apply();
 })();
-</script></body></html>
+</script><script>document.addEventListener('DOMContentLoaded',()=>{const b=document.createElement('button');b.type='button';b.id='uxExportCurrent';b.className='btn';b.textContent='Export current view · Excel';b.addEventListener('click',()=>{if(typeof exportVisibleVisuals==='function')exportVisibleVisuals()});document.getElementById('printBtn')?.insertAdjacentElement('afterend',b)});</script></body></html>
