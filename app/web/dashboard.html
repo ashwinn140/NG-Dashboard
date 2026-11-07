@@ -750,7 +750,7 @@ function exportVisibleVisuals(){
  const tables=[...page.querySelectorAll('table')];
  tables.forEach((table,i)=>{
    const headers=[...table.querySelectorAll('thead tr')].flatMap(tr=>[...tr.cells].map(c=>c.innerText.trim()));
-   const rows=[...table.querySelectorAll('tbody tr')].map(tr=>[...tr.cells].map(c=>{const t=c.innerText.trim();const n=Number(t.replace(/,/g,''));return t!==''&&/^[-+]?\\d[\\d,]*(?:\\.\\d+)?$/.test(t)?n:t}));
+   const rows=[...table.querySelectorAll('tbody tr')].map(tr=>[...tr.cells].map(c=>{const t=c.innerText.trim();const n=Number(t.replace(/,/g,''));return t!==''&&/^[-+]?\d[\d,]*(?:\.\d+)?$/.test(t)?n:t}));
    if(!rows.length&&!headers.length)return;
    const width=Math.max(headers.length,...rows.map(r=>r.length),1);
    sheets.push({name:'Table '+(i+1),cols:Array(width).fill(20),rows:[headers.map(HDR),...rows]});
