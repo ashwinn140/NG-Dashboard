@@ -11,7 +11,8 @@ section{overflow-x:auto}input{padding:9px;font:inherit;border-radius:6px;border:
 <label>Filter customers <input id="search" type="search" placeholder="Customer name"></label>
 <p id="status" role="status">Loading authorized data…</p><section><table><thead><tr><th>Company</th><th>Customer</th><th>Recent shipments</th><th>Existing LOBs</th><th>Potential LOBs</th><th>Action</th></tr></thead><tbody id="results"></tbody></table></section>
 <script>
-let candidates=[],coverage=[];\nconst normalize=s=>String(s||"").normalize("NFKC").toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu," ").trim().replace(/\s+/g," ");
+let candidates=[],coverage=[];
+const normalize=s=>String(s||"").normalize("NFKC").toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu," ").trim().replace(/\s+/g," ");
 const status=document.getElementById('status'),body=document.getElementById('results');
 function render(){const q=normalize(document.getElementById('search').value);body.replaceChildren();let shown=0;
 for(const x of candidates){if(q&&!normalize(x.customer).includes(q)&&!normalize(x.company).includes(q))continue;shown++;const tr=document.createElement('tr');
