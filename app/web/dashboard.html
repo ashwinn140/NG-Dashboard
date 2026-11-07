@@ -154,6 +154,43 @@ header.top h1{font-family:var(--sans);font-weight:750;letter-spacing:-.035em}
 @media(min-width:1440px){.grid,.kpis,.charts{gap:clamp(.75rem,1.1vw,1.4rem)}}
 @media(max-width:650px){header.top{align-items:flex-start}#app{padding:10px}#grpRow{gap:.5rem}#grpSeg{display:flex;overflow-x:auto;max-width:100%;flex-wrap:nowrap}}
 @media(prefers-reduced-motion:reduce){#boot::before{animation:none}}
+
+/* Enterprise workspace layer: navigation, command palette, density and contextual inspection */
+:root{--ux-rail:248px}
+body.ux-compact{font-size:13px}
+body.ux-compact .card{padding:.75rem}
+body.ux-compact th,body.ux-compact td{padding:.4rem .55rem}
+.ux-tools{display:flex;gap:.45rem;align-items:center;flex-wrap:wrap}
+.ux-tool{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:.45rem .7rem;cursor:pointer;font:inherit;font-size:.82rem;min-height:36px}
+.ux-tool:hover{border-color:var(--accent)}.ux-tool[aria-pressed=true]{background:color-mix(in srgb,var(--accent) 12%,var(--panel));color:var(--accent)}
+.ux-dialog{position:fixed;inset:0;z-index:9999;background:#081323a8;display:grid;place-items:start center;padding:min(12vh,90px) 1rem 1rem}
+.ux-dialog[hidden],.ux-inspector[hidden],.ux-rail[hidden]{display:none!important}
+.ux-dialog-inner{width:min(620px,100%);max-height:80vh;overflow:auto;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:18px;box-shadow:0 24px 80px #0005;padding:1rem}
+.ux-search{width:100%;min-height:48px;border:1px solid var(--line);border-radius:12px;padding:.8rem 1rem;background:var(--panel);color:var(--fg);font:inherit}
+.ux-results{display:grid;gap:.25rem;margin-top:.8rem;max-height:55vh;overflow:auto}
+.ux-result{width:100%;text-align:left;padding:.85rem 1rem;border:0;border-radius:9px;background:transparent;color:var(--fg);cursor:pointer;font:inherit}
+.ux-result:hover,.ux-result:focus-visible{background:color-mix(in srgb,var(--accent) 11%,var(--panel))}
+.ux-inspector{position:fixed;right:0;top:0;bottom:0;width:min(470px,100vw);z-index:100;background:var(--panel);color:var(--fg);box-shadow:-18px 0 70px #0003;border-left:1px solid var(--line);display:flex;flex-direction:column}
+.ux-inspector-head{display:flex;justify-content:space-between;align-items:center;gap:.7rem;padding:1rem;border-bottom:1px solid var(--line)}
+.ux-inspector-content{padding:1.25rem;overflow:auto;flex:1;overflow-wrap:anywhere}
+.ux-inspector dl{display:grid;grid-template-columns:minmax(90px,35%) 1fr;gap:.85rem;border-bottom:1px solid var(--line);padding:.75rem 0;margin:0}
+.ux-inspector dt{color:var(--muted);font-size:.8rem}.ux-inspector dd{margin:0;font-variant-numeric:tabular-nums}
+.ux-rail{position:fixed;left:0;top:0;bottom:0;width:var(--ux-rail);background:var(--panel);border-right:1px solid var(--line);z-index:20;padding:1rem .75rem;overflow:auto;box-shadow:4px 0 20px #00000005}
+.ux-brand{font-weight:800;letter-spacing:-.03em;padding:.75rem .65rem 1.5rem}
+.ux-nav{display:grid;gap:.3rem}.ux-nav button,.ux-nav a{display:block;width:100%;text-align:left;background:transparent;color:var(--fg);border:0;border-radius:10px;padding:.8rem .9rem;text-decoration:none;font:inherit;font-weight:600;cursor:pointer}
+.ux-nav button:hover,.ux-nav a:hover,.ux-nav button[aria-current=page]{background:color-mix(in srgb,var(--accent) 12%,var(--panel));color:var(--accent)}
+body.ux-dashboard{padding-left:var(--ux-rail)}
+body.ux-dashboard #app{max-width:none}
+body.ux-dashboard.ux-rail-collapsed{padding-left:72px}
+body.ux-dashboard.ux-rail-collapsed .ux-rail{width:72px}
+body.ux-dashboard.ux-rail-collapsed .ux-rail .ux-label,body.ux-dashboard.ux-rail-collapsed .ux-brand-text{display:none}
+.ux-rail-toggle{margin-bottom:.6rem}
+.ux-density-label{color:var(--muted);font-size:.75rem}
+.ux-clickable-row{cursor:pointer}
+.ux-clickable-row:hover{background:color-mix(in srgb,var(--accent) 7%,var(--panel))}
+@media(max-width:1023px){body.ux-dashboard,body.ux-dashboard.ux-rail-collapsed{padding-left:0}.ux-rail{transform:translateX(-100%);transition:transform .2s}.ux-rail.ux-mobile-open{transform:translateX(0)}.ux-inspector{width:min(470px,100vw)}}
+@media(prefers-reduced-motion:reduce){.ux-rail{transition:none}}
+
 </style></head>
 <body>
 <a class="skip" href="#page">Skip to the content</a>
@@ -1799,4 +1836,62 @@ window.NG = {agentRows, runVisual, visGet, visSave, defCfg, VTEMPLATES, rateOK, 
   })();
 })();
 </script>
-</body></html>
+<script>
+(function(){
+'use strict';
+const $=s=>document.querySelector(s);
+const make=(tag,attrs={},txt='')=>{const e=document.createElement(tag);Object.entries(attrs).forEach(([k,v])=>{if(k==='class')e.className=v;else e.setAttribute(k,v)});if(txt)e.textContent=txt;return e};
+const tools=make('div',{class:'ux-tools',role:'group','aria-label':'Workspace tools'});
+const search=make('button',{type:'button',class:'ux-tool','aria-label':'Search and navigate, Control or Command K'},'⌕ Search  ⌘K');
+const density=make('button',{type:'button',class:'ux-tool','aria-pressed':'false'},'Compact');
+tools.append(search,density);
+const dialog=make('div',{class:'ux-dialog',hidden:'',role:'presentation'});
+const inner=make('div',{class:'ux-dialog-inner',role:'dialog','aria-modal':'true','aria-label':'Search and navigate'});
+const field=make('input',{class:'ux-search',type:'search',placeholder:'Find a page or action…','aria-label':'Search commands'});
+const results=make('div',{class:'ux-results',role:'listbox','aria-label':'Navigation results'});
+inner.append(field,results);dialog.append(inner);document.body.append(dialog);
+let origin=null,items=[],active=0;
+function close(){dialog.hidden=true;origin?.focus()}
+function render(){const q=field.value.trim().toLowerCase();const found=items.filter(i=>i.label.toLowerCase().includes(q));results.replaceChildren();if(!found.length){results.append(make('p',{},'No matching pages'));return}found.forEach((item,index)=>{const b=make('button',{type:'button',class:'ux-result',role:'option','aria-selected':String(index===active)},item.label);b.onclick=()=>{close();item.run()};results.append(b)});active=Math.min(active,found.length-1)}
+function open(){origin=document.activeElement;active=0;field.value='';dialog.hidden=false;render();field.focus()}
+search.onclick=open;
+dialog.addEventListener('click',e=>{if(e.target===dialog)close()});
+field.addEventListener('input',()=>{active=0;render()});
+field.addEventListener('keydown',e=>{const buttons=[...results.querySelectorAll('button')];if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();active=(active+(e.key==='ArrowDown'?1:-1)+buttons.length)%Math.max(1,buttons.length);buttons.forEach((b,i)=>b.setAttribute('aria-selected',String(i===active)));buttons[active]?.scrollIntoView({block:'nearest'})}if(e.key==='Enter'){e.preventDefault();buttons[active]?.click()}});
+document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();dialog.hidden?open():close()}else if(e.key==='Escape'&&!dialog.hidden){e.preventDefault();close()}});
+function setDensity(value){document.body.classList.toggle('ux-compact',value==='compact');density.textContent=value==='compact'?'Comfortable':'Compact';density.setAttribute('aria-pressed',String(value==='compact'));try{localStorage.setItem('ng.ux.density',value)}catch(e){}}
+density.onclick=()=>setDensity(document.body.classList.contains('ux-compact')?'comfortable':'compact');
+try{setDensity(localStorage.getItem('ng.ux.density')||'comfortable')}catch(e){setDensity('comfortable')}
+const inspector=make('aside',{class:'ux-inspector',hidden:'','aria-label':'Contextual record inspection',tabindex:'-1'});
+const inspectorHead=make('div',{class:'ux-inspector-head'});
+const inspectorTitle=make('strong',{},'Record inspection');
+const inspectorClose=make('button',{type:'button',class:'ux-tool','aria-label':'Close inspection'},'✕');
+const inspectorContent=make('div',{class:'ux-inspector-content'});
+inspectorHead.append(inspectorTitle,inspectorClose);inspector.append(inspectorHead,inspectorContent);document.body.append(inspector);
+let inspectionOrigin=null;
+function closeInspector(){inspector.hidden=true;inspectionOrigin?.focus()}
+inspectorClose.onclick=closeInspector;
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!inspector.hidden){closeInspector();e.preventDefault()}});
+function inspectRow(row){inspectionOrigin=document.activeElement;inspectorContent.replaceChildren();const cells=[...row.cells];const table=row.closest('table');const headers=[...table?.querySelectorAll('thead th')||[]].map(h=>h.textContent.trim());inspectorTitle.textContent='Record inspection';const lead=make('p',{class:'note'},'Read-only details from the selected table row. Source values are shown without modification.');inspectorContent.append(lead);cells.forEach((cell,i)=>{const dl=make('dl');dl.append(make('dt',{},headers[i]||'Field '+(i+1)),make('dd',{},cell.innerText.trim()||'—'));inspectorContent.append(dl)});inspector.hidden=false;inspectorClose.focus()}
+document.addEventListener('click',e=>{if(e.target.closest('button,a,input,select,textarea,[role=button]'))return;const row=e.target.closest('tbody tr');if(row&&row.closest('#main,#app'))inspectRow(row)});
+window.NGWorkspace={tools,addCommand:(label,run)=>{items.push({label,run});render()},inspectRow};
+})();
+
+(function(){
+const ux=window.NGWorkspace;
+const rail=document.createElement('aside');rail.className='ux-rail';rail.setAttribute('aria-label','Main navigation');
+rail.innerHTML='<button type="button" class="ux-tool ux-rail-toggle" aria-label="Collapse navigation">☰</button><div class="ux-brand">◈ <span class="ux-brand-text">Performance Hub</span></div><nav class="ux-nav" aria-label="Business sections"></nav>';
+document.body.classList.add('ux-dashboard');
+document.body.prepend(rail);
+const nav=rail.querySelector('.ux-nav');
+const destinations=[['⌂','Executive overview','summary'],['▤','Operations','ops'],['◫','Profitability','profit'],['▦','My visuals','mine']];
+destinations.forEach(([symbol,label,key])=>{const b=document.createElement('button');b.type='button';b.innerHTML='<span aria-hidden="true">'+symbol+'</span> <span class="ux-label"></span>';b.querySelector('.ux-label').textContent=label;b.onclick=()=>{document.querySelector('#grpSeg [data-v="'+key+'"]')?.click();rail.classList.remove('ux-mobile-open')};nav.append(b);ux.addCommand(label,()=>b.click())});
+const admin=document.createElement('a');admin.href='/admin';admin.textContent='⚙ Administration';admin.className='ux-label';nav.append(admin);ux.addCommand('Administration',()=>location.assign('/admin'));
+const toggle=rail.querySelector('.ux-rail-toggle');
+toggle.onclick=()=>{if(matchMedia('(max-width:1023px)').matches){rail.classList.toggle('ux-mobile-open')}else{document.body.classList.toggle('ux-rail-collapsed');try{localStorage.setItem('ng.ux.rail',document.body.classList.contains('ux-rail-collapsed')?'collapsed':'expanded')}catch(e){}}};
+try{if(localStorage.getItem('ng.ux.rail')==='collapsed')document.body.classList.add('ux-rail-collapsed')}catch(e){}
+const header=document.querySelector('header.top');
+if(header){const mobile=document.createElement('button');mobile.type='button';mobile.className='ux-tool';mobile.textContent='☰ Menu';mobile.setAttribute('aria-label','Open navigation');mobile.onclick=()=>rail.classList.toggle('ux-mobile-open');mobile.style.display='none';const media=matchMedia('(max-width:1023px)');const update=()=>mobile.style.display=media.matches?'inline-flex':'none';update();media.addEventListener?.('change',update);const actions=document.createElement('div');actions.className='ux-tools';actions.append(mobile,ux.tools);header.append(actions)}
+const group=document.getElementById('grpSeg');if(group){const sync=()=>nav.querySelectorAll('button').forEach((b,i)=>b.setAttribute('aria-current',group.querySelector('.on')?.dataset.v===destinations[i][2]?'page':'false'));group.addEventListener('click',()=>requestAnimationFrame(sync));sync()}
+})();
+</script></body></html>
