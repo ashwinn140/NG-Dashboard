@@ -40,7 +40,7 @@ Not needed any more: `BASE_URL` (the app uses the address people open), `UPLOAD_
 Two secrets in PowerShell: `$b = New-Object byte[] 48; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); [Convert]::ToBase64String($b)` (run it twice). Keep `INGEST_SECRET` somewhere safe.
 
 ## 4. Web address
-Service > Settings > Networking > **Generate Domain** (port 8000 if asked). Open `https://<address>/healthz`: it should show `{"ok":true}`. Then open the address itself: the sign-in page appears.
+Service > Settings > Networking > **Generate Domain**. If it asks for a port, use the port the app reports in *Deploy Logs* (a line like `Uvicorn running on http://0.0.0.0:8080`). Railway chooses it and gives it to the app as `PORT`, so it is usually **8080**, not 8000. Open `https://<address>/healthz`: it should show `{"ok":true}`. Then open the address itself: the sign-in page appears.
 
 ## 5. First sign-in and the first data
 1. Sign in with `ADMIN_EMAIL` and `ADMIN_PASSWORD` (tab *User ID and password*).
@@ -76,4 +76,6 @@ Change files in the GitHub repository (copy new files into the cloned folder, Co
 | `SECRET_KEY is not set` in the log | Missing variable | Add `SECRET_KEY` and redeploy. |
 | Sign-in page has no *Email link* tab | SMTP not configured | Add the `SMTP_*` variables (Google App Password). |
 | A report stays "needs review" | It has far fewer rows than what is held, or its subject disagrees with its content | Admin portal > Imports > *Approve* with a reason, or upload the right file. |
+| `/healthz` does not answer although the deploy is green | The domain's target port is not the port in the log (often 8080) | Networking > edit the domain's port to the number in `Uvicorn running on http://0.0.0.0:XXXX`. |
+| Log line "could not prepare the dashboard data" at start | Older version: warm-up ran on an empty database | Harmless; fixed. Load reports and it disappears. |
 | Banner "x days left" in Railway | Trial credit | Upgrade to the Hobby plan. |

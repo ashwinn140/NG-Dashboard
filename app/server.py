@@ -59,6 +59,9 @@ class Store:
         """Builds the dashboard data ahead of time, so the first person after a load does not wait."""
         try:
             with self.lock:
+                with self.engine.connect() as c:
+                    if not c.execute(select(func.count()).select_from(shipments).where(shipments.c.to_import.is_(None)).limit(1)).scalar():
+                        return                      # nothing loaded yet: nothing to prepare (and no error to log)
                 if self.full is None or self.full_version != self.version:
                     self.full = DS.build_full(self.engine); self.full_version = self.version; self.cache.clear()
         except Exception:
@@ -468,7 +471,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
 
     try: bad = [c for c in setup_checks() if not c["ok"] and c["key"] in ("secret", "ingest", "db", "uploads", "smtp")]
     except Exception: bad = []
-    log.warning("Started. Address: %s | database: %s | still to set up: %s", base_url, engine.dialect.name, ", ".join(c["key"] for c in bad) or "nothing")
+    log.warning("Started. Address: %s | database: %s | still to set up: %s", base_url if (explicit or rdom) else "taken from the browser (BASE_URL is not needed)", engine.dialect.name, ", ".join(c["key"] for c in bad) or "nothing")
     return app
 
 

@@ -58,7 +58,7 @@ Flow: ERP emails reports to a Gmail inbox, a Gmail label `ERP-Reports` marks the
 Do **not** set `BASE_URL` or `RAILWAY_RUN_UID` (no longer needed). Email settings come in Stage F.
 
 ### Stage D: Address and first check
-1. App service > Settings > Networking > **Generate Domain** (port 8000 if asked). Tell Ashwin the address.
+1. App service > Settings > Networking > **Generate Domain**. If it asks for a port, use the one in the Deploy Logs line `Uvicorn running on http://0.0.0.0:XXXX` (Railway sets it; usually 8080, not 8000). If the address answers but `/healthz` does not, the domain's target port does not match that number. Tell Ashwin the address.
 2. Wait for the deployment to turn green.
 3. Open `https://<address>/healthz`: it must show `{"ok":true}`.
 4. Open the address: the sign-in page "Performance Dashboard" appears. Ashwin signs in with the admin email and `ADMIN_PASSWORD` (tab *User ID and password*).

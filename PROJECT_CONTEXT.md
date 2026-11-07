@@ -49,3 +49,4 @@ See `CONFIGURATION_REFERENCE.md` (admin portal settings, Railway variables, Gmai
 ## Change log
 * First production build: server, sign-in, admin portal, importer queue, dashboards, reports.
 * Hardening after the first deployment: optional `BASE_URL`, volume permissions handled by the container, empty-system message, tolerant admin bootstrap, setup checklist, dataset warm-up.
+* First live deployment (Railway): found that the warm-up task ran on an empty database and logged a traceback (harmless, fixed), and that Railway gives the app a `PORT` (8080) which the domain's target port must match (docs corrected).

@@ -44,6 +44,12 @@ try: create_app(get_engine("sqlite:///" + tmp + "/d.db"), tmp + "/up4"); ok = Fa
 except RuntimeError as e: ok = True; msg = str(e)
 check("the app refuses to start and says exactly what to add", ok and "SECRET_KEY" in msg, msg[:70])
 
+print("\n== 4b. Starting on an empty database logs no error (the first live start showed a traceback) ==")
+import logging, io, time as _t
+buf = io.StringIO(); h = logging.StreamHandler(buf); logging.getLogger("app").addHandler(h)
+env(ADMIN_EMAIL="boss@example.com", ADMIN_PASSWORD="Correct-horse9", SECRET_KEY="k", UPLOAD_DIR=tmp + "/up4b")
+app4 = create_app(get_engine("sqlite:///" + tmp + "/f.db"), tmp + "/up4b"); _t.sleep(3); logging.getLogger("app").removeHandler(h)
+check("no 'could not prepare the dashboard data' error at start", "could not prepare" not in buf.getvalue(), buf.getvalue()[:80].replace("\n", " ")); app4.state.store.stop = True
 print("\n== 5. A system with only some reports loaded still works (people load them one by one) ==")
 env(ADMIN_EMAIL="boss@example.com", ADMIN_PASSWORD="Correct-horse9", SECRET_KEY="k", UPLOAD_DIR=tmp + "/up5")
 eng = get_engine("sqlite:///" + tmp + "/e.db"); app = create_app(eng, tmp + "/up5", start_worker=False); c = TestClient(app); c.post("/auth/login", json={"login": "boss@example.com", "password": "Correct-horse9"})

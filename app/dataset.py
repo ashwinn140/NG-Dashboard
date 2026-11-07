@@ -101,6 +101,7 @@ def build_full(engine) -> dict:
         frames.append(df); ranges.append(rng.get((co, rt), (None, None)))
     A = pd.concat(frames, ignore_index=True)
     N = len(A)
+    if N == 0: raise ValueError("No shipments are loaded yet, so there is no dashboard data to build.")
     S = lambda col: A[col].fillna("").astype(str).str.strip().str.replace(r"\s+", " ", regex=True) if col in A.columns else pd.Series([""] * N)
 
     def canon(series):
