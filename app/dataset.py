@@ -263,7 +263,7 @@ def restrict(D: dict, user: dict) -> dict:
     sidx = np.asarray(D["p"]["sidx"], dtype=np.int64)[pidx] if len(pidx) else np.array([], dtype=np.int64)
     sidx_new = np.where(sidx >= 0, newpos[np.clip(sidx, 0, None)], -1)         # a job matched to a hidden shipment becomes unmatched
     out["p"] = {"co": [D["p"]["co"][i] for i in pidx], "sidx": sidx_new.tolist(), "rt": [D["p"]["rt"][i] for i in pidx], "income": [D["p"]["income"][i] for i in pidx], "expense": [D["p"]["expense"][i] for i in pidx],
-                "td": [D["p"]["td"][i] for i in pidx], "jd": [D["p"]["jd"][i] for i in pidx], "meta": [m for m in D["p"]["meta"] if user["finance"] and (not user["companies"] or m["co"] in user["companies"])]}
+                "td": [D["p"]["td"][i] for i in pidx], "jd": [D["p"]["jd"][i] for i in pidx], "meta": [m for m in D["p"]["meta"] if user["finance"] and not user["lobs"] and (not user["companies"] or m["co"] in user["companies"])]}
     cols = {}
     for k, c in D["cols"].items():
         entry = {"l": c["l"]}
