@@ -476,10 +476,21 @@ const CI = {customer: 0, branch: 1, carrier: 3, origin: 2, destination: 4, x_tra
 window.CHART_COLORS = ['#4c78a8', '#f58518', '#54a24b', '#b279a2', '#e45756', '#72b7b2', '#eeca3b', '#9d755d'];
 function card(title, note, body, cls) { return h('article', {class: 'card ' + (cls || '')}, h('h2', {class: 'h'}, title), note ? h('p', {class: 'note'}, note) : null, body); }
 function kpi(label, value, delta, note, tone, previousValue) {
-  const unverifiedYoY = Boolean(S.compare && S.def.compare === 'yoy' && delta != null);
-  const comparison = unverifiedYoY ? 'Year-on-year unavailable · previous-year source completeness not verified' + (previousValue != null ? ' · Available previous-period value (not certified): ' + previousValue : '') : (delta == null ? '' : fDelta(delta) + (previousValue == null ? ' · ' : ' · Current: ' + value + ' · Previous: ' + previousValue + ' · ') + cmpLabel());
-  return h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, label), h('div', {class: 'kv' + (tone ? ' ' + tone : '')}, value),
-    (unverifiedYoY || delta != null) ? h('div', {class: 'delta' + (!unverifiedYoY && delta >= 0 ? ' ok' : '')}, comparison) : null, note ? h('div', {class: 'kn'}, note) : null);
+  // Promoted ERP records are the reporting source of truth. A zero prior
+  // value is a valid baseline, but a percentage cannot be calculated from it.
+  const hasComparison = Boolean(S.compare);
+  const hasPrevious = previousValue != null;
+  const comparison = hasComparison
+    ? (hasPrevious ? 'Current: ' + value + ' · Previous: ' + previousValue + ' · ' : '')
+      + (delta == null ? (hasPrevious ? 'No percentage (zero or unavailable baseline)' : 'No comparable baseline') : fDelta(delta))
+      + ' · ' + cmpLabel()
+    : '';
+  return h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, label),
+    h('div', {class: 'kv' + (tone ? ' ' + tone : '')}, value),
+    hasComparison && (delta != null || hasPrevious)
+      ? h('div', {class: 'delta ' + (delta != null && delta >= 0 ? 'ok' : delta != null ? 'bad' : '')}, comparison)
+      : null,
+    note ? h('div', {class: 'kn'}, note) : null);
 }
 function activeCust(m) { const c = COLS.customer.c, a = new Uint32Array(COLS.customer.d.length); for (let i = 0; i < N; i++) if (m[i]) a[c[i]]++; let n = 0; for (let j = 0; j < a.length; j++) if (a[j] > 0 && a[j] >= S.def.activeMin) n++; return n; }
 function sumWhere(m, f) { let s = 0; for (let i = 0; i < N; i++) if (m[i]) s += f(i); return s; }
@@ -535,7 +546,7 @@ function pageOverview() {
   const sumAir = (m) => sumWhere(m, (i) => (mode[i] ? 0 : chg[i])), sumSea = (m) => sumWhere(m, (i) => (mode[i] ? teus[i] : 0));
   if (R.air) kp.push(kpi('Air chargeable weight (tonnes)', f1(sumAir(R.M)), S.compare ? pctChange(sumAir(R.M), sumAir(R.P)) : null, 'Air reports only', '', f1(sumAir(R.P))));
   if (R.sea) kp.push(kpi('Sea TEUs', fInt(Math.round(sumSea(R.M))), S.compare ? pctChange(sumSea(R.M), sumSea(R.P)) : null, 'Filled for FCL shipments only', '', fInt(Math.round(sumSea(R.P)))));
-  kp.push(kpi('Active customers', fInt(activeCust(R.M)), S.compare ? pctChange(activeCust(R.M), activeCust(R.P)) : null, 'At least ' + S.def.activeMin + ' shipment' + (S.def.activeMin > 1 ? 's' : '') + ' in range'));
+  kp.push(kpi('Active customers', fInt(activeCust(R.M)), S.compare ? pctChange(activeCust(R.M), activeCust(R.P)) : null, 'At least ' + S.def.activeMin + ' shipment' + (S.def.activeMin > 1 ? 's' : '') + ' in range', '', fInt(activeCust(R.P))));
   const t1 = top10(R.M, R.useVol), t0 = top10(R.P, R.useVol);
   kp.push(h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'Top ' + S.def.topN + ' customers’ share'), h('div', {class: 'kv'}, t1 == null ? '—' : fP0(t1)),
     t1 != null && t0 != null && S.compare ? h('div', {class: 'delta flat'}, (t1 >= t0 ? '+' : '−') + f1(Math.abs(t1 - t0) * 100) + ' pts vs ' + cmpLabel()) : null,
