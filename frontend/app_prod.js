@@ -15,29 +15,27 @@ const fIso = d3.utcFormat('%Y-%m-%d'), fDay = (d) => d3.utcFormat('%-d %b %Y')(d
 // visible on the Compare page when the demo switch is on. Real rows are 0..N-1; demo rows follow them.
 const hash01 = (a, b) => { let x = (Math.imul(a + 1, 2654435761) ^ Math.imul(b + 7, 40503)) >>> 0; x = Math.imul(x ^ (x >>> 15), 2246822519) >>> 0; x = Math.imul(x ^ (x >>> 13), 3266489917) >>> 0; return ((x ^ (x >>> 16)) >>> 0) / 4294967296; };
 const DEMO_KEEP = [0, 0.86, 0.72], demoSrc = [], demoK = [];
-for (let i = 0; i < N; i++) for (let k = 1; k <= 2; k++) { if (hash01(D.cols.customer.c[i], 99) < 0.08) continue; if (hash01(i, k) < DEMO_KEEP[k]) { demoSrc.push(i); demoK.push(k); } }
 const NA = N + demoSrc.length, ext = (T, a) => { const x = new T(NA); x.set(a); return x; };
 const rep = ext(Uint8Array, D.rep), comp = new Uint8Array(NA), rtype = new Uint8Array(NA), mode = new Uint8Array(NA), demo = new Uint8Array(NA);
 const date = ext(Int32Array, D.date), opsD = ext(Int32Array, D.ops), finD = ext(Int32Array, D.fin), inv1 = ext(Int32Array, D.inv1), invN = ext(Uint8Array, D.invN);
-const chg = ext(Float32Array, D.chg), teus = ext(Float32Array, D.teus), gross = ext(Float32Array, D.gross), cbm = ext(Float32Array, D.cbm);
+const chg = ext(Float64Array, D.chg), teus = ext(Float64Array, D.teus), gross = ext(Float64Array, D.gross), cbm = ext(Float64Array, D.cbm);
 for (let t = 0; t < demoSrc.length; t++) { const i = N + t, s0 = demoSrc[t], k = demoK[t], f = 0.7 + 0.6 * hash01(s0, 10 + k); rep[i] = rep[s0]; date[i] = date[s0] - 365 * k; inv1[i] = inv1[s0] > 0 ? inv1[s0] - 365 * k : inv1[s0]; invN[i] = invN[s0]; chg[i] = chg[s0] * f; teus[i] = Math.round(teus[s0] * f); gross[i] = gross[s0] * f; cbm[i] = cbm[s0] * f; demo[i] = 1; opsD[i] = -1; finD[i] = -1; }
 for (let i = 0; i < NA; i++) { comp[i] = rep[i] < 4 ? 0 : 1; rtype[i] = rep[i] % 4; mode[i] = rtype[i] < 2 ? 0 : 1; }
-const VOL = new Float32Array(NA); for (let i = 0; i < NA; i++) VOL[i] = mode[i] === 0 ? chg[i] : teus[i];
+const VOL = new Float64Array(NA); for (let i = 0; i < NA; i++) VOL[i] = mode[i] === 0 ? chg[i] : teus[i];
 const mStart = new Int32Array(NA); { const cache = new Map(); for (let i = 0; i < NA; i++) { let v = cache.get(date[i]); if (v === undefined) { v = Math.round(+d3.utcMonth.floor(dDate(date[i])) / DMS); cache.set(date[i], v); } mStart[i] = v; } }
 const COLS = {company: {l: 'Company', d: COMP, c: comp}, report: {l: 'Report', d: REPN, c: rtype}};
-for (const k in D.cols) { const dc = D.cols[k], c = dc.c ? ext(Uint16Array, dc.c) : new Uint16Array(NA); if (dc.c) for (let t = 0; t < demoSrc.length; t++) c[N + t] = c[demoSrc[t]]; COLS[k] = {l: dc.l, d: dc.d, c, own: !!dc.c}; }
+for (const k in D.cols) { const dc = D.cols[k], c = dc.c ? ext(Uint32Array, dc.c) : new Uint32Array(NA); if (dc.c) for (let t = 0; t < demoSrc.length; t++) c[N + t] = c[demoSrc[t]]; COLS[k] = {l: dc.l, d: dc.d, c, own: !!dc.c}; }
 // ---- job profit lines, joined to the shipment registers by job number (the "VLOOKUP"); they share the same dictionaries, so every filter applies to both
 const PD_ = D.p, NP = PD_.co.length, PSH = [7, 31, 365], pdemoSrc = [], pdemoK = [];
-for (let i = 0; i < NP; i++) PSH.forEach((sh, k) => { if (hash01(i, 50 + k) < 0.8) { pdemoSrc.push(i); pdemoK.push(k); } });
 const NPA = NP + pdemoSrc.length, pext = (T, a) => { const x = new T(NPA); x.set(a); return x; };
 const pco = pext(Uint8Array, PD_.co), prt = pext(Uint8Array, PD_.rt), pinc = pext(Float64Array, PD_.income), pexp = pext(Float64Array, PD_.expense), ptd = pext(Int32Array, PD_.td), pjd = pext(Int32Array, PD_.jd), psidx = pext(Int32Array, PD_.sidx);
 const pdemo = new Uint8Array(NPA), pjob = new Int32Array(NPA);
 for (let t = 0; t < pdemoSrc.length; t++) { const i = NP + t, s0 = pdemoSrc[t], f = 0.7 + 0.6 * hash01(s0, 90 + pdemoK[t]); pco[i] = pco[s0]; prt[i] = prt[s0]; pinc[i] = pinc[s0] * f; pexp[i] = pexp[s0] * f; ptd[i] = ptd[s0] - PSH[pdemoK[t]]; pjd[i] = pjd[s0] - PSH[pdemoK[t]]; psidx[i] = psidx[s0]; pdemo[i] = 1; }
-for (const k in D.cols) { const pc = pext(Uint16Array, D.cols[k].pc); for (let t = 0; t < pdemoSrc.length; t++) pc[NP + t] = pc[pdemoSrc[t]]; COLS[k].pc = pc; }
+for (const k in D.cols) { const pc = pext(Uint32Array, D.cols[k].pc); for (let t = 0; t < pdemoSrc.length; t++) pc[NP + t] = pc[pdemoSrc[t]]; COLS[k].pc = pc; }
 COLS.company.pc = pco; COLS.company.own = true; COLS.report.own = true; COLS.report.pc = prt; COLS.report.d = REPN.concat(['Other (road, general)']);
 COLS.jobstatus = {l: 'Job status', d: ['Healthy', 'Cost not booked', 'Billing pending', 'Loss-making', 'Low margin'], c: null, pc: new Uint8Array(NPA), own: false};
 COLS.band = {l: 'Job margin band', d: ['Loss (below 0%)', '0 to 10%', '10 to 30%', '30 to 60%', '60 to 99%', '100% (no cost booked)', 'No income'], c: null, pc: new Uint8Array(NPA), own: false};
-{ const jm = new Map(), jc = COLS.p_job.pc; for (let i = 0; i < NPA; i++) { const k = pco[i] * 100000 + jc[i]; let j = jm.get(k); if (j === undefined) { j = jm.size; jm.set(k, j); } pjob[i] = j; } var NJ = jm.size; }
+{ const jm = new Map(), jc = COLS.p_job.pc; for (let i = 0; i < NPA; i++) { const k = pco[i] + ':' + jc[i] + ':' + pjd[i] + ':' + prt[i]; let j = jm.get(k); if (j === undefined) { j = jm.size; jm.set(k, j); } pjob[i] = j; } var NJ = jm.size; }
 const pjInc = new Float64Array(NJ), pjExp = new Float64Array(NJ), pjFirst = new Int32Array(NJ).fill(-1);
 for (let i = 0; i < NP; i++) { const j = pjob[i]; pjInc[j] += pinc[i]; pjExp[j] += pexp[i]; if (pjFirst[j] < 0) pjFirst[j] = i; }
 for (let t = 0; t < pdemoSrc.length; t++) if (pjFirst[pjob[NP + t]] < 0) pjFirst[pjob[NP + t]] = pdemoSrc[t];
@@ -46,7 +44,7 @@ function setPBasis(b) { pdate = b === 'job' ? pjd : ptd; PMIN = 1e9; PMAX = -1e9
 setPBasis('bill');
 const PMAIN = ['p_lob', 'p_charge', 'p_party', 'jobstatus', 'band', 'p_ic'], PEXTRA = ['p_job', 'p_mode', 'p_direction', 'p_kind'];
 
-{ const lm = new Map(), names = [], codes = new Uint16Array(NA), oc = COLS.origin.c, dc = COLS.destination.c; for (let i = 0; i < NA; i++) { const key = oc[i] * 1000 + dc[i]; let j = lm.get(key); if (j === undefined) { j = names.length; lm.set(key, j); names.push(COLS.origin.d[oc[i]] + ' → ' + COLS.destination.d[dc[i]]); } codes[i] = j; } const lpc = new Uint16Array(NPA), poc = COLS.origin.pc, pdc = COLS.destination.pc; for (let i = 0; i < NPA; i++) { const key = poc[i] * 1000 + pdc[i]; let j = lm.get(key); if (j === undefined) { j = names.length; lm.set(key, j); names.push(COLS.origin.d[poc[i]] + ' → ' + COLS.destination.d[pdc[i]]); } lpc[i] = j; } COLS.lane = {l: 'Lane', d: names, c: codes, pc: lpc, own: true}; }
+{ const lm = new Map(), names = [], codes = new Uint32Array(NA), oc = COLS.origin.c, dc = COLS.destination.c; for (let i = 0; i < NA; i++) { const key = oc[i] + ':' + dc[i]; let j = lm.get(key); if (j === undefined) { j = names.length; lm.set(key, j); names.push(COLS.origin.d[oc[i]] + ' → ' + COLS.destination.d[dc[i]]); } codes[i] = j; } const lpc = new Uint32Array(NPA), poc = COLS.origin.pc, pdc = COLS.destination.pc; for (let i = 0; i < NPA; i++) { const key = poc[i] + ':' + pdc[i]; let j = lm.get(key); if (j === undefined) { j = names.length; lm.set(key, j); names.push(COLS.origin.d[poc[i]] + ' → ' + COLS.destination.d[pdc[i]]); } lpc[i] = j; } COLS.lane = {l: 'Lane', d: names, c: codes, pc: lpc, own: true}; }
 const MAIN = ['company', 'report', 'branch', 'customer', 'agent', 'x_salesperson', 'shipper', 'consignee', 'job_owner', 'carrier', 'origin', 'destination', 'x_tradelanename', 'x_dischargecountry', 'nomination', 'consol', 'cargo', 'status', 'stage'];
 const EXTRA = Object.keys(COLS).filter((k) => k.startsWith('x_') && !MAIN.includes(k)).sort((a, b) => COLS[a].l.localeCompare(COLS[b].l));
 let MINDATE = 1e9, MAXDATE = -1e9; for (let i = 0; i < N; i++) { if (date[i] < MINDATE) MINDATE = date[i]; if (date[i] > MAXDATE) MAXDATE = date[i]; }
@@ -62,7 +60,7 @@ S.def = Object.assign({}, DEFAULTS);
 try { const st = JSON.parse(localStorage.getItem('ngDefs') || '{}'); for (const k in DEFAULTS) if (st[k] !== undefined && typeof st[k] === typeof DEFAULTS[k]) S.def[k] = st[k]; } catch (e) { /* storage not available: defaults are used */ }
 function saveDefs() { try { localStorage.setItem('ngDefs', JSON.stringify(S.def)); } catch (e) { /* ignore */ } srvPut('defs', S.def); }
 function bucketList() { const u = [...new Set(String(S.def.buckets).split(',').map((x) => parseInt(x, 10)).filter((x) => x > 0))].sort((x, y) => x - y); return u.length ? u : [30, 60, 90, 180]; }
-function cmpLabel() { return S.def.compare === 'yoy' ? 'same period last year' : 'previous ' + R.w.n + ' days'; }
+function cmpLabel() { const w=R.w; return 'current '+fRange({from:w.from,to:w.to})+' vs '+fRange({from:w.pfrom,to:w.pto})+(S.def.compare==='yoy'?' (year-on-year)':' ('+w.n+' days each)'); }
 function grainOf(w) { const g = S.def.grain; return g === 'auto' ? (w.n > S.def.autoDays ? 'month' : 'day') : g; }
 function asOfDay() { return S.def.relEnd === 'today' ? Math.floor(Date.now() / DMS) : MAXDATE; }
 function dayClamped(y, m, d) { const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate(); return dayOf(y, m, Math.min(d, last)); }
@@ -106,9 +104,9 @@ function h(tag, props, ...kids) {
 const $ = (id) => document.getElementById(id);
 
 // ---------------------------------------------------------------- filtering
-function win() { let from, to; if (S.rel) { const r = resolveRel(S.rel); from = r.from; to = r.to; } else { from = S.from == null ? MINDATE : S.from; to = S.to == null ? MAXDATE : S.to; } const n = Math.max(1, to - from + 1); return S.def.compare === 'yoy' ? {from, to, n, pfrom: from - 365, pto: to - 365} : {from, to, n, pfrom: from - n, pto: from - 1}; }
+function win() { let from, to; if (S.rel) { const r = resolveRel(S.rel); from = r.from; to = r.to; } else { from = S.from == null ? MINDATE : S.from; to = S.to == null ? MAXDATE : S.to; } const n = Math.max(1, to - from + 1); return S.def.compare === 'yoy' ? {from, to, n, pfrom: dayClamped(...ymd(from).map((v,i)=>i===0?v-1:v)), pto: dayClamped(...ymd(to).map((v,i)=>i===0?v-1:v))} : {from, to, n, pfrom: from - n, pto: from - 1}; }
 function mask(opt) {
-  opt = opt || {}; const skip = new Set([].concat(opt.skip || [])), NN = opt.demo && S.demo ? NA : N, m = new Uint8Array(NA); m.fill(1, 0, NN);
+  opt = opt || {}; const skip = new Set([].concat(opt.skip || [])), NN = N, m = new Uint8Array(NA); m.fill(1, 0, NN);
   for (const k in S.sel) { if (skip.has(k) || !COLS[k].own) continue; const set = S.sel[k]; if (!set || !set.size) continue;
     const L = new Uint8Array(COLS[k].d.length); set.forEach((v) => { L[v] = 1; }); const c = COLS[k].c; for (let i = 0; i < NN; i++) if (!L[c[i]]) m[i] = 0; }
   if (opt.dates !== 'none') { const w = win(), lo = opt.dates === 'prev' ? w.pfrom : w.from, hi = opt.dates === 'prev' ? w.pto : w.to; for (let i = 0; i < NN; i++) if (date[i] < lo || date[i] > hi) m[i] = 0; }
@@ -155,9 +153,22 @@ function rankedKey(key) {
 const CI = {customer: 0, branch: 1, carrier: 3, origin: 2, destination: 4, x_tradelanename: 5, x_dischargecountry: 6, shipper: 0, consignee: 1};
 window.CHART_COLORS = ['#4c78a8', '#f58518', '#54a24b', '#b279a2', '#e45756', '#72b7b2', '#eeca3b', '#9d755d'];
 function card(title, note, body, cls) { return h('article', {class: 'card ' + (cls || '')}, h('h2', {class: 'h'}, title), note ? h('p', {class: 'note'}, note) : null, body); }
-function kpi(label, value, delta, note, tone) {
-  return h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, label), h('div', {class: 'kv' + (tone ? ' ' + tone : '')}, value),
-    delta == null ? null : h('div', {class: 'delta ' + (delta >= 0 ? 'ok' : 'bad')}, fDelta(delta) + ' vs ' + cmpLabel()), note ? h('div', {class: 'kn'}, note) : null);
+function kpi(label, value, delta, note, tone, previousValue) {
+  // Promoted ERP records are the reporting source of truth. A zero prior
+  // value is a valid baseline, but a percentage cannot be calculated from it.
+  const hasComparison = Boolean(S.compare);
+  const hasPrevious = previousValue != null;
+  const comparison = hasComparison
+    ? (hasPrevious ? 'Current: ' + value + ' · Previous: ' + previousValue + ' · ' : '')
+      + (delta == null ? (hasPrevious ? 'No percentage (zero or unavailable baseline)' : 'No comparable baseline') : fDelta(delta))
+      + ' · ' + cmpLabel()
+    : '';
+  return h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, label),
+    h('div', {class: 'kv' + (tone ? ' ' + tone : '')}, value),
+    hasComparison && (delta != null || hasPrevious)
+      ? h('div', {class: 'delta ' + (delta != null && delta >= 0 ? 'ok' : delta != null ? 'bad' : '')}, comparison)
+      : null,
+    note ? h('div', {class: 'kn'}, note) : null);
 }
 function activeCust(m) { const c = COLS.customer.c, a = new Uint32Array(COLS.customer.d.length); for (let i = 0; i < N; i++) if (m[i]) a[c[i]]++; let n = 0; for (let j = 0; j < a.length; j++) if (a[j] > 0 && a[j] >= S.def.activeMin) n++; return n; }
 function sumWhere(m, f) { let s = 0; for (let i = 0; i < N; i++) if (m[i]) s += f(i); return s; }
@@ -209,11 +220,11 @@ function mixBlock(key, title) {
 function pageOverview() {
   const kp = [];
   const dN = pctChange(R.n, R.np);
-  kp.push(kpi('Shipments', fInt(R.n), S.compare ? dN : null, 'Dated within the selected range'));
+  kp.push(kpi('Shipments', fInt(R.n), S.compare ? dN : null, 'Dated within the selected range', '', fInt(R.np)));
   const sumAir = (m) => sumWhere(m, (i) => (mode[i] ? 0 : chg[i])), sumSea = (m) => sumWhere(m, (i) => (mode[i] ? teus[i] : 0));
-  if (R.air) kp.push(kpi('Air chargeable weight (tonnes)', f1(sumAir(R.M)), S.compare ? pctChange(sumAir(R.M), sumAir(R.P)) : null, 'Air reports only'));
-  if (R.sea) kp.push(kpi('Sea TEUs', fInt(Math.round(sumSea(R.M))), S.compare ? pctChange(sumSea(R.M), sumSea(R.P)) : null, 'Filled for FCL shipments only'));
-  kp.push(kpi('Active customers', fInt(activeCust(R.M)), S.compare ? pctChange(activeCust(R.M), activeCust(R.P)) : null, 'At least ' + S.def.activeMin + ' shipment' + (S.def.activeMin > 1 ? 's' : '') + ' in range'));
+  if (R.air) kp.push(kpi('Air chargeable weight (tonnes)', f1(sumAir(R.M)), S.compare ? pctChange(sumAir(R.M), sumAir(R.P)) : null, 'Air reports only', '', f1(sumAir(R.P))));
+  if (R.sea) kp.push(kpi('Sea TEUs', fInt(Math.round(sumSea(R.M))), S.compare ? pctChange(sumSea(R.M), sumSea(R.P)) : null, 'Filled for FCL shipments only', '', fInt(Math.round(sumSea(R.P)))));
+  kp.push(kpi('Active customers', fInt(activeCust(R.M)), S.compare ? pctChange(activeCust(R.M), activeCust(R.P)) : null, 'At least ' + S.def.activeMin + ' shipment' + (S.def.activeMin > 1 ? 's' : '') + ' in range', '', fInt(activeCust(R.P))));
   const t1 = top10(R.M, R.useVol), t0 = top10(R.P, R.useVol);
   kp.push(h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'Top ' + S.def.topN + ' customers’ share'), h('div', {class: 'kv'}, t1 == null ? '—' : fP0(t1)),
     t1 != null && t0 != null && S.compare ? h('div', {class: 'delta flat'}, (t1 >= t0 ? '+' : '−') + f1(Math.abs(t1 - t0) * 100) + ' pts vs ' + cmpLabel()) : null,
@@ -349,6 +360,7 @@ function pageShip() {
   return h('div', {class: 'grid'}, card('Shipments', 'Every shipment in the current selection. The CSV carries all filtered rows with the extra columns, and opens in Excel.', h('div', null, h('div', {class: 'frow'}, q, dx, dl), note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody)), pager), 'full'));
 }
 function pageChanges() {
+  if (D.storage_mode === 'replace') return card('Daily report replacement', 'The latest data is kept for each reporting period.', h('p', {class: 'empty'}, 'Daily reports update the dates and branches they cover. Other periods stay available. Earlier versions of changed or removed records are not retained, so a before-and-after comparison is unavailable.'), 'full');
   const avail = Object.keys(D.changes).map(Number);
   if (!avail.length) return card('Changes since the last report', 'What each new load added, changed or removed.', h('p', {class: 'empty'}, 'Nothing to compare yet. A report needs to have been loaded at least twice; after the next daily load this page lists the new, changed and no-longer-present shipments.'), 'full');
   if (S.ch == null || !avail.includes(S.ch)) S.ch = avail[0]; const c = D.changes[String(S.ch)], m = D.meta[S.ch];
@@ -428,6 +440,46 @@ const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.s
 const serial = (d) => d + 25569;                       // days since 1970 -> Excel date serial
 const HDR = (t) => ({v: t, s: 1});
 function downloadXlsx(name, sheets) { saveBytes(name, xlsxBytes(sheets), XLSX_TYPE); }
+
+/* Export every rendered report table and chart data currently exposed in the DOM. */
+function exportVisibleVisuals(){
+ const page=document.getElementById('page');if(!page)return;
+ const title=(document.querySelector('#tabs [data-p="'+S.page+'"]')?.textContent||'Dashboard').trim();
+ const sheets=[],seen=new Set();
+ const tables=[...page.querySelectorAll('table')];
+ tables.forEach((table,i)=>{
+   const headers=[...table.querySelectorAll('thead tr')].flatMap(tr=>[...tr.cells].map(c=>c.innerText.trim()));
+   const rows=[...table.querySelectorAll('tbody tr')].map(tr=>[...tr.cells].map(c=>{const t=c.innerText.trim();const n=Number(t.replace(/,/g,''));return t!==''&&/^[-+]?\d[\d,]*(?:\.\d+)?$/.test(t)?n:t}));
+   if(!rows.length&&!headers.length)return;
+   const width=Math.max(headers.length,...rows.map(r=>r.length),1);
+   sheets.push({name:'Table '+(i+1),cols:Array(width).fill(20),rows:[headers.map(HDR),...rows]});
+ });
+ // Export D3-bound numerical chart series where available, never pixel positions.
+ [...page.querySelectorAll('svg')].forEach((svg,i)=>{
+   const items=[],unique=new Set();
+   for(const el of svg.querySelectorAll('rect,path,circle,line,g')){
+     const d=el.__data__;if(d==null)continue;
+     let values=[];
+     if(typeof d==='number')values=[['Value',d]];
+     else if(Array.isArray(d))values=d.slice(0,12).map((v,j)=>[String(j),v]).filter(([,v])=>typeof v==='number'&&Number.isFinite(v));
+     else if(typeof d==='object')values=Object.entries(d).filter(([,v])=>typeof v==='number'&&Number.isFinite(v)).slice(0,12);
+     if(!values.length)continue;
+     const label=el.getAttribute('aria-label')||el.querySelector('title')?.textContent||el.getAttribute('data-label')||'Series '+(items.length+1);
+     const key=label+'|'+JSON.stringify(values);if(unique.has(key))continue;unique.add(key);
+     for(const [field,value] of values)items.push([label,field,value]);
+     if(items.length>=15000)break;
+   }
+   if(items.length)sheets.push({name:'Chart '+(i+1),cols:[52,24,22],rows:[[HDR('Series / mark'),HDR('Measure'),HDR('Value')],...items]});
+ });
+ if(!sheets.length){alert('This view has no exposed table or chart data to export. Use the report-specific Excel export where available.');return}
+ sheets.push({name:'Export context',cols:[30,70],rows:[[HDR('Page'),title],[HDR('Current date range'),fRange({from:R.w.from,to:R.w.to})],[HDR('Comparison date range'),fRange({from:R.w.pfrom,to:R.w.pto})],[HDR('Filters'),filterSummary()],[HDR('Note'),'Visible table rows and D3-bound numeric chart series where available. Use report-specific Excel export for full underlying records.']]});
+ downloadXlsx('NG_'+title.replace(/[^a-z0-9]+/gi,'_')+'_'+fIso(dDate(R.w.to))+'.xlsx',sheets);
+}
+function addUniversalExport(){
+ const anchor=document.getElementById('printBtn')||document.getElementById('grpRow');if(!anchor)return;
+ let b=document.getElementById('uxExportCurrent');if(!b){b=document.createElement('button');b.id='uxExportCurrent';b.type='button';b.className='btn';b.textContent='Export visible data · Excel';b.addEventListener('click',exportVisibleVisuals);anchor.insertAdjacentElement('afterend',b)}
+}
+
 function dlButton(label, build, disabledWhy) {
   return h('button', {type: 'button', class: 'btn on', disabled: !!disabledWhy, title: disabledWhy || '', onclick: build}, label);
 }
@@ -439,7 +491,7 @@ function filterSummary() {
 
 // ================================================================ Compare periods
 S.cmp = {unit: 'month', against: 'prev', basis: 'todate', anchor: null, custom: false, A: {from: null, to: null}, B: {from: null, to: null}, dim: 'customer', show: 'all', tsort: {sort: 'adelta', dir: -1}};
-S.demo = false;
+S.demo = false; S.pdemo = false;
 const UNITS = [['week', 'Week'], ['month', 'Month'], ['quarter', 'Quarter'], ['year', 'Year (follows the year setting above)']];
 const ymd = (d) => { const x = dDate(d); return [x.getUTCFullYear(), x.getUTCMonth(), x.getUTCDate()]; };
 const dayOf = (y, m, dd) => Math.round(Date.UTC(y, m, dd) / DMS);
@@ -571,9 +623,7 @@ function pageCompare() {
       h('label', {class: 'f'}, h('span', null, 'Basis'), sel([['todate', 'To date (like for like)'], ['full', 'Full period']], c.basis, (v) => { c.basis = v; renderAll(); })), h('label', {class: 'f'}, h('span', null, 'As at'), dateIn(c.anchor == null ? asOfDay() : c.anchor, (v) => { c.anchor = v; c.custom = false; })),
       h('button', {type: 'button', class: 'btn', onclick: () => { c.anchor = null; renderAll(); }}, 'Reset to as-of date'), h('label', {class: 'f'}, h('input', {type: 'checkbox', checked: c.custom, onchange: (e) => { c.custom = e.target.checked; if (c.custom) prefill(); renderAll(); }}), 'Custom date ranges')));
   if (c.custom) controls.append(h('div', {class: 'frow'}, h('span', {class: 'lbl2'}, 'Current'), dateIn(c.A.from, (v) => { c.A.from = v; }), dateIn(c.A.to, (v) => { c.A.to = v; }), h('span', {class: 'lbl2'}, 'compared with'), dateIn(c.B.from, (v) => { c.B.from = v; }), dateIn(c.B.to, (v) => { c.B.to = v; })));
-  controls.append(h('div', {class: 'frow'}, h('label', {class: 'f'}, h('input', {type: 'checkbox', checked: S.demo, onchange: (e) => { S.demo = e.target.checked; renderAll(); }}), 'Show demo history (simulated earlier years, so you can preview year-on-year before the real years are loaded)')));
   root.append(controls);
-  if (S.demo) root.append(h('div', {class: 'card warnbar'}, h('b', null, 'Demo history is on. '), '2025 and 2024 figures on this page are simulated from 2026 data, so they are not real. Downloads are switched off while this is on.'));
   if (pr.err) { root.append(h('div', {class: 'card'}, h('p', {class: 'empty'}, pr.err))); return root; }
 
   const m = mask({dates: 'none', demo: true}), tot = scanTotals(m, pr), mixed = tot.hasAir && tot.hasSea, useVol = S.measure === 'volume' && !mixed;
@@ -582,7 +632,7 @@ function pageCompare() {
   root.append(h('div', {class: 'card', style: 'margin-bottom:.9rem'}, h('p', {class: 'take', style: 'margin:0 0 .3rem'}, pr.title + '.'),
     h('p', {class: 'meta', style: 'margin:0'}, 'Current: ' + (pr.curName ? pr.curName + ', ' : '') + fRange(pr.cur) + ' (' + nDays(pr.cur) + ' days)   |   Previous: ' + (pr.prevName ? pr.prevName + ', ' : '') + fRange(pr.prev) + ' (' + nDays(pr.prev) + ' days)' + (nDays(pr.cur) !== nDays(pr.prev) ? '   |   The two periods have a different number of days.' : '') + (pr.clamped ? '   |   The previous period is shorter than the days elapsed in the current one, so it stops at its last day.' : '')),
     mixed && S.measure === 'volume' ? h('p', {class: 'meta', style: 'margin:.3rem 0 0'}, 'Air and sea are never added together, so the figures below count shipments. Select only air or only sea reports to compare volume.') : null,
-    tot.nP === 0 ? h('p', {class: 'meta', style: 'margin:.4rem 0 0;color:var(--warn)'}, 'There is no data in the comparison period. ' + (c.against === 'yoy' || pr.prev.to < MINDATE ? 'Load the earlier years (admin portal, Upload report), or switch on demo history above to preview this page.' : 'Choose a different period.')) : null));
+    tot.nP === 0 ? h('p', {class: 'meta', style: 'margin:.4rem 0 0;color:var(--warn)'}, 'There is no data in the comparison period. ' + (c.against === 'yoy' || pr.prev.to < MINDATE ? 'The uploaded records contain no activity for that comparison period. Upload earlier reports if needed.' : 'Choose a different period.')) : null));
 
   // KPI cards
   const cu = scanDim(m, 'customer', pr, () => 1); let aC = 0, aP = 0, nw = 0, ls = 0;
@@ -674,7 +724,7 @@ function totalsP(m, from, to) {
   return {inc, exp, profit: inc - exp, margin: marginOf(inc, exp), jobs: jobs.size, booked: booked.size, lines, neg};
 }
 function maskP(opt) {
-  opt = opt || {}; const skip = new Set([].concat(opt.skip || [])), NN = opt.demo && S.pdemo ? NPA : NP, m = new Uint8Array(NPA); m.fill(1, 0, NN);
+  opt = opt || {}; const skip = new Set([].concat(opt.skip || [])), NN = NP, m = new Uint8Array(NPA); m.fill(1, 0, NN);
   for (const k in S.sel) { if (skip.has(k)) continue; const set = S.sel[k]; if (!set || !set.size) continue; const L = new Uint8Array(COLS[k].d.length); set.forEach((v) => { L[v] = 1; }); const c = COLS[k].pc; for (let i = 0; i < NN; i++) if (!L[c[i]]) m[i] = 0; }
   if (opt.dates !== 'none') { const w = win(), lo = opt.dates === 'prev' ? w.pfrom : w.from, hi = opt.dates === 'prev' ? w.pto : w.to; for (let i = 0; i < NN; i++) if (pdate[i] < lo || pdate[i] > hi) m[i] = 0; }
   return m;
@@ -744,9 +794,9 @@ function ppOverview() {
   const t = R.t, tp = R.tp, on = S.compare, dd = (a, b) => (on ? pctChange(a, b) : null), ex = pExpectedByLob(R.M), cov = t.jobs ? t.booked / t.jobs : 1;
   const stat = groupByP('jobstatus', maskP({skip: 'jobstatus'})), st = (n) => stat.find((r) => r.label === n) || {jobs: 0, inc: 0, exp: 0, profit: 0};
   const ptsDelta = t.margin != null && tp.margin != null && on ? (t.margin >= tp.margin ? '+' : '−') + ((Math.abs(t.margin - tp.margin)) * 100).toFixed(1) + ' pts vs ' + cmpLabel() : null;
-  const kp = [kpi('Income', money(t.inc), dd(t.inc, tp.inc), 'Billed to customers'), kpi('Expense', money(t.exp), dd(t.exp, tp.exp), 'Costs booked so far'), kpi('Profit', money(t.profit), dd(t.profit, tp.profit), 'Income minus expense', t.profit < 0 ? 'bad' : ''),
+  const kp = [kpi('Income', money(t.inc), dd(t.inc, tp.inc), 'Billed to customers', '', money(tp.inc)), kpi('Expense', money(t.exp), dd(t.exp, tp.exp), 'Costs booked so far', '', money(tp.exp)), kpi('Profit', money(t.profit), dd(t.profit, tp.profit), 'Income minus expense', t.profit < 0 ? 'bad' : '', money(tp.profit)),
     h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'Margin'), h('div', {class: 'kv'}, fMargin(t.margin)), ptsDelta ? h('div', {class: 'delta flat'}, ptsDelta) : null, h('div', {class: 'kn'}, 'Profit as a share of income')),
-    kpi('Jobs', fInt(t.jobs), dd(t.jobs, tp.jobs), 'With at least one line'), kpi('Profit per job', t.jobs ? money(t.profit / t.jobs) : '–', null, 'Average over these jobs'),
+    kpi('Jobs', fInt(t.jobs), dd(t.jobs, tp.jobs), 'With at least one line', '', fInt(tp.jobs)), kpi('Profit per job', t.jobs ? money(t.profit / t.jobs) : '–', null, 'Average over these jobs'),
     kpi('Jobs with cost booked', t.jobs ? fP0(cov) : '–', null, t.booked + ' of ' + t.jobs + ' jobs', cov * 100 < S.def.costCoverage ? 'warn' : ''),
     kpi('Profit after expected costs', money(t.profit - ex.est), null, 'Estimate: unbooked jobs get the cost ratio of booked jobs', 'warn')];
   const banner = t.jobs && cov * 100 < S.def.costCoverage ? h('div', {class: 'card warnbar'}, h('b', null, 'Margins are probably too high. '), 'Costs are booked on only ' + t.booked + ' of ' + t.jobs + ' jobs (' + fP0(cov) + '), so ' + fInt(ex.jobs) + ' jobs worth ' + money(ex.inc) + ' of income show no cost at all. If they cost what similar booked jobs cost, profit would be about ' + money(t.profit - ex.est) + ', not ' + money(t.profit) + '. ',
@@ -877,15 +927,13 @@ function ppCompare() {
       h('label', {class: 'f'}, h('span', null, 'Basis'), sel([['todate', 'To date (like for like)'], ['full', 'Full period']], c.basis, (v) => { c.basis = v; renderAll(); })), h('label', {class: 'f'}, h('span', null, 'As at'), dateIn(c.anchor == null ? asOfDay() : c.anchor, (v) => { c.anchor = v; c.custom = false; })),
       h('button', {type: 'button', class: 'btn', onclick: () => { c.anchor = null; renderAll(); }}, 'Reset to as-of date'), h('label', {class: 'f'}, h('input', {type: 'checkbox', checked: c.custom, onchange: (e) => { c.custom = e.target.checked; if (c.custom) prefill(); renderAll(); }}), 'Custom date ranges')));
   if (c.custom) controls.append(h('div', {class: 'frow'}, h('span', {class: 'lbl2'}, 'Current'), dateIn(c.A.from, (v) => { c.A.from = v; }), dateIn(c.A.to, (v) => { c.A.to = v; }), h('span', {class: 'lbl2'}, 'compared with'), dateIn(c.B.from, (v) => { c.B.from = v; }), dateIn(c.B.to, (v) => { c.B.to = v; })));
-  controls.append(h('div', {class: 'frow'}, h('label', {class: 'f'}, h('input', {type: 'checkbox', checked: S.pdemo, onchange: (e) => { S.pdemo = e.target.checked; renderAll(); }}), 'Show demo history (simulated earlier weeks, months and a year, so you can preview this page before real history is loaded)')));
   root.append(controls);
-  if (S.pdemo) root.append(h('div', {class: 'card warnbar'}, h('b', null, 'Demo history is on. '), 'Earlier periods on this page are simulated from the current lines, so they are not real. Downloads are switched off while this is on.'));
   if (pr.err) { root.append(h('div', {class: 'card'}, h('p', {class: 'empty'}, pr.err))); return root; }
   const m = maskP({dates: 'none', demo: true}), NN = S.pdemo ? NPA : NP; let ci = 0, ce = 0, pi = 0, pe = 0; const cj = new Set(), pj = new Set();
   for (let i = 0; i < NN; i++) { if (!m[i]) continue; const d = pdate[i]; if (d >= pr.cur.from && d <= pr.cur.to) { ci += pinc[i]; ce += pexp[i]; cj.add(pjob[i]); } if (d >= pr.prev.from && d <= pr.prev.to) { pi += pinc[i]; pe += pexp[i]; pj.add(pjob[i]); } }
   const meas = c.measure, mv = (a, b) => (meas === 'income' ? a : meas === 'expense' ? b : a - b), mLabel = meas === 'income' ? 'Income' : meas === 'expense' ? 'Expense' : 'Profit';
   root.append(h('div', {class: 'card', style: 'margin-bottom:.9rem'}, h('p', {class: 'take', style: 'margin:0 0 .3rem'}, pr.title + '.'), h('p', {class: 'meta', style: 'margin:0'}, 'Current: ' + (pr.curName ? pr.curName + ', ' : '') + fRange(pr.cur) + ' (' + nDays(pr.cur) + ' days)   |   Previous: ' + (pr.prevName ? pr.prevName + ', ' : '') + fRange(pr.prev) + ' (' + nDays(pr.prev) + ' days)' + (nDays(pr.cur) !== nDays(pr.prev) ? '   |   The two periods have a different number of days.' : '')),
-    pi === 0 && pe === 0 ? h('p', {class: 'meta', style: 'margin:.4rem 0 0;color:var(--warn)'}, 'There is no data in the comparison period. The reports loaded so far cover ' + fDay(MINDATE) + ' to ' + fDay(MAXDATE) + '. Load earlier reports (admin portal, Upload report), or switch on demo history above to preview this page.') : null));
+    pi === 0 && pe === 0 ? h('p', {class: 'meta', style: 'margin:.4rem 0 0;color:var(--warn)'}, 'There is no data in the comparison period. The reports loaded so far cover ' + fDay(MINDATE) + ' to ' + fDay(MAXDATE) + '. No activity is present in the uploaded comparison-period records. Upload earlier reports if needed.') : null));
   const vk = (label, cur, prev, f) => { const d = cur - prev, p = pctOf(cur, prev); return h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, label), h('div', {class: 'kv'}, f(cur)), h('div', {class: 'kn'}, 'Previous ' + f(prev)), h('div', {class: 'delta ' + (d > 0 ? 'ok' : d < 0 ? 'bad' : 'flat')}, sgn(d) + f(Math.abs(d)) + ' (' + fPctS(p) + ')')); };
   const mC = marginOf(ci, ce), mP = marginOf(pi, pe), mpts = mC != null && mP != null ? (mC - mP) * 100 : null;
   root.append(h('div', {class: 'kpis'}, vk('Income', ci, pi, money), vk('Expense', ce, pe, money), vk('Profit', ci - ce, pi - pe, money), h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'Margin'), h('div', {class: 'kv'}, fMargin(mC)), h('div', {class: 'kn'}, 'Previous ' + fMargin(mP)), mpts == null ? null : h('div', {class: 'delta ' + (mpts > 0 ? 'ok' : mpts < 0 ? 'bad' : 'flat')}, sgn(mpts) + Math.abs(mpts).toFixed(1) + ' pts')), vk('Jobs', cj.size, pj.size, fInt)));
@@ -974,7 +1022,7 @@ function ppStatus() {
       h('li', null, 'Profit per air tonne uses chargeable weight and profit per sea TEU uses TEUs, both from the register, for matched jobs only. A job’s weight is counted once however many charge lines it has.'),
       h('li', null, 'A line is intercompany when the customer or party is the other group company. In a group view with both companies selected, such income and cost belong to both.'),
       h('li', null, 'In the live system the profit report arrives every day covering the whole year at charge level, and earlier years are loaded once. Each daily file replaces the lines for its dates; earlier years are never touched.'),
-      h('li', null, 'Only one billing month is loaded, so comparisons with earlier periods stay empty until earlier reports are loaded. Demo history on the Compare page previews them.')), 'full'),
+      h('li', null, 'Comparisons use the uploaded ERP records. A zero prior value is shown explicitly; percentage change is unavailable when the prior value is zero.')), 'full'),
     card('Columns', 'Column order does not matter, and extra columns added to the ERP report are kept and can be used as filters.', cols, 'full'));
 }
 
@@ -1004,10 +1052,10 @@ function sOwner() {
   const M = mask(), P = mask({dates: 'prev'}), pm = maskP(), on = S.compare, dd = (a, b) => (on ? pctChange(a, b) : null), o = opsFacts(M), op = opsFacts(P), mo = opsFacts(mask({dates: 'none'})), t = R.t, tp = R.tp;
   const ex = pExpectedByLob(pm), cov = t.jobs ? t.booked / t.jobs : 1, stat = groupByP('jobstatus', maskP({skip: 'jobstatus'})), st = (n) => stat.find((r) => r.label === n) || {jobs: 0, inc: 0, exp: 0, profit: 0};
   const ptsDelta = t.margin != null && tp.margin != null && on ? (t.margin >= tp.margin ? '+' : '−') + (Math.abs(t.margin - tp.margin) * 100).toFixed(1) + ' pts vs ' + cmpLabel() : null;
-  const opsK = [kpi('Shipments', fInt(o.n), dd(o.n, op.n), 'By shipment date'), kpi('Air chargeable weight', f1(o.air) + ' t', dd(o.air, op.air), 'Air shipments'), kpi('Sea TEUs', fInt(Math.round(o.sea)), dd(o.sea, op.sea), 'FCL shipments'), kpi('Active customers', fInt(o.cust), dd(o.cust, op.cust), 'With a shipment in range'),
+  const opsK = [kpi('Shipments', fInt(o.n), dd(o.n, op.n), 'By shipment date', '', fInt(op.n)), kpi('Air chargeable weight', f1(o.air) + ' t', dd(o.air, op.air), 'Air shipments', '', f1(op.air) + ' t'), kpi('Sea TEUs', fInt(Math.round(o.sea)), dd(o.sea, op.sea), 'FCL shipments', '', fInt(Math.round(op.sea))), kpi('Active customers', fInt(o.cust), dd(o.cust, op.cust), 'With a shipment in range', '', fInt(op.cust)),
     kpi('Financials still open', fInt(mo.openFin), null, fInt(mo.old) + ' older than ' + S.def.oldDays + ' days (ignores the date range)', mo.old ? 'warn' : ''), kpi('Days from ops lock to financial lock', mo.lag == null ? '–' : mo.lag.toFixed(1), null, 'Average, where both are recorded')];
-  const accK = [kpi('Income', money(t.inc), dd(t.inc, tp.inc), 'By billing date'), kpi('Profit', money(t.profit), dd(t.profit, tp.profit), 'Income minus booked cost', t.profit < 0 ? 'bad' : ''), h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'Margin'), h('div', {class: 'kv'}, fMargin(t.margin)), ptsDelta ? h('div', {class: 'delta flat'}, ptsDelta) : null, h('div', {class: 'kn'}, 'Profit over income')),
-    kpi('Jobs', fInt(t.jobs), dd(t.jobs, tp.jobs), 'In the profit report'), kpi('Jobs with cost booked', t.jobs ? fP0(cov) : '–', null, t.booked + ' of ' + t.jobs, cov * 100 < S.def.costCoverage ? 'warn' : ''), kpi('Profit after expected costs', money(t.profit - ex.est), null, 'Estimate for jobs with no cost yet', 'warn')];
+  const accK = [kpi('Income', money(t.inc), dd(t.inc, tp.inc), 'By billing date', '', money(tp.inc)), kpi('Profit', money(t.profit), dd(t.profit, tp.profit), 'Income minus booked cost', t.profit < 0 ? 'bad' : '', money(tp.profit)), h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'Margin'), h('div', {class: 'kv'}, fMargin(t.margin)), ptsDelta ? h('div', {class: 'delta flat'}, ptsDelta) : null, h('div', {class: 'kn'}, 'Profit over income')),
+    kpi('Jobs', fInt(t.jobs), dd(t.jobs, tp.jobs), 'In the profit report', '', fInt(tp.jobs)), kpi('Jobs with cost booked', t.jobs ? fP0(cov) : '–', null, t.booked + ' of ' + t.jobs, cov * 100 < S.def.costCoverage ? 'warn' : ''), kpi('Profit after expected costs', money(t.profit - ex.est), null, 'Estimate for jobs with no cost yet', 'warn')];
   // what needs attention
   const al = [], money0 = money, un = S.def.unassignedNames.split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
   if (st('Cost not booked').jobs) al.push({sev: cov * 100 < S.def.costCoverage ? 'bad' : 'warn', text: fInt(st('Cost not booked').jobs) + ' jobs worth ' + money(st('Cost not booked').inc) + ' of income have no cost booked, so profit is overstated by about ' + money(ex.est), go: () => goto('profit', 'p_quality', {jobstatus: 1}), label: 'See the jobs'});
@@ -1031,10 +1079,11 @@ function sOwner() {
   const cops = [0, 1].map((c) => { const mm = mask({skip: 'company'}); for (let i = 0; i < N; i++) if (comp[i] !== c) mm[i] = 0; return opsFacts(mm); }), cacc = groupByP('company', maskP({skip: 'company'}));
   const cmpTbl = h('div', {class: 'scroll'}, h('table', {class: 'tbl'}, h('thead', null, h('tr', null, ['Company', 'Shipments', 'Air tonnes', 'Sea TEUs', 'Income', 'Profit', 'Margin', 'Jobs with cost booked'].map((x, k) => h('th', {class: k ? 'n' : ''}, x)))), h('tbody', null, [0, 1].map((c) => { const a = cacc.find((r) => r.g === c) || {inc: 0, profit: 0, margin: null, jobs: 0, booked: 0}, cs = S.sel.company || new Set();
     return h('tr', {class: 'click' + (cs.size === 1 && cs.has(c) ? ' on' : ''), onclick: () => toggle('company', c)}, h('td', null, COMP[c]), h('td', {class: 'n'}, fInt(cops[c].n)), h('td', {class: 'n'}, f1(cops[c].air)), h('td', {class: 'n'}, fInt(Math.round(cops[c].sea))), h('td', {class: 'n'}, money(a.inc)), h('td', {class: 'n ' + (a.profit < 0 ? 'bad' : '')}, money(a.profit)), h('td', {class: 'n'}, fMargin(a.margin)), h('td', {class: 'n'}, a.jobs ? fP0(a.booked / a.jobs) : '–')); }))));
+  if (!FIN) cmpTbl.querySelectorAll('tr').forEach(row => Array.from(row.children).slice(4).forEach(cell => cell.remove()));
   return h('div', null, h('p', {class: 'meta'}, 'Operations and accounting together, for the filters above. Shipments are counted by shipment date and profit by billing date, within the same date range.'),
     h('h2', {class: 'h', style: 'margin:.4rem 0'}, 'Operations'), h('div', {class: 'kpis'}, opsK), FIN ? h('h2', {class: 'h', style: 'margin:.9rem 0 .4rem'}, 'Accounting') : null, FIN ? h('div', {class: 'kpis'}, accK) : null,
-    h('div', {class: 'grid', style: 'margin-top:.9rem'}, sVariance(), alertsCard, card('The two companies', 'Click a company to filter everything.', cmpTbl), card('Shipments by month', 'Click a month to zoom in.', monthBars(M)), card('Profit by week', 'Billing date. Click a week to zoom in.', weekChart(pm)),
-      card('Top ' + S.def.topN + ' customers by profit', 'Click to filter.', pkeyRank('customer', {color: '#b279a2'})), card('Top ' + S.def.topN + ' sales people by profit', 'Click to filter.', pkeyRank('x_salesperson', {color: '#72b7b2'})), card('Top ' + S.def.topN + ' branches by profit', 'Click to filter.', pkeyRank('branch', {color: '#4c78a8'}))));
+    h('div', {class: 'grid', style: 'margin-top:.9rem'}, sVariance(), alertsCard, card('The two companies', 'Click a company to filter everything.', cmpTbl), card('Shipments by month', 'Click a month to zoom in.', monthBars(M)), FIN ? card('Profit by week', 'Billing date. Click a week to zoom in.', weekChart(pm)) : null,
+      FIN ? card('Top ' + S.def.topN + ' customers by profit', 'Click to filter.', pkeyRank('customer', {color: '#b279a2'})) : null, FIN ? card('Top ' + S.def.topN + ' sales people by profit', 'Click to filter.', pkeyRank('x_salesperson', {color: '#72b7b2'})) : null, FIN ? card('Top ' + S.def.topN + ' branches by profit', 'Click to filter.', pkeyRank('branch', {color: '#4c78a8'})) : null));
 }
 function sScore() {
   const sc = S.sc, d = SC_DIMS[sc.dim] || SC_DIMS[0], key = d.k, root = h('div'), m = mask({skip: key}), n = COLS[key].d.length, c = COLS[key].c;
@@ -1050,9 +1099,11 @@ function sScore() {
   const draw = () => { const st = sc.sort, f = st.sort === 'label' ? (a, b) => a.label.localeCompare(b.label) : (a, b) => (a[st.sort] == null ? -1e18 : a[st.sort]) - (b[st.sort] == null ? -1e18 : b[st.sort]); const list = rows.slice().sort((a, b) => f(a, b) * st.dir); last = list; const shown = list.slice(0, S.def.tableRows); thead.replaceChildren(sortHead(cols, st, draw));
     tbody.replaceChildren(...shown.map((r) => h('tr', {class: 'click' + (sel.has(r.g) ? ' on' : ''), onclick: () => toggle(key, r.g)}, h('td', null, r.label), h('td', {class: 'n'}, fInt(r.ship)), h('td', {class: 'n'}, r.shS == null ? '–' : fS(r.shS)), h('td', {class: 'n'}, r.airT ? f1(r.airT) : '–'), h('td', {class: 'n'}, r.seaT ? fInt(Math.round(r.seaT)) : '–'), h('td', {class: 'n'}, fInt(r.openF)), h('td', {class: 'n'}, r.lag == null ? '–' : r.lag.toFixed(1)),
       h('td', {class: 'n'}, r.inc ? money(r.inc) : '–'), h('td', {class: 'n ' + (r.profit < 0 ? 'bad' : '')}, r.jobs ? money(r.profit) : '–'), h('td', {class: 'n'}, fMargin(r.margin)), h('td', {class: 'n'}, r.shP == null ? '–' : fS(r.shP)), h('td', {class: 'n'}, fInt(r.jobs)), h('td', {class: 'n'}, r.ppj == null ? '–' : money(r.ppj)), h('td', {class: 'n ' + (r.bk != null && r.bk * 100 < S.def.costCoverage ? 'warnt' : '')}, r.bk == null ? '–' : fP0(r.bk)))));
+    if (!FIN) [thead,tbody].forEach(section=>section.querySelectorAll('tr').forEach(row=>Array.from(row.children).slice(7).forEach(cell=>cell.remove())));
     note.textContent = 'Showing ' + shown.length + ' of ' + fInt(list.length) + ' rows. Click a header to sort, a row to filter everything. A dash in the profit columns means no job in the profit report matches.'; };
   draw();
   const exportS = () => { const list = last, nn = list.length + 1, tr = nn + 1;
+    if (!FIN) { downloadXlsx('operations_scorecard.xlsx', [{name:'Operations scorecard', freeze:true, filter:true, cols:[42,14,14,14,14,14,14], rows:[[d.l,'Shipments','Share of shipments','Air tonnes','Sea TEUs','Financials open','Lock lag days'].map(HDR)].concat(list.map(r=>[r.label,r.ship,r.shS,r.airT,r.seaT,r.openF,r.lag]))}, settingsSheet([[HDR('Rows by'),d.l]])]); return; }
     downloadXlsx('scorecard_by_' + d.l.toLowerCase().replace(/[^a-z]+/g, '_') + '_' + fIso(dDate(MAXDATE)) + '.xlsx', [{name: 'Scorecard', freeze: true, filter: true, cols: [42, 12, 14, 12, 12, 14, 14, 16, 16, 16, 12, 14, 10, 16], rows: [[d.l, 'Shipments', 'Share of shipments', 'Air tonnes', 'Sea TEUs', 'Financials open', 'Income', 'Expense', 'Profit', 'Margin', 'Share of profit', 'Jobs', 'Profit per job'].map(HDR)]
       .concat(list.map((r, i) => { const x = i + 2; return [r.label, {v: r.ship, s: 3}, {f: 'IF(SUM(B$2:B$' + nn + ')=0,"",B' + x + '/SUM(B$2:B$' + nn + '))', s: 2}, {v: +r.airT.toFixed(3), s: 4}, {v: Math.round(r.seaT), s: 3}, {v: r.openF, s: 3}, {v: +r.inc.toFixed(2), s: 3}, {v: +r.exp.toFixed(2), s: 3}, {f: 'G' + x + '-H' + x, s: 3}, {f: 'IF(G' + x + '<=0,"",I' + x + '/G' + x + ')', s: 2}, {f: 'IF(SUM(I$2:I$' + nn + ')=0,"",I' + x + '/SUM(I$2:I$' + nn + '))', s: 2}, {v: r.jobs, s: 3}, {f: 'IF(L' + x + '=0,"",I' + x + '/L' + x + ')', s: 3}]; }))
       .concat([[HDR('Total'), {f: 'SUM(B2:B' + nn + ')', s: 3}, '', {f: 'SUM(D2:D' + nn + ')', s: 4}, {f: 'SUM(E2:E' + nn + ')', s: 3}, {f: 'SUM(F2:F' + nn + ')', s: 3}, {f: 'SUM(G2:G' + nn + ')', s: 3}, {f: 'SUM(H2:H' + nn + ')', s: 3}, {f: 'SUM(I2:I' + nn + ')', s: 3}, {f: 'IF(G' + tr + '<=0,"",I' + tr + '/G' + tr + ')', s: 2}]])}, settingsSheet([[HDR('Rows by'), d.l]])]); };
@@ -1077,13 +1128,13 @@ function sVariance() {
   const mo = mask({dates: 'none'}), mp = maskP({dates: 'none'}), a = winFacts(pr.cur, mo, mp), b = winFacts(pr.prev, mo, mp), fin = b.lines > 0;
   const defs = [['Shipments', 'n', 'int', 1, 0], ['Air chargeable tonnes', 'air', 't', 1, 0], ['Sea TEUs', 'sea', 'int', 1, 0], ['Active customers', 'cust', 'int', 1, 0], ['Shipments invoiced', 'inv', 'int', 1, 0], ['Est. freight margin (air export)', 'rm', 'money', 1, 0], ['Income', 'inc', 'money', 1, 1], ['Expense', 'exp', 'money', -1, 1], ['Profit', 'profit', 'money', 1, 1], ['Margin', 'margin', 'pts', 1, 1], ['Jobs in the profit report', 'jobs', 'int', 1, 1]];
   const fv = (t, v) => (v == null ? '–' : t === 'int' ? fInt(Math.round(v)) : t === 't' ? f1(v) : t === 'money' ? money(v) : fMargin(v));
-  const body = defs.filter(([lab, k]) => FIN || ['n', 'air', 'sea', 'cust'].includes(k)).map(([lab, k, t, good, isFin]) => { const cur = a[k], pv = b[k], na = isFin && !fin; let ch = '–', pc = '–', tone = '';
-    if (!na && cur != null && pv != null) { if (t === 'pts') { const d = (cur - pv) * 100; ch = (d >= 0 ? '+' : '−') + Math.abs(d).toFixed(1) + ' pts'; tone = d * good >= 0 ? 'ok' : 'bad'; } else { const d = cur - pv; ch = sgn(d) + fv(t, Math.abs(d)); pc = pv > 0 ? fPctS(pctOf(cur, pv)) : (cur > 0 ? 'new' : '–'); tone = d * good >= 0 ? 'ok' : 'bad'; } }
+  const body = defs.filter(([lab, k]) => FIN || ['n', 'air', 'sea', 'cust'].includes(k)).map(([lab, k, t, good, isFin]) => { const cur = a[k], pv = b[k], na = false; let ch = '–', pc = '–', tone = '';
+    if (!na && cur != null && pv != null) { if (t === 'pts') { const d = (cur - pv) * 100; ch = (d >= 0 ? '+' : '−') + Math.abs(d).toFixed(1) + ' pts'; tone = d * good >= 0 ? 'ok' : 'bad'; } else { const d = cur - pv; ch = sgn(d) + fv(t, Math.abs(d)); pc = pv > 0 ? fPctS(pctOf(cur, pv)) : (pv === 0 && cur > 0 ? 'new' : '–'); tone = d * good >= 0 ? 'ok' : 'bad'; } }
     return h('tr', null, h('td', null, lab + (isFin ? '' : '')), h('td', {class: 'n'}, fv(t, cur)), h('td', {class: 'n'}, na ? 'not loaded' : fv(t, pv)), h('td', {class: 'n ' + tone}, ch), h('td', {class: 'n ' + tone}, pc)); });
   const finHistTxt = D.p.meta.map((mm) => mm.range_from + ' to ' + mm.range_to + ' (' + COMP[mm.co === 'NG' ? 0 : 1] + ')').join('; ');
   return card('Variance: ' + pr.title, 'Value and percentage change, for the filters above. Shipments are by shipment date, invoices by first invoice date, money by billing date.', h('div', null, cmpControls(),
     h('div', {class: 'scroll'}, h('table', {class: 'tbl'}, h('thead', null, h('tr', null, h('th', null, 'Measure'), h('th', {class: 'n'}, pr.curName || 'This period'), h('th', {class: 'n'}, pr.prevName || 'Comparison'), h('th', {class: 'n'}, 'Change'), h('th', {class: 'n'}, 'Change %'))), h('tbody', null, body))),
-    fin ? null : h('p', {class: 'meta', style: 'color:var(--warn);margin:.5rem 0 0'}, 'Money has nothing to compare against yet: the profit report loaded so far covers billing dates ' + finHistTxt + ' only. When the daily full-year report and the earlier years are loaded, income, expense, profit and margin compare automatically. Shipments and invoices already have the whole year.')), 'full');
+    fin ? null : h('p', {class: 'meta', style: 'color:var(--warn);margin:.5rem 0 0'}, 'The comparison period has zero finance lines under the current filters. Values use uploaded records; percentages require a nonzero prior value. Available report date ranges: ' + finHistTxt + '.')), 'full');
 }
 function ppBilling() {
   const bl = S.bl, root = h('div'), OLD = S.def.unbilledDays, today = OPS_MAX;
@@ -1141,7 +1192,7 @@ function costGapCard() {
 }
 
 // ================================================================ rates: estimated freight margin on air exports (the registers' buy and sell rate text)
-const ckg = ext(Float32Array, D.ckg), rbuy = ext(Float32Array, D.rbuy), rsell = ext(Float32Array, D.rsell), rbf = ext(Uint8Array, D.rbf), rsf = ext(Uint8Array, D.rsf);
+const ckg = ext(Float64Array, D.ckg), rbuy = ext(Float64Array, D.rbuy), rsell = ext(Float64Array, D.rsell), rbf = ext(Uint8Array, D.rbf), rsf = ext(Uint8Array, D.rsf);
 for (let t = 0; t < demoSrc.length; t++) { const i = N + t, s0 = demoSrc[t]; ckg[i] = ckg[s0]; rbuy[i] = rbuy[s0]; rsell[i] = rsell[s0]; rbf[i] = rbf[s0]; rsf[i] = rsf[s0]; }
 const rateOK = (i) => { if (!(ckg[i] > 0)) return false; const okf = (f) => f === 1 || (f === 2 && S.def.rateMode !== 'clean'); return okf(rbf[i]) && okf(rsf[i]) && rbuy[i] > 0 && rsell[i] > 0 && rbuy[i] <= S.def.rateMax && rsell[i] <= S.def.rateMax; };
 const rmargin = (i) => (rsell[i] - rbuy[i]) * ckg[i];
@@ -1195,7 +1246,7 @@ const fmtV = (f, v) => (v == null || Number.isNaN(v) ? '–' : f === 'int' ? fIn
 const vLabel = (ds, k) => (VM[ds][k] || {}).l || k, dLabel = (ds, k) => (vDims(ds).find((x) => x[0] === k) || [0, k])[1];
 const autoTitle = (c) => vLabel(c.data, c.measure) + ' by ' + dLabel(c.data, c.dim).toLowerCase() + (c.split && c.split !== 'none' ? ' and ' + dLabel(c.data, c.split).toLowerCase() : '');
 function runVisual(cfg) {
-  const ds = cfg.data, M = (VM[ds] || {})[cfg.measure]; if (!M) return {err: 'Pick a measure.'};
+  const ds = cfg.data, M = (VM[ds] || {})[cfg.measure]; if (!FIN && (ds === 'fin' || ['rmar', 'rkg'].includes(cfg.measure))) return {err: 'Finance access is required.'}; if (!M) return {err: 'Pick a measure.'};
   const ops = ds === 'ops', n = ops ? N : NP, m = ops ? mask({dates: 'none'}) : maskP({dates: 'none'}), df = VD[ds].find((x) => x[0] === cfg.date) || VD[ds][0], da = df[2](), w = win(), tm = cfg.dim.indexOf('time:') === 0, unit = tm ? cfg.dim.slice(5) : null;
   if (!tm && !COLS[cfg.dim]) return {err: 'Pick what to show by.'}; const kd = tm ? null : (ops ? COLS[cfg.dim].c : COLS[cfg.dim].pc), sp = cfg.split && cfg.split !== 'none' && COLS[cfg.split], ks = sp ? (ops ? sp.c : sp.pc) : null, cell = () => ({a: 0, d: 0, s: M.set ? new Set() : null});
   const acc = (c, i) => { if (M.set) c.s.add(M.set(i)); else if (M.add) c.a += M.add(i); else { c.a += M.num(i); c.d += M.den(i); } }, val = (c) => (M.set ? c.s.size : M.den ? (c.d ? c.a / c.d : null) : c.a), merge = (x, y) => { x.a += y.a; x.d += y.d; if (x.s) y.s.forEach((v) => x.s.add(v)); };

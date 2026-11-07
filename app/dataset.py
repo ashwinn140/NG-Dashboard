@@ -162,22 +162,30 @@ def build_full(engine) -> dict:
         pl_rows.sort(key=lambda r: r["id"])
         jp = c.execute(select(imports.c.company, imports.c.range_from, imports.c.range_to, imports.c.file_name, imports.c.columns).where(imports.c.report_type == "JP", imports.c.status == "promoted").order_by(imports.c.id)).all()
     reg_co = np.where(A["_rep"] < 4, "NG", "NCS") if N else np.array([]); reg_no = A["Shipment No"].astype(str).str.strip().values if N else []; reg_date = sd.dt.strftime("%Y-%m-%d").values if N else []
-    by_key, by_no = {}, collections.defaultdict(list)
+    reg_rt = [REPS[int(ri)][1] for ri in A["_rep"]]
+    by_key, by_no = collections.defaultdict(list), collections.defaultdict(list)
     for i in range(N):
-        by_key.setdefault((reg_co[i], reg_no[i], reg_date[i]), i); by_no[(reg_co[i], reg_no[i])].append(i)
+        by_key[(reg_co[i], reg_no[i], reg_date[i])].append(i); by_no[(reg_co[i], reg_no[i])].append(i)
     ICN = {norm(n): cc for n, cc in CFG.COMPANIES.items()}
     pl, pmeta_acc = [], {}
     for r in pl_rows:
         co = r["company"]; jd = r["job_date"].strftime("%Y-%m-%d") if r["job_date"] else ""
-        si = by_key.get((co, r["job_no"], jd), -1)
-        if si < 0 and len(by_no.get((co, r["job_no"]), [])) >= 1: si = by_no[(co, r["job_no"])][0]
         mode, direction, kind = J._mode(r["lob"]); other = "NCS" if co == "NG" else "NG"
+        # Match within the known LOB, using a unique exact date first. Never
+        # attribute finance to an arbitrary first shipment with a reused number.
+        expected_rt = {("Air", "Export"): "AE", ("Air", "Import"): "AI",
+                       ("Sea", "Export"): "OE", ("Sea", "Import"): "OI"}.get((mode, direction))
+        candidates = by_key.get((co, r["job_no"], jd), [])
+        if not candidates:
+            candidates = by_no.get((co, r["job_no"]), [])
+        candidates = [i for i in candidates if expected_rt is None or reg_rt[i] == expected_rt]
+        si = candidates[0] if len(candidates) == 1 and str(r["job_no"] or "").strip() else -1
         ic = "Intercompany" if (ICN.get(norm(r["customer"])) == other or ICN.get(norm(r["party"])) == other) else "External"
         rtc = {("Air", "Export"): 0, ("Air", "Import"): 1, ("Sea", "Export"): 2, ("Sea", "Import"): 3}.get((mode, direction), 4)
         pl.append(dict(co=0 if co == "NG" else 1, sidx=si, rt=rtc, branch=r["branch"], lob=r["lob"], mode=mode, direction=direction, kind=kind, job=r["job_no"], customer=r["customer"], charge=r["charge"], party=r["party"],
                        income=r["income"] or 0.0, expense=r["expense"] or 0.0, td=r["trans_date"], jd=r["job_date"], plane=r["trade_lane"], ic=ic))
         e = pmeta_acc.setdefault(co, dict(lines=0, income=0.0, expense=0.0, jobs={}))
-        e["lines"] += 1; e["income"] += r["income"] or 0.0; e["expense"] += r["expense"] or 0.0; e["jobs"].setdefault(r["job_no"], (si, r["lob"]))
+        e["lines"] += 1; e["income"] += r["income"] or 0.0; e["expense"] += r["expense"] or 0.0; e["jobs"].setdefault((r["job_no"], jd, rtc), (si, r["lob"]))
     pmeta = []
     for co in ("NG", "NCS"):
         if co not in pmeta_acc: continue
@@ -209,9 +217,9 @@ def build_full(engine) -> dict:
     dayso = lambda s: pd.to_datetime(s, errors="coerce").map(lambda d: -1 if pd.isna(d) else (d - EPOCH).days)
     PROFIT = {"co": PD.co.tolist(), "sidx": PD.sidx.tolist(), "rt": PD.rt.tolist(), "income": PD.income.astype(float).round(2).tolist(), "expense": PD.expense.astype(float).round(2).tolist(), "td": dayso(PD.td).tolist(), "jd": dayso(PD.jd).tolist(), "meta": pmeta}
     num = lambda col: pd.to_numeric(A[col], errors="coerce").fillna(0) if col in A.columns else pd.Series([0.0] * N)
-    out = {"reps": [[c_, r_] for c_, r_ in REPS], "ckg": pd.to_numeric(A.get("Chargeable Wt", pd.Series([0] * N)), errors="coerce").fillna(0).round(1).tolist(), "rbuy": RBUY, "rbf": RBF, "rsell": RSELL, "rsf": RSF,
+    out = {"reps": [[c_, r_] for c_, r_ in REPS], "ckg": pd.to_numeric(A.get("Chargeable Wt", pd.Series([0] * N)), errors="coerce").fillna(0).tolist(), "rbuy": RBUY, "rbf": RBF, "rsell": RSELL, "rsf": RSF,
            "inv1": INV1, "invN": INVN, "rep": A["_rep"].tolist(), "no": A["Shipment No"].astype(str).tolist(), "date": days(sd).tolist(), "ops": days(ops).tolist(), "fin": days(fin).tolist(),
-           "gross": (num("Gross Weight") / 1000).round(3).tolist(), "chg": (num("Chargeable Wt") / 1000).round(3).tolist(), "teus": num("TEUs").round(2).tolist(), "cbm": num("Volume").round(2).tolist(),
+           "gross": (num("Gross Weight") / 1000).tolist(), "chg": (num("Chargeable Wt") / 1000).tolist(), "teus": num("TEUs").tolist(), "cbm": num("Volume").tolist(),
            "agentInfo": AGENTINFO, "cols": pcols, "p": PROFIT}
     meta = []
     for ri, (co, rt) in enumerate(REPS):
@@ -260,8 +268,13 @@ def restrict(D: dict, user: dict) -> dict:
     take = lambda a: [a[i] for i in idx]
     out = {"reps": reps, "rep": take(D["rep"]), "no": take(D["no"])}
     for k in ("date", "ops", "fin", "gross", "chg", "teus", "cbm", "ckg", "rbuy", "rbf", "rsell", "rsf", "inv1", "invN"): out[k] = take(D[k])
+    if not user["finance"]:
+        for k in ("rbuy", "rbf", "rsell", "rsf"):
+            out[k] = [0] * len(idx)
     sidx = np.asarray(D["p"]["sidx"], dtype=np.int64)[pidx] if len(pidx) else np.array([], dtype=np.int64)
-    sidx_new = np.where(sidx >= 0, newpos[np.clip(sidx, 0, None)], -1)         # a job matched to a hidden shipment becomes unmatched
+    sidx_new = np.full(len(sidx), -1, dtype=np.int64)
+    matched = (sidx >= 0) & (sidx < len(newpos))
+    sidx_new[matched] = newpos[sidx[matched]]  # hidden shipments remain unmatched, including empty registers
     out["p"] = {"co": [D["p"]["co"][i] for i in pidx], "sidx": sidx_new.tolist(), "rt": [D["p"]["rt"][i] for i in pidx], "income": [D["p"]["income"][i] for i in pidx], "expense": [D["p"]["expense"][i] for i in pidx],
                 "td": [D["p"]["td"][i] for i in pidx], "jd": [D["p"]["jd"][i] for i in pidx], "meta": [m for m in D["p"]["meta"] if user["finance"] and not user["lobs"] and (not user["companies"] or m["co"] in user["companies"])]}
     cols = {}
@@ -290,3 +303,4 @@ def restrict(D: dict, user: dict) -> dict:
     out["storage_mode"] = D.get("storage_mode", "versioned")
     out["user"] = {"finance": bool(user["finance"]), "companies": user["companies"], "lobs": user["lobs"]}
     return out
+

@@ -1,19 +1,20 @@
-# Dashboard front end
+# Dashboard production frontend
 
-The dashboard page is built from these pieces (plain JavaScript, no build tools):
+The deployed application is built from `app_prod.js` (calculations, pages and exports),
+`production_shell.html` (layout, styles, authentication bootstrap and navigation),
+and the local D3/fflate files in `vendor/`. No ERP data is embedded.
 
-| File | What it holds |
-|---|---|
-| `app.js.pre_merge` | the operations dashboard (overview, compare, customers, lanes, worklist, shipments, changes, data status) |
-| `pr_*.js` | the finance pages and their data setup (profit, branches, charges, jobs, quality) |
-| `s_pages.js` | the owner's summary and the scorecard |
-| `f_pages.js` | variance, billing health, who needs to book costs |
-| `v_pages.js` | rate margin, the visual builder and My dashboard |
-| `a_pages.js` | the agent variation report and the sales performance report |
-| `template.html.pre_merge`, `style.css` | the page and its styles (including the phone layout) |
-| `merge_build.py` | joins the pieces; `build_prod.py` makes `../app/web/dashboard.html` |
+Run `sh frontend/build.sh` from the repository root after changing these sources.
+Commit both the source and generated `app/web/dashboard.html`; Railway's Docker
+build serves that generated file directly. The earlier review assembly files are
+retained for reference and are not production build inputs.
 
-After changing any piece run `sh build.sh`. The page never contains data: it asks the server for the person's data when it opens.
+## Audit checks
 
-## Checking the page against a running server
-`cd frontend/tests && npm install && node boot_test.js http://127.0.0.1:8000` opens the production page as an administrator, an operations user and a stranger (use the demo users from `scripts/seed_demo.py`) and checks that every page renders, money is hidden from people without access, and saved visuals reach the server.
+Run Python regressions with `python -m unittest discover -s tests -v`.
+For an entirely synthetic source-to-visual audit, run
+`python scripts/build_audit_fixture.py`, install the dependencies in
+`frontend/tests`, then run `node frontend/tests/data_audit.js` from the root
+(with NODE_PATH set to frontend/tests/node_modules if necessary).
+The fixtures and JSON results go to /tmp and never connect to production.
+DOM tests exercise report rendering and calculations, not pixel layout.

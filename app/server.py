@@ -422,7 +422,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
 
     @app.get("/phase2/intelligence", response_class=HTMLResponse)
     def phase2_intelligence_page(user: dict = Depends(me)):
-        return page("intelligence.html")
+        raise HTTPException(410, "Business Intelligence has been removed. Use the main dashboard.")
 
     @app.get("/phase2/opportunities", response_class=HTMLResponse)
     def phase2_opportunities_page(user: dict = Depends(admin)):
@@ -645,3 +645,4 @@ def save_file(store: Store, data: bytes, name: str):
 def app_factory():
     """For `uvicorn app.server:app_factory --factory`."""
     return create_app()
+
