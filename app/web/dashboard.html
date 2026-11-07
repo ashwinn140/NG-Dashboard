@@ -141,11 +141,24 @@ header.top{align-items:center;margin-bottom:1.35rem}
 @media(max-width:920px){.filter-grid{grid-template-columns:1fr}.filter-group:nth-child(odd){border-right:0}.filter-toolbar-actions{width:100%;justify-content:space-between}}
 @media(max-width:760px){.filter-toolbar{padding:.85rem;gap:.75rem}.filter-toolbar-copy{min-width:0}.filter-toolbar-actions{gap:.5rem}.filter-trigger{min-height:44px}.filter-panel-head,.filter-group,.filter-panel-bottom{padding:1rem}.filter-panel-bottom{align-items:stretch;flex-direction:column}.filter-group .frow{flex-wrap:wrap}#filters.collapsed>*:not(#chips):not(#status){display:initial}#filters[hidden]{display:none!important}}
 
+
+/* Responsive reporting surface and accessible initial loader */
+#app{max-width:1920px;width:100%;padding:clamp(12px,1.8vw,32px)}
+header.top{position:relative;align-items:center;gap:1rem;padding:clamp(12px,1.4vw,22px);border:1px solid var(--line);background:var(--panel);border-radius:16px}
+header.top h1{font-family:var(--sans);font-weight:750;letter-spacing:-.035em}
+#grpRow{padding:.6rem .2rem;align-items:center}
+.card{border-radius:14px}
+#boot:not([hidden]){display:flex;align-items:center;gap:.8rem;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:1.15rem 1.3rem;margin-bottom:1rem;font-weight:600}
+#boot:not([hidden])::before{content:"";width:21px;height:21px;flex-shrink:0;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:ngLoaderSpin .75s linear infinite}
+@keyframes ngLoaderSpin{to{transform:rotate(360deg)}}
+@media(min-width:1440px){.grid,.kpis,.charts{gap:clamp(.75rem,1.1vw,1.4rem)}}
+@media(max-width:650px){header.top{align-items:flex-start}#app{padding:10px}#grpRow{gap:.5rem}#grpSeg{display:flex;overflow-x:auto;max-width:100%;flex-wrap:nowrap}}
+@media(prefers-reduced-motion:reduce){#boot::before{animation:none}}
 </style></head>
 <body>
 <a class="skip" href="#page">Skip to the content</a>
 <div id="app">
-  <div id="boot" role="status">Loading the dashboard…</div>
+  <div id="boot" role="status" aria-live="polite">Loading dashboard data and reports…</div>
   <header class="top">
     <div>
       <h1>{{PRODUCT}}</h1>
