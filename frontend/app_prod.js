@@ -1473,7 +1473,30 @@ function menuAll() { const key = MENU.key; if (!key || key === '__add') return; 
 function menuClear() { const key = MENU.key; if (!key || key === '__add') return; if (key === 'report') { S.qm.clear(); S.qd.clear(); } delete S.sel[key]; renderAll(); }
 
 // ---------------------------------------------------------------- render loop
-function renderPage() { const p = $('page'); p.replaceChildren(PAGES[S.page]()); }
+function reportingContext() {
+  const w = win(), notes = [];
+  let current = {from:w.from,to:w.to}, previous = {from:w.pfrom,to:w.pto};
+  if (S.page === 'compare' || S.page === 'p_compare') {
+    const period = periods(S.page === 'compare' ? S.cmp : S.pcmp);
+    if (!period.err) { current=period.cur; previous=period.prev; }
+  }
+  const overlap = Math.min(current.to, previous.to) - Math.max(current.from, previous.from) + 1;
+  if (S.compare && overlap > 0) notes.push('The selected comparison ranges overlap by ' + overlap + ' days. Select one calendar or accounting year for an annual comparison.');
+  if (FIN && S.group !== 'ops') {
+    const selected = S.sel.company;
+    for (const meta of D.p.meta || []) {
+      const co = meta.co === 'NG' ? 0 : 1;
+      if (selected && selected.size && !selected.has(co)) continue;
+      const first = isoD(meta.range_from), last = isoD(meta.range_to);
+      if (!Number.isFinite(first) || !Number.isFinite(last)) continue;
+      const beginsBefore = current.from < first || (S.compare && previous.from < first);
+      const endsAfter = current.to > last || (S.compare && previous.to > last);
+      if (beginsBefore || endsAfter) notes.push(COMP[co] + ' finance source reports cover ' + fDay(first) + ' to ' + fDay(last) + '. Dates outside that range have no loaded source report. Values and variances continue to use the uploaded records.');
+    }
+  }
+  return notes.length ? h('aside', {class:'card reporting-context', role:'note', style:'margin-bottom:.9rem;font-size:.82rem;border-left:3px solid var(--warn)'}, notes.map(text=>h('p',{class:'meta',style:'margin:.3rem 0'},text))) : null;
+}
+function renderPage() { const p = $('page'); p.replaceChildren(PAGES[S.page]()); const context = reportingContext(); if (context) p.prepend(context); }
 function renderAll() { compute(); renderStatic(); renderFilterButtons(); renderPage(); renderMenu(); }
 const DEF_FIELDS = [
   {k: 'topN', l: 'Top N', h: 'How many items the “top” lists show (customers, branches, lanes, carriers, ports) and what the top-N share uses.', t: 'num', min: 1, max: 200},
