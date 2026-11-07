@@ -217,6 +217,19 @@ body.ux-dashboard .ux-inspector{z-index:100}
 @media(max-width:1250px){body.ux-dashboard header.top{flex-wrap:wrap}body.ux-dashboard .ux-tools{width:100%;justify-content:flex-start}}
 @media(max-width:1023px){body.ux-dashboard{transition:none}body.ux-dashboard #grpRow{overflow-x:auto;flex-wrap:nowrap}body.ux-dashboard #grpRow .ux-tool{white-space:nowrap}}
 @media(max-width:650px){body.ux-dashboard header.top .ux-tools{gap:.35rem}body.ux-dashboard .ux-tools .ux-tool{font-size:.75rem;padding:.4rem .55rem}body.ux-dashboard #grpRow{padding:.45rem}}
+
+/* Discoverable, accessible right-side filter drawer. Keep charts full width. */
+#fToggle{display:inline-flex!important;align-items:center;gap:.4rem;white-space:nowrap;font-weight:650}
+.filter-toolbar{position:sticky;top:0;z-index:30;background:var(--bg);border-bottom:1px solid var(--line)}
+#filterBackdrop{position:fixed;inset:0;z-index:109;background:rgba(14,23,38,.46)}
+#filters.filter-drawer{position:fixed!important;right:0;top:0;bottom:0;width:min(380px,100vw);max-width:100vw;overflow-y:auto;overscroll-behavior:contain;z-index:110;margin:0!important;border-radius:12px 0 0 12px;box-shadow:-12px 0 38px rgba(0,0,0,.22);padding:1.25rem;background:var(--panel)}
+#filters.filter-drawer[hidden],#filterBackdrop[hidden]{display:none!important}
+#filters.filter-drawer .filter-grid{display:flex!important;flex-direction:column;gap:1rem}
+#filters.filter-drawer .filter-group{width:100%;min-width:0}
+#filters.filter-drawer .filter-panel-head{position:sticky;top:-1.25rem;z-index:2;background:var(--panel);padding:.6rem 0 1rem}
+#filters.filter-drawer .filter-panel-head h2{font-size:1.25rem}
+#filters.filter-drawer .filter-actions{position:sticky;bottom:-1.25rem;background:var(--panel);padding:.75rem 0}
+@media(max-width:760px){#filters.filter-drawer{width:min(380px,100vw);border-radius:0;padding:1rem}.filter-toolbar-copy .filter-hint{display:none}}
 </style></head>
 <body>
 <a class="skip" href="#page">Skip to the content</a>
@@ -268,9 +281,10 @@ body.ux-dashboard .ux-inspector{z-index:100}
   </div>
   <div class="filter-toolbar" aria-label="Dashboard filters">
     <div class="filter-toolbar-copy"><span class="filter-eyebrow">EXPLORE YOUR DATA</span><strong>Refine your view</strong><span class="filter-hint">Use quick filters or open all options to explore by company, period, mode and more.</span></div>
-    <div class="filter-toolbar-actions"><div id="quickSummary" class="quick-summary" aria-live="polite">All available data</div><button type="button" class="btn filter-trigger" id="fToggle" aria-expanded="false" aria-controls="filters">☷ &nbsp; All filters <span id="fCount"></span><span aria-hidden="true">⌄</span></button></div>
+    <div class="filter-toolbar-actions"><div id="quickSummary" class="quick-summary" aria-live="polite">All available data</div><button type="button" class="btn filter-trigger" id="fToggle" aria-expanded="false" aria-controls="filters">☷ &nbsp; Filters <span id="fCount"></span><span aria-hidden="true">⌄</span></button></div>
   </div>
-  <section class="card collapsed" id="filters" aria-label="Advanced filters" hidden>
+  <div id="filterBackdrop" hidden aria-hidden="true"></div>
+  <section class="card collapsed filter-drawer" id="filters" aria-label="Advanced filters" hidden>
     <div class="filter-panel-head"><div><span class="filter-eyebrow">FILTER BUILDER</span><h2>Choose what to see</h2><p>Changes apply immediately across charts and tables.</p></div><button type="button" class="btn filter-close" id="fClose" aria-label="Close filters">Close ✕</button></div>
     <div class="filter-grid"><div class="filter-group filter-group-period"><h3>01 · Reporting period</h3><p>Choose the reporting year and time window.</p>
     <div class="frow" id="yearRow"><span class="lbl2">Year</span><div id="ybSeg" title="Calendar year runs January to December. Accounting year follows the start month set under Definitions."><button type="button" class="btn" data-v="cal">Calendar year</button><button type="button" class="btn" data-v="fy">Accounting year</button></div><label class="f"><span>Show</span><select id="yearSel" aria-label="Year"></select></label></div>
@@ -1886,8 +1900,10 @@ window.NG = {agentRows, runVisual, visGet, visSave, defCfg, VTEMPLATES, rateOK, 
         const r = await fetch('/api/me/password', {method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json', 'X-CSRF-Token': u.csrf}, body: JSON.stringify({current: cur, new: nw})}); alert(r.ok ? 'Password saved.' : (await r.json()).detail); }; box.append(pw);
       const out = document.createElement('button'); out.textContent = 'Sign out'; out.onclick = async () => { await fetch('/auth/logout', {method: 'POST', credentials: 'same-origin'}); location.href = '/login'; }; box.append(out);
       const f = document.getElementById('filters'), tg = document.getElementById('fToggle'), cnt = document.getElementById('fCount');
-      const setFilterOpen = open => { f.hidden = !open; f.classList.toggle('collapsed', !open); tg.setAttribute('aria-expanded', String(open)); tg.classList.toggle('on', open); if (open) f.scrollIntoView({block:'nearest',behavior:window.matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'}); };
+      const backdrop=document.getElementById('filterBackdrop'); let filterReturnFocus=null; const setFilterOpen = open => { if(open)filterReturnFocus=document.activeElement; f.hidden=!open;backdrop.hidden=!open;f.classList.toggle('collapsed',!open);tg.setAttribute('aria-expanded',String(open));tg.classList.toggle('on',open);document.body.classList.toggle('filters-open',open);if(open)document.getElementById('fClose').focus();else if(filterReturnFocus?.isConnected)filterReturnFocus.focus(); };
       tg.onclick = () => setFilterOpen(f.hidden);
+      backdrop.onclick=()=>setFilterOpen(false);
+      f.addEventListener('keydown',e=>{if(e.key!=='Tab')return;const nodes=[...f.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])')].filter(x=>x.getClientRects().length);if(!nodes.length)return;const first=nodes[0],last=nodes[nodes.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}});
       document.getElementById('fClose').onclick = () => { setFilterOpen(false); tg.focus(); };
       document.getElementById('fDone').onclick = () => { setFilterOpen(false); tg.focus(); };
       document.addEventListener('keydown', e => { if (e.key === 'Escape' && !f.hidden && document.getElementById('menu').hidden) { setFilterOpen(false); tg.focus(); } });
