@@ -35,7 +35,7 @@ class Store:
         self.cache: dict = {}; self.wake = threading.Event(); self.idle = threading.Event(); self.idle.set(); self.stop = False; self.building = False
         with engine.begin() as c: c.execute(update(uploads).where(uploads.c.status == "processing").values(status="queued"))          # a crash mid-load: try again
         if start_worker:
-            self.thread = threading.Thread(target=self._worker, daemon=True, name="importer"); self.thread.start()
+            self.thread = threading.Thread(target=self._supervise_worker, daemon=True, name="importer"); self.thread.start()
         self.wake.set()
 
     # ---- dataset
@@ -81,6 +81,26 @@ class Store:
             r = c.execute(select(uploads).where(uploads.c.status == "queued").order_by(uploads.c.id).limit(1)).first()
             if r: c.execute(update(uploads).where(uploads.c.id == r.id).values(status="processing"))
         return r
+
+    def _supervise_worker(self):
+        """Keep queue consumption alive if a database or worker error escapes _worker."""
+        while not self.stop:
+            try:
+                self._worker()
+                if not self.stop:
+                    log.error("import worker exited unexpectedly; restarting")
+            except Exception:
+                log.exception("import worker crashed; restarting after backoff")
+            if self.stop:
+                break
+            # A worker crash can leave the claimed upload in processing forever.
+            # Requeue it so the next worker iteration can retry it.
+            try:
+                with self.engine.begin() as c:
+                    c.execute(update(uploads).where(uploads.c.status == "processing").values(status="queued"))
+            except Exception:
+                log.exception("could not recover interrupted imports")
+            time.sleep(5)
 
     def _worker(self):
         while not self.stop:
