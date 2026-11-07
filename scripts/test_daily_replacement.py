@@ -17,6 +17,23 @@ from app.server import Store, save_file
 
 
 class ReplacementTests(unittest.TestCase):
+    def test_streamed_profit_workbook_preserves_lines_and_totals(self):
+        from openpyxl import Workbook
+        workbook = Workbook(); sheet = workbook.active
+        sheet.append(['New Globe Logistik LLP\nCharge wise Detail From 01-Jan-2026 to 31-Dec-2026'])
+        sheet.append(['Basis : Billing Date'])
+        sheet.append(['Location', 'Job No.', 'Charge', 'Income (INR)', 'Expense (INR)', 'Date'])
+        for i in range(30):
+            sheet.append(['Mumbai', f'J{i}', 'Freight', 100, 50, datetime(2026, 6, 1)])
+        sheet.append(['', '', 'Job Total', 3000, 1500])
+        sheet.append(['Total', '', '', 3000, 1500])
+        path = str(Path(self.tmp.name) / 'profit.xlsx'); workbook.save(path)
+        report = J.read_profit(path)
+        self.assertEqual(len(report.df), 30)
+        self.assertEqual(report.df['Income (INR)'].sum(), report.grand['Income (INR)'])
+        self.assertEqual(report.df.iloc[-1]['Job No.'], 'J29')
+        self.assertEqual(report.range_to, date(2026, 12, 31))
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.engine = get_engine('sqlite:///' + self.tmp.name + '/db.sqlite')
@@ -119,7 +136,8 @@ class ReplacementTests(unittest.TestCase):
         self.assertEqual(sum(r['trans_date'].month == 6 for r in rows), 2)
         self.assertEqual(next(r['income'] for r in rows if r['job_no'] == '2026-JOB-0'), 125.)
         daily.basis = 'Job Date'
-        self.assertEqual(self.load_profit(daily, approve=True)['status'], 'needs_review')
+        with patch.object(J, 'standardise_profit', side_effect=AssertionError('Unsafe basis should not be materialised')):
+            self.assertEqual(self.load_profit(daily, approve=True)['status'], 'needs_review')
 
     def test_default_mode_keeps_history_and_diffs(self):
         with patch.dict(os.environ, REPORT_STORAGE_MODE='versioned'):

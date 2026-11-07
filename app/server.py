@@ -1,5 +1,5 @@
 """The web app: sign-in, the dashboard data, the admin portal and the endpoint the Gmail script posts to."""
-import gzip, hashlib, io, json, logging, os, secrets, shutil, tempfile, threading, time
+import gc, gzip, hashlib, io, json, logging, os, secrets, shutil, tempfile, threading, time
 from collections import defaultdict, deque
 from datetime import date, datetime
 from pathlib import Path
@@ -90,7 +90,11 @@ class Store:
                 self.idle.set(); self.wake.wait(2); self.wake.clear(); continue
             self.idle.clear(); changed = False
             try:
-                res = P.ingest_file(self.engine, r.path, r.report_time or datetime.utcnow(), r.gmail_id or "", bool(r.approve), r.source or "email", r.uploaded_by or "", r.uploaded_by if r.approve else "", r.reason or "", r.subject or "")
+                # Do not retain/build a second dashboard dataset alongside a large workbook.
+                with self.lock:
+                    self.full = None; self.full_version = -1; self.cache.clear()
+                    gc.collect()
+                    res = P.ingest_file(self.engine, r.path, r.report_time or datetime.utcnow(), r.gmail_id or "", bool(r.approve), r.source or "email", r.uploaded_by or "", r.uploaded_by if r.approve else "", r.reason or "", r.subject or "")
                 status = "done"; changed = res.get("status") == "promoted"
             except Exception as e:                      # one bad file must not stop the queue
                 log.exception("import failed"); status = "failed"

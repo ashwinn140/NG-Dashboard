@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from itertools import chain, islice
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
@@ -43,9 +44,10 @@ class ProfitReport:
 def _sheet_rows(path):
     import openpyxl
     wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
-    rows = [list(r) for r in wb.worksheets[0].iter_rows(values_only=True)]
-    wb.close()
-    return rows
+    try:
+        yield from wb.worksheets[0].iter_rows(values_only=True)
+    finally:
+        wb.close()
 
 
 def is_profit_report(path: str) -> bool:
@@ -63,7 +65,8 @@ def is_profit_report(path: str) -> bool:
 
 
 def read_profit(path: str) -> ProfitReport:
-    rows = _sheet_rows(path)
+    stream = _sheet_rows(path)
+    rows = list(islice(stream, 12))
     if not rows or "charge wise detail" not in str(rows[0][0]).lower():
         raise ReportError("Not a job profit report: the title row does not say 'Charge wise Detail'")
     title = str(rows[0][0])
@@ -101,7 +104,7 @@ def read_profit(path: str) -> ProfitReport:
             seen[nm] = 0
         names.append(nm)
     lines, grand = [], {}
-    for r in rows[hi + 1:]:
+    for r in chain(rows[hi + 1:], stream):
         d = {n: ("" if v is None else v) for n, v in zip(names, r) if n}
         loc, charge = str(d.get("Location", "")).strip(), str(d.get("Charge", "")).strip()
         if loc.lower() == "total":
@@ -109,7 +112,7 @@ def read_profit(path: str) -> ProfitReport:
         elif loc.lower().startswith("generated") or charge.lower() in ("total", "job total"):
             continue
         elif loc or str(d.get("Job No.", "")).strip():
-            lines.append(d)
+            lines.append([d.get(n, "") for n in names if n])
     df = pd.DataFrame(lines, columns=[n for n in names if n])
     for c in ("Income (INR)", "Expense (INR)", "Profit (INR)"):
         if c in df.columns:
@@ -147,7 +150,9 @@ def standardise_profit(rep: ProfitReport) -> list[dict]:
     seq: dict = {}
     out = []
     ic_names = {_hnorm(n) for n in config.COMPANIES}
-    for rec, raw in zip(cells.to_dict("records"), rep.df.to_dict("records")):
+    columns = list(rep.df.columns)
+    for values, raw_values in zip(cells.itertuples(index=False, name=None), rep.df.itertuples(index=False, name=None)):
+        rec, raw = dict(zip(columns, values)), dict(zip(columns, raw_values))
         extra = {k: v for k, v in rec.items() if v != ""}
         inc, exp = float(raw.get("Income (INR)", 0) or 0), float(raw.get("Expense (INR)", 0) or 0)
         g = lambda k: str(rec.get(k, ""))          # noqa: E731
@@ -185,6 +190,9 @@ def process_profit(engine, rep: ProfitReport, file_name: str, file_sha: str, rep
         problems = validate_profit(rep)
         if problems:
             return stop("failed", "; ".join(problems))
+        replacing = config.replace_reports()
+        if replacing and (rep.range_from is None or rep.range_to is None or "billing" not in rep.basis.lower()):
+            return stop("needs_review", "Replacement requires an explicit billing-date range; existing profit data was kept")
         rows = standardise_profit(rep)
         jobs = {r["job_no"] for r in rows}
         replacing = config.replace_reports()
