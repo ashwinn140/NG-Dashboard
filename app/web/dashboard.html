@@ -475,9 +475,9 @@ function rankedKey(key) {
 const CI = {customer: 0, branch: 1, carrier: 3, origin: 2, destination: 4, x_tradelanename: 5, x_dischargecountry: 6, shipper: 0, consignee: 1};
 window.CHART_COLORS = ['#4c78a8', '#f58518', '#54a24b', '#b279a2', '#e45756', '#72b7b2', '#eeca3b', '#9d755d'];
 function card(title, note, body, cls) { return h('article', {class: 'card ' + (cls || '')}, h('h2', {class: 'h'}, title), note ? h('p', {class: 'note'}, note) : null, body); }
-function kpi(label, value, delta, note, tone) {
+function kpi(label, value, delta, note, tone, previousValue) {
   return h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, label), h('div', {class: 'kv' + (tone ? ' ' + tone : '')}, value),
-    delta == null ? null : h('div', {class: 'delta ' + (delta >= 0 ? 'ok' : 'bad')}, fDelta(delta) + ' vs ' + cmpLabel()), note ? h('div', {class: 'kn'}, note) : null);
+    delta == null ? null : h('div', {class: 'delta ' + (delta >= 0 ? 'ok' : 'bad')}, fDelta(delta) + ' · Current: ' + value + ' · Previous: ' + (previousValue == null ? 'not available' : previousValue) + ' · ' + cmpLabel()), note ? h('div', {class: 'kn'}, note) : null);
 }
 function activeCust(m) { const c = COLS.customer.c, a = new Uint32Array(COLS.customer.d.length); for (let i = 0; i < N; i++) if (m[i]) a[c[i]]++; let n = 0; for (let j = 0; j < a.length; j++) if (a[j] > 0 && a[j] >= S.def.activeMin) n++; return n; }
 function sumWhere(m, f) { let s = 0; for (let i = 0; i < N; i++) if (m[i]) s += f(i); return s; }
@@ -529,10 +529,10 @@ function mixBlock(key, title) {
 function pageOverview() {
   const kp = [];
   const dN = pctChange(R.n, R.np);
-  kp.push(kpi('Shipments', fInt(R.n), S.compare ? dN : null, 'Dated within the selected range'));
+  kp.push(kpi('Shipments', fInt(R.n), S.compare ? dN : null, 'Dated within the selected range', '', fInt(R.np)));
   const sumAir = (m) => sumWhere(m, (i) => (mode[i] ? 0 : chg[i])), sumSea = (m) => sumWhere(m, (i) => (mode[i] ? teus[i] : 0));
-  if (R.air) kp.push(kpi('Air chargeable weight (tonnes)', f1(sumAir(R.M)), S.compare ? pctChange(sumAir(R.M), sumAir(R.P)) : null, 'Air reports only'));
-  if (R.sea) kp.push(kpi('Sea TEUs', fInt(Math.round(sumSea(R.M))), S.compare ? pctChange(sumSea(R.M), sumSea(R.P)) : null, 'Filled for FCL shipments only'));
+  if (R.air) kp.push(kpi('Air chargeable weight (tonnes)', f1(sumAir(R.M)), S.compare ? pctChange(sumAir(R.M), sumAir(R.P)) : null, 'Air reports only', '', f1(sumAir(R.P))));
+  if (R.sea) kp.push(kpi('Sea TEUs', fInt(Math.round(sumSea(R.M))), S.compare ? pctChange(sumSea(R.M), sumSea(R.P)) : null, 'Filled for FCL shipments only', '', fInt(Math.round(sumSea(R.P)))));
   kp.push(kpi('Active customers', fInt(activeCust(R.M)), S.compare ? pctChange(activeCust(R.M), activeCust(R.P)) : null, 'At least ' + S.def.activeMin + ' shipment' + (S.def.activeMin > 1 ? 's' : '') + ' in range'));
   const t1 = top10(R.M, R.useVol), t0 = top10(R.P, R.useVol);
   kp.push(h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'Top ' + S.def.topN + ' customers’ share'), h('div', {class: 'kv'}, t1 == null ? '—' : fP0(t1)),
