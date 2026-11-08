@@ -263,7 +263,6 @@ body.ux-dashboard .ux-inspector{z-index:100}
     <button type="button" data-p="p_explorer" aria-selected="false">Profitability by…</button>
     <button type="button" data-p="p_branches" aria-selected="false">Branch profit</button>
     <button type="button" data-p="p_customers" aria-selected="false">Customers</button>
-    <button type="button" data-p="p_charges" aria-selected="false">Charges and vendors</button>
     <button type="button" data-p="p_jobs" aria-selected="false">Jobs</button>
     <button type="button" data-p="p_quality" aria-selected="false">Profit quality</button>
     <button type="button" data-p="p_billing" aria-selected="false">Billing health</button>
@@ -288,7 +287,7 @@ body.ux-dashboard .ux-inspector{z-index:100}
       <span class="lbl2" data-g="ops">Measure</span>
       <div id="mSeg" data-g="ops"><button type="button" class="btn" data-v="count">Shipments</button><button type="button" class="btn" data-v="volume">Volume (t or TEU)</button></div>
       <span class="lbl2" data-g="profit" hidden>Rank by</span><div id="rankSeg" data-g="profit" hidden><button type="button" class="btn" data-v="profit">Profit</button><button type="button" class="btn" data-v="income">Income</button><button type="button" class="btn" data-v="expense">Expense</button></div>
-      <span class="lbl2" data-g="profit" hidden>Date basis</span><div id="basisSeg" data-g="profit" hidden title="The profit report is built on billing date. Job date is when the job was opened."><button type="button" class="btn" data-v="bill">Billing date</button><button type="button" class="btn" data-v="job">Job date</button></div>
+      <span class="lbl2" data-g="profit" hidden>Finance basis: Job Date</span><div id="basisSeg" hidden></div>
       <label class="f"><input type="checkbox" id="cmp" checked> Show change vs comparison period</label>
       <button type="button" class="btn" id="defBtn" aria-expanded="false">Definitions ⚙</button>
     </div>

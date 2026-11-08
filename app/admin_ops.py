@@ -13,9 +13,9 @@ def preview_any(engine, path: str, report_time: datetime | None = None, subject:
     """What loading this file would do, without changing anything (registers and the job profit report)."""
     report_time = report_time or datetime.utcnow()
     layout = J.profit_layout(path)
-    if layout == "charge_detail": return preview_profit(engine, path, report_time)
-    if layout == "job_summary":
-        return dict(kind="Job-level profit summary", report_type="JP", verdict="rejected", message=J.JOB_SUMMARY_MESSAGE)
+    if layout == "job_summary": return preview_profit(engine, path, report_time)
+    if layout == "charge_detail":
+        return dict(kind="Legacy charge detail", report_type="JP", verdict="rejected", message=J.LEGACY_MESSAGE)
     out = P.preview_file(engine, path, report_time, subject); out.setdefault("kind", "Shipment register"); out["kind"] = "Shipment register"; return out
 
 
@@ -23,19 +23,19 @@ def preview_profit(engine, path: str, report_time: datetime) -> dict:
     try: rep = J.read_profit(path)
     except P.ReportError as e: return dict(kind="Job profit report", verdict="rejected", message=str(e))
     sha = P.sha256_file(path); problems = J.validate_profit(rep); c = rep.company
-    out = dict(kind="Job profit report", company=c, report_type="JP", covers_from=rep.range_from, covers_to=rep.range_to, basis=rep.basis, rows=len(rep.df), jobs=int(rep.df["Job No."].nunique()),
+    out = dict(kind="Job profit report", company=c, report_type="JP", covers_from=rep.range_from, covers_to=rep.range_to, basis=rep.basis, rows=len(rep.df), jobs=int(rep.df.drop_duplicates(["Job No.", "Job Date", "LOB"]).shape[0]),
                income=round(float(rep.df["Income (INR)"].sum()), 2), expense=round(float(rep.df["Expense (INR)"].sum()), 2), verdict="ready", message="", notes=[])
     with engine.connect() as conn:
         dup = conn.execute(select(imports.c.id).where(imports.c.file_sha256 == sha, imports.c.status == "promoted")).first()
         overlap = and_(imports.c.range_from <= rep.range_to, imports.c.range_to >= rep.range_from) if rep.range_from else true()
-        last = conn.execute(select(imports.c.id, imports.c.report_time).where(imports.c.company == c, imports.c.report_type == "JP", imports.c.status == "promoted", overlap).order_by(imports.c.report_time.desc())).first()
-        held = conn.execute(select(func.count()).select_from(profit_lines).where(profit_lines.c.company == c, profit_lines.c.to_import.is_(None))).scalar()
+        last = conn.execute(select(imports.c.id, imports.c.report_time).where(imports.c.company == c, imports.c.report_type == "JP", imports.c.status == "promoted", imports.c.columns.not_like('%"Charge"%'), overlap).order_by(imports.c.report_time.desc())).first()
+        held = conn.execute(select(func.count()).select_from(profit_lines).where(profit_lines.c.company == c, *J.current_jobs())).scalar()
     if dup: out.update(verdict="duplicate", message=f"Identical file already loaded as import {dup[0]}")
     elif last and report_time <= last.report_time: out.update(verdict="stale", message=f"A newer report for the same dates is already loaded ({last.report_time:%Y-%m-%d %H:%M})")
     elif problems: out.update(verdict="failed", message="; ".join(problems))
     elif J.replacement_issue(rep): out.update(verdict="needs_review", message=J.replacement_issue(rep))
     else:
-        out["notes"].append(f"{len(rep.df):,} charge lines for {rep.range_from} to {rep.range_to}, {out['jobs']:,} jobs. Lines already held for other dates are left untouched.")
+        out["notes"].append(f"{len(rep.df):,} job rows for {rep.range_from} to {rep.range_to}, {out['jobs']:,} jobs. Lines already held for other dates are left untouched.")
         if held and rep.range_from is None: out["notes"].append("The date range could not be read, so only the jobs in this file are compared.")
     return out
 

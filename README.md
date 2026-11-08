@@ -70,14 +70,15 @@ touches last year's shipments, and a report covering fewer branches never makes 
 Last year is loaded once by uploading its eight full-year reports in the admin portal (the one-time backfill). It stays until you remove it.
 If a file's title rows cannot be read, the earliest and latest shipment dates in the file are used, and the import log says so.
 
-## Job profit analysis (Charge wise Detail)
-`app/profit.py` reads the ERP's job profit report: every income or expense line of a job, with Total and Job Total rows that are used only as a check.
-- The lines must add up to the report's own grand total, otherwise the file is rejected and both numbers are shown.
-- Columns are read by name (any order; extra columns are kept). The two "Organization" columns are read as the job's customer (first) and the party on the line (second).
-- `ingest_file` finds out by itself whether a file is a shipment register or a profit report.
-- Same rules as the registers (duplicate, older, bad, suspiciously smaller). The report arrives daily as a full-year snapshot; earlier years are loaded once. A file covers the dates in its title: lines loaded for those dates and missing from the new file are "not present"; lines for other dates (earlier years) are never touched.
-- Size: a full-year file of about 112,000 charge lines (15 MB) loads in about 80 seconds and needs about 650 MB of memory while it runs.
-- Test: `python scripts/run_profit_test.py <folder with the Excel files>`
+## Job profit analysis (Job Date)
+`app/profit.py` accepts Job Profit Analysis Report with **Basis: Job Date**, one row per job, for NG and NCS. The same format serves daily and historical uploads.
+- Required names: Location, LOB, Job No., Job Date, Organization, Income (INR), Expense (INR), Profit (INR). Column order is arbitrary; duplicate headers are rejected. Optional source fields are retained.
+- A complete explicit From/to range, valid in-range job dates, unique job/date/LOB keys and finite monetary values are required. Income, expense and profit reconcile against the source grand total; each job's profit is checked against income minus expense.
+- Replacements affect only the same company and Job Date range, retaining other years. Duplicate, stale, suspicious-drop, static-history and retention controls remain in effect.
+- The former charge-wise format is rejected. Its retained rows are excluded from the new dashboard and coverage; they are not converted to job-date totals. Upload matching job reports for both companies and historical periods.
+- Finance variances, saved finance visuals and exports use Job Date. Charge/vendor pages and dimensions are removed. Saved unsupported visuals show a specific explanation.
+- Job attributes take priority over shipment-register attributes. Register weights still require a unique match. Customs jobs never borrow freight-forwarding weights.
+- No database migration or hourly Gmail-trigger change is needed.
 
 ## Years that move (a product, not a one-off)
 - `year_slots` / `history_window(today, years, fy_start_month)`: the years kept and compared are relative to today (this year plus the years before). `fy_start_month=1` is the calendar year; `4` is India's April-March accounting year. The window moves by itself when the year changes.
@@ -124,3 +125,4 @@ admin review. The default `versioned` mode retains previous row versions instead
 Replacement mode does not offer before/after row-version comparisons.
 
 See `DAILY_REPLACEMENT_REVIEW.md` for the approved scope, safeguards and validation.
+

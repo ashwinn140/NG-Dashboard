@@ -157,10 +157,10 @@ def build_full(engine) -> dict:
 
     # ---- job profit lines joined to the registers
     with engine.connect() as c:
-        fields = ["id", "company", "job_date", "job_no", "lob", "customer", "party", "branch", "charge", "income", "expense", "trans_date", "trade_lane"]
-        pl_rows = list(c.execute(select(*(profit_lines.c[k] for k in fields)).where(profit_lines.c.to_import.is_(None))).mappings())
+        fields = ["id", "company", "job_date", "job_no", "lob", "customer", "party", "branch", "charge", "income", "expense", "trans_date", "trade_lane", "extra"]
+        pl_rows = list(c.execute(select(*(profit_lines.c[k] for k in fields)).where(*J.current_jobs())).mappings())
         pl_rows.sort(key=lambda r: r["id"])
-        jp = c.execute(select(imports.c.company, imports.c.range_from, imports.c.range_to, imports.c.file_name, imports.c.columns).where(imports.c.report_type == "JP", imports.c.status == "promoted").order_by(imports.c.id)).all()
+        jp = J.summary_imports(c.execute(select(imports.c.company, imports.c.range_from, imports.c.range_to, imports.c.file_name, imports.c.columns).where(imports.c.report_type == "JP", imports.c.status == "promoted").order_by(imports.c.id)).all())
     reg_co = np.where(A["_rep"] < 4, "NG", "NCS") if N else np.array([]); reg_no = A["Shipment No"].astype(str).str.strip().values if N else []; reg_date = sd.dt.strftime("%Y-%m-%d").values if N else []
     reg_rt = [REPS[int(ri)][1] for ri in A["_rep"]]
     by_key, by_no = collections.defaultdict(list), collections.defaultdict(list)
@@ -179,30 +179,37 @@ def build_full(engine) -> dict:
         if not candidates:
             candidates = by_no.get((co, r["job_no"]), [])
         candidates = [i for i in candidates if expected_rt is None or reg_rt[i] == expected_rt]
-        si = candidates[0] if len(candidates) == 1 and str(r["job_no"] or "").strip() else -1
+        si = candidates[0] if kind != "Customs clearance" and len(candidates) == 1 and str(r["job_no"] or "").strip() else -1
         ic = "Intercompany" if (ICN.get(norm(r["customer"])) == other or ICN.get(norm(r["party"])) == other) else "External"
         rtc = {("Air", "Export"): 0, ("Air", "Import"): 1, ("Sea", "Export"): 2, ("Sea", "Import"): 3}.get((mode, direction), 4)
         pl.append(dict(co=0 if co == "NG" else 1, sidx=si, rt=rtc, branch=r["branch"], lob=r["lob"], mode=mode, direction=direction, kind=kind, job=r["job_no"], customer=r["customer"], charge=r["charge"], party=r["party"],
                        income=r["income"] or 0.0, expense=r["expense"] or 0.0, td=r["trans_date"], jd=r["job_date"], plane=r["trade_lane"], ic=ic))
         e = pmeta_acc.setdefault(co, dict(lines=0, income=0.0, expense=0.0, jobs={}))
-        e["lines"] += 1; e["income"] += r["income"] or 0.0; e["expense"] += r["expense"] or 0.0; e["jobs"].setdefault((r["job_no"], jd, rtc), (si, r["lob"]))
+        e["lines"] += 1; e["income"] += r["income"] or 0.0; e["expense"] += r["expense"] or 0.0; e["jobs"].setdefault((r["job_no"], jd, r["lob"]), (si, r["lob"]))
     pmeta = []
     for co in ("NG", "NCS"):
         if co not in pmeta_acc: continue
         e = pmeta_acc[co]; mine = [x for x in jp if x[0] == co]; unm = collections.Counter(l for (si, l) in e["jobs"].values() if si < 0)
         cols = json.loads(mine[-1][4]) if mine and mine[-1][4] else []
-        pmeta.append(dict(co=co, file=mine[-1][3] if mine else "", title=f"{CFG.COMPANY_LABELS[co]} · Charge wise Detail", range_from=str(min(x[1] for x in mine if x[1])) if mine else "", range_to=str(max(x[2] for x in mine if x[2])) if mine else "",
-                          basis="Billing Date", lines=e["lines"], income=round(e["income"], 2), expense=round(e["expense"], 2), grand_income=round(e["income"], 2), grand_expense=round(e["expense"], 2), columns=cols,
-                          jobs=len(e["jobs"]), matched=sum(1 for (si, l) in e["jobs"].values() if si >= 0), unmatched_by_lob=dict(unm)))
+        pmeta.append(dict(co=co, file=mine[-1][3] if mine else "", title=f"{CFG.COMPANY_LABELS[co]} · Job Profit Analysis", range_from=str(min(x[1] for x in mine if x[1])) if mine else "", range_to=str(max(x[2] for x in mine if x[2])) if mine else "",
+                          basis="Job Date", lines=e["lines"], income=round(e["income"], 2), expense=round(e["expense"], 2), grand_income=round(e["income"], 2), grand_expense=round(e["expense"], 2), columns=cols,
+                          ranges=[[str(x[1]), str(x[2])] for x in mine if x[1] and x[2]], jobs=len(e["jobs"]), matched=sum(1 for (si, l) in e["jobs"].values() if si >= 0), unmatched_by_lob=dict(unm)))
     PD = pd.DataFrame(pl, columns=["co", "sidx", "rt", "branch", "lob", "mode", "direction", "kind", "job", "customer", "charge", "party", "income", "expense", "td", "jd", "plane", "ic"]); NP = len(PD)
     NOMATCH = "(no register match)"
     from_reg = lambda series, idx: pd.Series([series.iloc[i] if i >= 0 else NOMATCH for i in idx], dtype=object)
+    source_map = {"branch": "Location", "customer": "Organization", "shipper": "Shipper", "consignee": "Consignee", "job_owner": "Job Owner", "carrier": "Carrier", "agent": "Overseas Agent", "origin": "Loading Port", "destination": "Discharge Port", "x_salesperson": "Sales Person", "x_tradelanename": "Trade Lane", "x_dischargecountry": "Discharge Country", "cargo": "Cargo Type", "consol": "Consol Type"}
+    source_values = [x["extra"] or {} for x in pl_rows]
+    # Source job attributes take priority, including explicit blanks. Register
+    # attributes are only fallbacks for fields absent from the uploaded report.
     pser = {}
     for k, (label, ser) in cats.items():
         ps = from_reg(ser.reset_index(drop=True), PD.sidx.tolist())
         if k == "branch": ps = PD.branch.astype(str).str.strip()
         if k == "customer": ps = PD.customer.fillna("").astype(str).str.strip().str.replace(r"\s+", " ", regex=True)
         if k == "x_tradelanename": ps = pd.Series([v if v != NOMATCH or not pl_ else (pl_ or NOMATCH) for v, pl_ in zip(ps, PD.plane.fillna("").astype(str))], dtype=object)
+        field = source_map.get(k)
+        if field:
+            ps = pd.Series([str(extra[field]).strip() if field in extra else ("" if si < 0 else val) for extra, si, val in zip(source_values, PD.sidx.tolist(), ps)], dtype=object)
         pser[k] = ps
     cust_all = pd.concat([cats["customer"][1].reset_index(drop=True), pser["customer"]], ignore_index=True); cust_c = canon(cust_all)
     cats["customer"] = (cats["customer"][0], cust_c.iloc[:N].reset_index(drop=True)); pser["customer"] = cust_c.iloc[N:].reset_index(drop=True)
@@ -212,10 +219,17 @@ def build_full(engine) -> dict:
     pcols = {k: enc_both(k) for k in cats}
     AGENTINFO = [[MASTER[norm(n)]["country"] or "", MASTER[norm(n)]["network"] or "", MASTER[norm(n)]["conf"] or "", MASTER[norm(n)]["sales"] or "", MASTER[norm(n)]["contact"] or "", MASTER[norm(n)]["email"] or ""]
                  if norm(n) in MASTER else ["", "", "", "", "", ""] for n in pcols["agent"]["d"]]
-    for k, label in {"charge": "Charge", "party": "Vendor or party", "lob": "Line of business", "ic": "Intercompany", "job": "Job no.", "mode": "Mode (profit)", "direction": "Direction (profit)", "kind": "Service"}.items():
+    for k, label in {"lob": "Line of business", "ic": "Intercompany", "job": "Job no.", "mode": "Mode (profit)", "direction": "Direction (profit)", "kind": "Service"}.items():
         e = enc(PD[k].fillna("").astype(str)); pcols["p_" + k] = {"l": label, "d": e["d"], "pc": e["c"]}
+    excluded = set(source_map.values()) | set(CFG.PROFIT_REQUIRED) | {"_format", "Profit Margin %"}
+    for name in sorted({key for extra in source_values for key in extra} - excluded):
+        if not name or name.startswith("_"):
+            continue
+        key = "jp_" + norm(name)
+        e = enc(pd.Series([str(extra.get(name, "")) for extra in source_values], dtype=object))
+        pcols[key] = {"l": name, "d": e["d"], "pc": e["c"]}
     dayso = lambda s: pd.to_datetime(s, errors="coerce").map(lambda d: -1 if pd.isna(d) else (d - EPOCH).days)
-    PROFIT = {"co": PD.co.tolist(), "sidx": PD.sidx.tolist(), "rt": PD.rt.tolist(), "income": PD.income.astype(float).round(2).tolist(), "expense": PD.expense.astype(float).round(2).tolist(), "td": dayso(PD.td).tolist(), "jd": dayso(PD.jd).tolist(), "meta": pmeta}
+    PROFIT = {"co": PD.co.tolist(), "sidx": PD.sidx.tolist(), "rt": PD.rt.tolist(), "income": PD.income.astype(float).round(2).tolist(), "expense": PD.expense.astype(float).round(2).tolist(), "td": dayso(PD.td).tolist(), "jd": dayso(PD.jd).tolist(), "meta": pmeta, "format": J.FORMAT}
     num = lambda col: pd.to_numeric(A[col], errors="coerce").fillna(0) if col in A.columns else pd.Series([0.0] * N)
     out = {"reps": [[c_, r_] for c_, r_ in REPS], "ckg": pd.to_numeric(A.get("Chargeable Wt", pd.Series([0] * N)), errors="coerce").fillna(0).tolist(), "rbuy": RBUY, "rbf": RBF, "rsell": RSELL, "rsf": RSF,
            "inv1": INV1, "invN": INVN, "rep": A["_rep"].tolist(), "no": A["Shipment No"].astype(str).tolist(), "date": days(sd).tolist(), "ops": days(ops).tolist(), "fin": days(fin).tolist(),
@@ -276,7 +290,7 @@ def restrict(D: dict, user: dict) -> dict:
     matched = (sidx >= 0) & (sidx < len(newpos))
     sidx_new[matched] = newpos[sidx[matched]]  # hidden shipments remain unmatched, including empty registers
     out["p"] = {"co": [D["p"]["co"][i] for i in pidx], "sidx": sidx_new.tolist(), "rt": [D["p"]["rt"][i] for i in pidx], "income": [D["p"]["income"][i] for i in pidx], "expense": [D["p"]["expense"][i] for i in pidx],
-                "td": [D["p"]["td"][i] for i in pidx], "jd": [D["p"]["jd"][i] for i in pidx], "meta": [m for m in D["p"]["meta"] if user["finance"] and not user["lobs"] and (not user["companies"] or m["co"] in user["companies"])]}
+                "format": J.FORMAT, "td": [D["p"]["td"][i] for i in pidx], "jd": [D["p"]["jd"][i] for i in pidx], "meta": [m for m in D["p"]["meta"] if user["finance"] and not user["lobs"] and (not user["companies"] or m["co"] in user["companies"])]}
     cols = {}
     for k, c in D["cols"].items():
         entry = {"l": c["l"]}

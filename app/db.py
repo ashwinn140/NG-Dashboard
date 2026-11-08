@@ -72,7 +72,8 @@ admin_log = Table(
 )
 
 
-# Job profit analysis: one row per charge line (income or expense) of a job. Same open/closed versioning as shipments.
+# Job profit snapshots. New-format rows contain one job total and are marked in extra.
+# Legacy charge rows remain archived in this table but are excluded from job-based reporting.
 profit_lines = Table(
     "profit_lines", metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
@@ -133,3 +134,4 @@ settings = Table(
     "settings", metadata,
     Column("key", String(60), primary_key=True), Column("value", Text),
 )
+

@@ -448,16 +448,16 @@ def ingest_file(engine, path: str, report_time: datetime, source_ref: str = "", 
     """Entry point for an email attachment or a manual upload: read, identify, check, load."""
     from . import profit            # the job profit report has its own layout and rules
     layout = profit.profit_layout(path)
-    if layout == "charge_detail":
-        return profit.ingest_profit(engine, path, report_time, source, uploaded_by, approve_review, subject)
+    if layout == "job_summary":
+        return profit.ingest_profit(engine, path, report_time, source, uploaded_by, approve_review, subject, source_ref)
     name = path.replace("\\", "/").rsplit("/", 1)[-1]
     sha = sha256_file(path)
-    if layout == "job_summary":
+    if layout == "charge_detail":
         with engine.begin() as conn:
             iid = _record(conn, None, "JP", report_time=report_time, file_name=name, file_sha256=sha,
-                          source_ref=source_ref, status="failed", message=profit.JOB_SUMMARY_MESSAGE,
+                          source_ref=source_ref, status="failed", message=profit.LEGACY_MESSAGE,
                           file_path=path, source=source, uploaded_by=uploaded_by, subject=subject)
-        return dict(import_id=iid, status="failed", message=profit.JOB_SUMMARY_MESSAGE)
+        return dict(import_id=iid, status="failed", message=profit.LEGACY_MESSAGE)
     try:
         reg = read_register(path)
     except ReportError as e:

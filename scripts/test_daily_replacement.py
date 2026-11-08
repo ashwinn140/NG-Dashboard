@@ -37,13 +37,12 @@ class ReplacementTests(unittest.TestCase):
     def test_streamed_profit_workbook_preserves_lines_and_totals(self):
         from openpyxl import Workbook
         workbook = Workbook(); sheet = workbook.active
-        sheet.append(['New Globe Logistik LLP\nCharge wise Detail From 01-Jan-2026 to 31-Dec-2026'])
-        sheet.append(['Basis : Billing Date'])
-        sheet.append(['Location', 'Job No.', 'Charge', 'Income (INR)', 'Expense (INR)', 'Date'])
+        sheet.append(['New Globe Logistik LLP\nJob Profit Analysis Report From 01-Jan-2026 to 31-Dec-2026'])
+        sheet.append(['Basis : Job Date'])
+        sheet.append(['Location', 'Job No.', 'LOB', 'Income (INR)', 'Expense (INR)', 'Job Date', 'Organization', 'Profit (INR)'])
         for i in range(30):
-            sheet.append(['Mumbai', f'J{i}', 'Freight', 100, 50, datetime(2026, 6, 1)])
-        sheet.append(['', '', 'Job Total', 3000, 1500])
-        sheet.append(['Total', '', '', 3000, 1500])
+            sheet.append(['Mumbai', f'J{i}', 'FFWD AIR EXP', 100, 50, datetime(2026, 6, 1), 'Customer', 50])
+        sheet.append(['Total', '', '', 3000, 1500, '', '', 1500])
         path = str(Path(self.tmp.name) / 'profit.xlsx'); workbook.save(path)
         report = J.read_profit(path)
         self.assertEqual(len(report.df), 30)
@@ -125,18 +124,20 @@ class ReplacementTests(unittest.TestCase):
         frame = pd.DataFrame([
             {'Location': 'Mumbai', 'LOB': 'AIR EXPORT', 'Job No.': f'{year}-JOB-{i}',
              'Job Date': pd.Timestamp(year, month, 1), 'Date': pd.Timestamp(year, month, 2),
-             'Charge': 'Freight', 'Trans No.': f'{year}-INV-{i}', 'Customer': 'Customer',
-             'Party': 'Vendor', 'Income (INR)': 100., 'Expense (INR)': 50.}
+             'Organization': 'Customer', 'Profit (INR)': 50.,
+             'Income (INR)': 100., 'Expense (INR)': 50.}
             for i, month in enumerate((1, 1, 6))])
         return J.ProfitReport('NG', frame, 'Profit', date(year, 1, 1), date(year, 12, 31),
-                              'Billing Date', {}, list(frame.columns))
+                              'Job Date', {}, list(frame.columns))
 
     def load_profit(self, report, approve=False):
+        report.df['Profit (INR)'] = report.df['Income (INR)'] - report.df['Expense (INR)']
+        report.grand = {c: report.df[c].sum() for c in ['Income (INR)', 'Expense (INR)', 'Profit (INR)']}
         self.sequence += 1
         return J.process_profit(self.engine, report, 'profit.xlsx', str(self.sequence),
                                 self.clock + timedelta(minutes=self.sequence), approve_review=approve)
 
-    def test_profit_replacement_preserves_other_billing_dates(self):
+    def test_profit_replacement_preserves_other_job_dates(self):
         self.load_profit(self.profit(2025))
         self.load_profit(self.profit())
         daily = self.profit()
@@ -149,12 +150,12 @@ class ReplacementTests(unittest.TestCase):
         self.assertEqual((result['changed'], result['ended']), (1, 1))
         rows = self.rows(profit_lines)
         self.assertEqual(len(rows), 5)
-        self.assertEqual(sum(r['trans_date'].year == 2025 for r in rows), 3)
-        self.assertEqual(sum(r['trans_date'].month == 6 for r in rows), 2)
+        self.assertEqual(sum(r['job_date'].year == 2025 for r in rows), 3)
+        self.assertEqual(sum(r['job_date'].month == 6 for r in rows), 2)
         self.assertEqual(next(r['income'] for r in rows if r['job_no'] == '2026-JOB-0'), 125.)
-        daily.basis = 'Job Date'
+        daily.basis = 'Billing Date'
         with patch.object(J, 'standardise_profit', side_effect=AssertionError('Unsafe basis should not be materialised')):
-            self.assertEqual(self.load_profit(daily, approve=True)['status'], 'needs_review')
+            self.assertEqual(self.load_profit(daily, approve=True)['status'], 'failed')
 
     def test_default_mode_keeps_history_and_diffs(self):
         with patch.dict(os.environ, REPORT_STORAGE_MODE='versioned'):
@@ -243,3 +244,4 @@ class ReplacementTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
+

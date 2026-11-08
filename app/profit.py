@@ -1,13 +1,4 @@
-"""Job profit analysis ("Charge wise Detail") reports.
-
-The report lists every charge line of a job (an income or an expense), followed by "Total" rows per charge, a "Job Total" per job
-and one grand total. Only the charge lines are kept; the total rows are used to prove the file is complete:
-the lines must add up to the report's own grand total, otherwise the file is rejected.
-
-Same rules as the shipment registers: duplicate file, older file, bad file, suspicious drop (held for review), and every version kept.
-A profit file is a snapshot of the dates it covers (daily, full year; earlier years loaded once). Lines that were loaded for those dates and are missing
-from the new file are marked "not_present"; lines belonging to other dates (earlier years) are never touched.
-"""
+"""Job-level profit snapshots, scoped by Job Date. Legacy charge reports are rejected."""
 from __future__ import annotations
 
 import hashlib
@@ -24,9 +15,18 @@ from . import config
 from .db import imports, profit_lines
 from .processor import ReportError, _cell, _chunks, _hnorm, _record, _to_dates, historical_freeze, sha256_file
 
-_KNOWN = {_hnorm(n): n for n in list(config.PROFIT_REQUIRED) + ["Job Date", "Trans No.", "Date", "Party Ref No.", "Party Ref Date", "Profit (INR)",
-                                                              "Profit Margin %", "Trade Lane", "Commodity"]}
-DATE_COLS = ("Job Date", "Date", "Party Ref Date")
+FORMAT = "job_summary_v1"
+_KNOWN = {_hnorm(n): n for n in list(config.PROFIT_REQUIRED) + ["Organization", "Trade Lane", "Commodity"]}
+DATE_COLS = ("Job Date", "Revenue Recognition Date", "Financial Lock Date", "Operation Lock Date", "House Date", "Master Date")
+
+
+def current_jobs():
+    """Exclude retained legacy charge rows from all job-based finance calculations."""
+    return (profit_lines.c.to_import.is_(None), profit_lines.c.extra["_format"].as_string() == FORMAT)
+
+
+def summary_imports(rows):
+    return [r for r in rows if "Job Date" in json.loads(r.columns or "[]") and "Charge" not in json.loads(r.columns or "[]")]
 
 
 @dataclass
@@ -50,56 +50,42 @@ def _sheet_rows(path):
         wb.close()
 
 
-JOB_SUMMARY_MESSAGE = (
-    "This file is a job-level profit summary. Finance imports require the "
-    "charge-wise detail report, with Basis: Billing Date and an explicit From/to range."
-)
+LEGACY_MESSAGE = "The previous charge-wise profit format is no longer supported. Upload Job Profit Analysis Report with Basis: Job Date, one row per job, and an explicit From/to range."
 
 
 def profit_layout(path: str) -> str | None:
-    """Identify supported charge detail and known job-summary layouts by contents."""
     try:
         rows = list(islice(_sheet_rows(path), 12))
-        if not rows:
-            return None
-        title = re.sub(r"\s+", " ", str(rows[0][0] or "")).lower()
+        title = re.sub(r"\s+", " ", str(rows[0][0] or "")).lower() if rows else ""
         if "charge wise detail" in title:
             return "charge_detail"
         if "job profit analysis report" in title:
-            for row in rows:
-                fields = {_hnorm(c) for c in row if c is not None}
-                if {"jobno", "incomeinr", "expenseinr"}.issubset(fields) and "charge" not in fields:
-                    return "job_summary"
+            return "job_summary"
     except Exception:
-        return None
+        pass
     return None
 
 
 def is_profit_report(path: str) -> bool:
-    return profit_layout(path) == "charge_detail"
+    return profit_layout(path) == "job_summary"
 
 
 def replacement_issue(rep: ProfitReport) -> str | None:
-    """Shared, read-only preview/import validation for replacement date scope."""
-    if not config.replace_reports():
-        return None
-    if rep.range_from is None or rep.range_to is None or "billing" not in rep.basis.lower():
-        return "Replacement requires an explicit billing-date range; existing profit data was kept"
-    dates = rep.df.get("Date")
-    if dates is None:
-        return "A profit line has no billing date or falls outside the report range; existing data was kept"
-    dates = pd.to_datetime(dates, errors="coerce").dt.normalize()
+    if rep.range_from is None or rep.range_to is None or rep.range_from > rep.range_to or _hnorm(rep.basis) != "jobdate":
+        return "Job profit requires Basis: Job Date and an explicit valid From/to range; existing data was kept"
+    dates = pd.to_datetime(rep.df.get("Job Date", pd.Series(dtype=object)), errors="coerce").dt.normalize()
     if dates.isna().any() or ((dates < pd.Timestamp(rep.range_from)) | (dates > pd.Timestamp(rep.range_to))).any():
-        return "A profit line has no billing date or falls outside the report range; existing data was kept"
+        return "A job has no valid Job Date or falls outside the report range; existing data was kept"
     return None
 
 
 def read_profit(path: str) -> ProfitReport:
     stream = _sheet_rows(path)
     rows = list(islice(stream, 12))
-    if not rows or "charge wise detail" not in re.sub(r"\s+", " ", str(rows[0][0])).lower():
-        raise ReportError("Not a job profit report: the title row does not say 'Charge wise Detail'")
-    title = str(rows[0][0])
+    title = str(rows[0][0] or "") if rows else ""
+    clean_title = re.sub(r"\s+", " ", title).lower()
+    if "job profit analysis report" not in clean_title or "charge wise detail" in clean_title:
+        raise ReportError(LEGACY_MESSAGE)
     first = re.sub(r"\s+", " ", title.split("\n")[0]).strip().lower()
     company = config.COMPANIES.get(first)
     if not company:
@@ -107,46 +93,38 @@ def read_profit(path: str) -> ProfitReport:
     rf = rt = None
     m = re.search(r"From\s+(\d{1,2}-[A-Za-z]{3}-\d{4})\s+to\s+(\d{1,2}-[A-Za-z]{3}-\d{4})", title, re.I)
     if m:
-        rf, rt = (datetime.strptime(x, "%d-%b-%Y").date() for x in m.groups())
-    basis = ""
-    for r in rows[1:4]:
-        if r and r[0] and str(r[0]).lower().startswith("basis"):
-            basis = str(r[0]).split(":", 1)[-1].strip()
-    hi = next((i for i, r in enumerate(rows[:12]) if any(_hnorm(c) == "jobno" for c in r if c is not None)), None)
+        try:
+            rf, rt = (datetime.strptime(x, "%d-%b-%Y").date() for x in m.groups())
+        except ValueError as e:
+            raise ReportError("Invalid report date range") from e
+    basis = next((str(r[0]).split(":", 1)[-1].strip() for r in rows if r and r[0] and str(r[0]).lower().startswith("basis")), "")
+    hi = next((i for i, r in enumerate(rows) if any(_hnorm(c) == "jobno" for c in r if c is not None)), None)
     if hi is None:
         raise ReportError("Header row ('Job No.') not found in the first 12 rows")
-    hdr = ["" if c is None else re.sub(r"\s+", " ", str(c)).strip() for c in rows[hi]]
-    ci = next((j for j, h in enumerate(hdr) if _hnorm(h) == "charge"), None)
-    names, seen, orgs = [], {}, 0
-    for j, h in enumerate(hdr):
-        if not h:
-            names.append(None)
-            continue
-        if _hnorm(h) == "organization":           # appears twice: the first is the job's customer, the second the party on the transaction
-            orgs += 1
-            nm = "Customer" if orgs == 1 else "Party" if orgs == 2 else f"Organization.{orgs}"
-        else:
-            nm = _KNOWN.get(_hnorm(h), h)
-        if nm in seen:                            # any other repeated header keeps its position in the name
-            seen[nm] += 1
-            nm = f"{nm}.{seen[nm]}"
-        else:
-            seen[nm] = 0
-        names.append(nm)
+    names = [(_KNOWN.get(_hnorm(c), re.sub(r"\s+", " ", str(c)).strip()) if c is not None and str(c).strip() else None) for c in rows[hi]]
+    normalized = [_hnorm(n) for n in names if n]
+    if len(normalized) != len(set(normalized)):
+        raise ReportError("Duplicate column names are ambiguous; keep one column for each field")
+    missing = [c for c in config.PROFIT_REQUIRED if c not in names]
+    if missing or "Charge" in names or any(_hnorm(n or "") == "charge" for n in names):
+        raise ReportError("Missing required columns: " + ", ".join(missing) if missing else LEGACY_MESSAGE)
     lines, grand = [], {}
-    for r in chain(rows[hi + 1:], stream):
+    for r in chain(rows[hi+1:], stream):
         d = {n: ("" if v is None else v) for n, v in zip(names, r) if n}
-        loc, charge = str(d.get("Location", "")).strip(), str(d.get("Charge", "")).strip()
-        if loc.lower() == "total":
+        loc, job = str(d.get("Location", "")).strip(), str(d.get("Job No.", "")).strip()
+        if loc.lower() == "total" and not job:
+            if grand:
+                raise ReportError("More than one grand-total row was found")
             grand = d
-        elif loc.lower().startswith("generated") or charge.lower() in ("total", "job total"):
+        elif loc.lower().startswith("generated") and not job:
             continue
-        elif loc or str(d.get("Job No.", "")).strip():
-            lines.append([d.get(n, "") for n in names if n])
+        elif any(v != "" for v in d.values()):
+            if grand:
+                raise ReportError("Job rows found after the grand total")
+            lines.append(d)
     df = pd.DataFrame(lines, columns=[n for n in names if n])
     for c in ("Income (INR)", "Expense (INR)", "Profit (INR)"):
-        if c in df.columns:
-            df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0.0)
+        df[c] = pd.to_numeric(df[c].astype(str).str.replace(",", "", regex=False), errors="coerce")
     for c in DATE_COLS:
         if c in df.columns:
             df[c] = _to_dates(df[c].replace("", pd.NA))
@@ -159,12 +137,27 @@ def validate_profit(rep: ProfitReport) -> list[str]:
     if missing:
         return [f"Missing required columns: {', '.join(missing)}"]
     if len(df) == 0:
-        return ["The report has no charge lines"]
+        return ["The report has no jobs"]
     out = []
-    for col, label in (("Income (INR)", "income"), ("Expense (INR)", "expense")):
-        want = pd.to_numeric(rep.grand.get(col, None), errors="coerce")
-        if pd.notna(want) and abs(df[col].sum() - want) > config.PROFIT_TOLERANCE:
-            out.append(f"The lines add up to {df[col].sum():,.2f} {label} but the report's own grand total says {want:,.2f}: the file may be incomplete")
+    import numpy as np
+    for col in ("Income (INR)", "Expense (INR)", "Profit (INR)"):
+        vals = pd.to_numeric(df[col], errors="coerce")
+        if not np.isfinite(vals).all():
+            out.append(f"Invalid or missing amount in {col}")
+        want = pd.to_numeric(str(rep.grand.get(col, "")).replace(",", ""), errors="coerce")
+        if pd.isna(want) or not np.isfinite(want):
+            out.append(f"Missing or invalid report grand total for {col}")
+        elif abs(vals.sum() - want) > 0.01:
+            out.append(f"Jobs total {vals.sum():,.2f} for {col}, but the report total is {want:,.2f}")
+    if ((df["Income (INR)"] - df["Expense (INR)"] - df["Profit (INR)"]).abs() > 0.011).any():
+        out.append("A job's profit does not equal income minus expense")
+    if df[["Job No.", "Location", "LOB"]].apply(lambda c: c.astype(str).str.strip().eq("")).any().any():
+        out.append("Every job needs a Job No., Location and LOB")
+    if df.duplicated(["Job No.", "Job Date", "LOB"]).any():
+        out.append("Duplicate job number/date/LOB rows would double-count finance")
+    issue = replacement_issue(rep)
+    if issue:
+        out.append(issue)
     return out
 
 
@@ -183,16 +176,16 @@ def standardise_profit(rep: ProfitReport) -> list[dict]:
     columns = list(rep.df.columns)
     for values, raw_values in zip(cells.itertuples(index=False, name=None), rep.df.itertuples(index=False, name=None)):
         rec, raw = dict(zip(columns, values)), dict(zip(columns, raw_values))
-        extra = {k: v for k, v in rec.items() if v != ""}
+        extra = dict(rec); extra["_format"] = FORMAT
         inc, exp = float(raw.get("Income (INR)", 0) or 0), float(raw.get("Expense (INR)", 0) or 0)
         g = lambda k: str(rec.get(k, ""))          # noqa: E731
-        base = "|".join([g("Job No."), g("Trans No."), g("Charge"), g("Party"), g("Party Ref No.")])
+        base = "job|" + json.dumps([g("Job No."), g("Job Date"), g("LOB")], ensure_ascii=False)
         n = seq[base] = seq.get(base, 0) + 1
         dt = lambda k: (raw.get(k).date() if pd.notna(raw.get(k)) else None) if k in raw and raw.get(k) is not None else None   # noqa: E731
         mode, direction, kind = _mode(g("LOB"))
         row = dict(company=rep.company, key=f"{base}#{n}", branch=g("Location"), lob=g("LOB"), job_no=g("Job No."), job_date=dt("Job Date"),
-                   customer=g("Customer"), charge=g("Charge"), trans_no=g("Trans No."), trans_date=dt("Date"), party=g("Party"),
-                   party_ref_no=g("Party Ref No."), party_ref_date=dt("Party Ref Date"), income=inc, expense=exp, profit=round(inc - exp, 2),
+                   customer=g("Organization"), charge="", trans_no="", trans_date=None, party="",
+                   party_ref_no="", party_ref_date=None, income=inc, expense=exp, profit=round(inc - exp, 2),
                    trade_lane=g("Trade Lane"), commodity=g("Commodity"), extra=extra)
         hash_src = {k: v for k, v in extra.items() if k not in ("Profit (INR)", "Profit Margin %")}
         row["row_hash"] = hashlib.sha1(json.dumps(hash_src, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
@@ -201,10 +194,10 @@ def standardise_profit(rep: ProfitReport) -> list[dict]:
 
 
 def process_profit(engine, rep: ProfitReport, file_name: str, file_sha: str, report_time: datetime, file_path: str = "", source: str = "email",
-                   uploaded_by: str = "", approve_review: bool = False, subject: str = "") -> dict:
+                   uploaded_by: str = "", approve_review: bool = False, subject: str = "", source_ref: str = "") -> dict:
     """Duplicate / older / bad / suspiciously smaller / promote, as for the registers. Lines are compared per job."""
     base = dict(report_time=report_time, file_name=file_name, file_sha256=file_sha, row_count=len(rep.df), range_from=rep.range_from,
-                range_to=rep.range_to, file_path=file_path, source=source, uploaded_by=uploaded_by, subject=subject)
+                range_to=rep.range_to, file_path=file_path, source=source, uploaded_by=uploaded_by, subject=subject, source_ref=source_ref)
     c = rep.company
     with engine.begin() as conn:
         def stop(status, msg):
@@ -216,7 +209,7 @@ def process_profit(engine, rep: ProfitReport, file_name: str, file_sha: str, rep
         if dup:
             return stop("duplicate", f"Identical file already loaded as import {dup[0]}")
         overlap = and_(imports.c.range_from <= rep.range_to, imports.c.range_to >= rep.range_from) if rep.range_from else true()
-        last = conn.execute(select(imports.c.id, imports.c.report_time).where(imports.c.company == c, imports.c.report_type == "JP", imports.c.status == "promoted", overlap)
+        last = conn.execute(select(imports.c.id, imports.c.report_time).where(imports.c.company == c, imports.c.report_type == "JP", imports.c.status == "promoted", imports.c.columns.not_like('%"Charge"%'), overlap)
                             .order_by(imports.c.report_time.desc())).first()
         if last and report_time <= last.report_time:
             return stop("stale", f"Report time {report_time:%Y-%m-%d %H:%M} is not newer than the latest report for the same dates ({last.report_time:%Y-%m-%d %H:%M})")
@@ -230,10 +223,10 @@ def process_profit(engine, rep: ProfitReport, file_name: str, file_sha: str, rep
         rows = standardise_profit(rep)
         jobs = {r["job_no"] for r in rows}
         replacing = config.replace_reports()
-        held = conn.execute(select(profit_lines.c.id, profit_lines.c.key, profit_lines.c.row_hash, profit_lines.c.job_no, profit_lines.c.from_import, profit_lines.c.trans_date).where(
-            profit_lines.c.company == c, profit_lines.c.to_import.is_(None))).all()
+        held = conn.execute(select(profit_lines.c.id, profit_lines.c.key, profit_lines.c.row_hash, profit_lines.c.job_no, profit_lines.c.from_import, profit_lines.c.job_date).where(
+            profit_lines.c.company == c, *current_jobs())).all()
         if replacing:
-            in_jobs = [h for h in held if h.trans_date and rep.range_from <= h.trans_date <= rep.range_to]
+            in_jobs = [h for h in held if h.job_date and rep.range_from <= h.job_date <= rep.range_to]
             scoped = {h.id for h in in_jobs}
             incoming_keys = {r["key"] for r in rows}
             if any(h.key in incoming_keys and h.id not in scoped for h in held):
@@ -250,7 +243,7 @@ def process_profit(engine, rep: ProfitReport, file_name: str, file_sha: str, rep
             drop = (len(in_jobs) - len(rows)) / len(in_jobs)
             if drop > config.MAX_ROW_DROP:
                 return stop("needs_review", f"{len(rows)} lines vs {len(in_jobs)} held for the same dates ({drop:.0%} fewer): held for review")
-        iid = _record(conn, c, "JP", status="promoted", message="", **base)
+        iid = _record(conn, c, "JP", status="promoted", message=f"Job Date; {len(rep.df):,} jobs; source totals reconciled: income {rep.df['Income (INR)'].sum():.2f}, expense {rep.df['Expense (INR)'].sum():.2f}, profit {rep.df['Profit (INR)'].sum():.2f}", **base)
         old = {r.key: (r.id, r.row_hash) for r in held}
         new_keys = {r["key"] for r in rows}
         pc = conn.execute(select(imports.c.columns).where(imports.c.company == c, imports.c.report_type == "JP", imports.c.status == "promoted",
@@ -288,11 +281,11 @@ def process_profit(engine, rep: ProfitReport, file_name: str, file_sha: str, rep
         gone = [r.id for r in in_jobs if r.key not in new_keys]
         if config.static_history():
             ranges = conn.execute(select(imports.c.range_from, imports.c.range_to).where(
-                imports.c.company == c, imports.c.report_type == "JP", imports.c.status == "promoted", imports.c.id != iid)).all()
+                imports.c.company == c, imports.c.report_type == "JP", imports.c.status == "promoted", imports.c.id != iid, imports.c.columns.not_like('%"Charge"%'))).all()
             cutoff, frozen = historical_freeze(conn, ranges)
-            protected = {r.id for r in held if r.trans_date and r.trans_date < cutoff}
+            protected = {r.id for r in held if r.job_date and r.job_date < cutoff}
             add = [r for r in add if (old.get(r["key"], (None,))[0] not in protected)
-                   and (r["key"] in old or not frozen(r["trans_date"]))]
+                   and (r["key"] in old or not frozen(r["job_date"]))]
             chg_ids = [i for i in chg_ids if i not in protected]
             gone = [i for i in gone if i not in protected]
             inplace = [r for r in inplace if r["b_id"] not in protected]
@@ -320,36 +313,36 @@ def process_profit(engine, rep: ProfitReport, file_name: str, file_sha: str, rep
         return dict(import_id=iid, status="promoted", message="", new=n_new, changed=n_chg, ended=len(gone))
 
 
-def ingest_profit(engine, path: str, report_time: datetime, source: str = "email", uploaded_by: str = "", approve_review: bool = False, subject: str = "") -> dict:
+def ingest_profit(engine, path: str, report_time: datetime, source: str = "email", uploaded_by: str = "", approve_review: bool = False, subject: str = "", source_ref: str = "") -> dict:
     name = path.replace("\\", "/").rsplit("/", 1)[-1]
     sha = sha256_file(path)
     try:
         rep = read_profit(path)
     except ReportError as e:
         with engine.begin() as conn:
-            iid = _record(conn, None, "JP", report_time=report_time, file_name=name, file_sha256=sha, status="failed", message=str(e), file_path=path, source=source, uploaded_by=uploaded_by, subject=subject)
+            iid = _record(conn, None, "JP", report_time=report_time, file_name=name, file_sha256=sha, status="failed", message=str(e), file_path=path, source=source, uploaded_by=uploaded_by, subject=subject, source_ref=source_ref)
         return dict(import_id=iid, status="failed", message=str(e))
-    return process_profit(engine, rep, name, sha, report_time, path, source, uploaded_by, approve_review, subject)
+    return process_profit(engine, rep, name, sha, report_time, path, source, uploaded_by, approve_review, subject, source_ref)
 
 
 def profit_snapshot(engine, company: str | None = None) -> pd.DataFrame:
-    q = select(profit_lines).where(profit_lines.c.to_import.is_(None))
+    q = select(profit_lines).where(*current_jobs())
     if company:
         q = q.where(profit_lines.c.company == company)
     return pd.read_sql(q, engine)
 
 
 def profit_coverage(engine, today: date | None = None, years: int = 3, fy_start_month: int = 1) -> pd.DataFrame:
-    """For every company and every year in the window: profit lines held (by billing date), and whether the loaded reports together cover the whole year."""
+    """For every company and every year in the window: profit lines held (by Job Date), and whether the loaded reports together cover the whole year."""
     from .processor import _covered, year_slots
     slots = year_slots(today, years, fy_start_month)
     with engine.connect() as conn:
-        rows = conn.execute(select(profit_lines.c.company, profit_lines.c.trans_date).where(profit_lines.c.to_import.is_(None), profit_lines.c.trans_date >= slots[0]["start"])).all()
-        imps = conn.execute(select(imports.c.company, imports.c.range_from, imports.c.range_to).where(imports.c.report_type == "JP", imports.c.status == "promoted", imports.c.range_from.is_not(None))).all()
+        rows = conn.execute(select(profit_lines.c.company, profit_lines.c.job_date).where(*current_jobs(), profit_lines.c.job_date >= slots[0]["start"])).all()
+        imps = summary_imports(conn.execute(select(imports.c.company, imports.c.range_from, imports.c.range_to, imports.c.columns).where(imports.c.report_type == "JP", imports.c.status == "promoted", imports.c.range_from.is_not(None))).all())
     out = []
     for c in sorted({i.company for i in imps} | {r.company for r in rows}):
         ranges = [(i.range_from, i.range_to) for i in imps if i.company == c]
-        mine = [r.trans_date for r in rows if r.company == c and r.trans_date]
+        mine = [r.job_date for r in rows if r.company == c and r.job_date]
         for sl in slots:
             out.append(dict(company=c, year=sl["year"], label=sl["label"], lines=sum(1 for d in mine if sl["start"] <= d <= sl["end"]), import_covers_year=_covered(ranges, sl["start"], sl["end"])))
     return pd.DataFrame(out)

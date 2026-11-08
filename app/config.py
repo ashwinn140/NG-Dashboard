@@ -68,6 +68,7 @@ DATE_FIELDS_SOURCE = ("Shipment Date", "Operations Locked On", "Financials Locke
 SUBJECT_COMPANIES = {"ngl": "NG", "new globe": "NG", "ncs": "NCS", "neutral consolidation": "NCS"}
 SUBJECT_REPORTS = {"air export": "AE", "air import": "AI", "ocean export": "OE", "sea export": "OE", "ocean import": "OI", "sea import": "OI"}
 
-# Job profit analysis ("Charge wise Detail"). Columns are read by name, so their order never matters and extra columns are kept.
-PROFIT_REQUIRED = ("Location", "LOB", "Job No.", "Charge", "Income (INR)", "Expense (INR)")
+# Job Profit Analysis Report, one row per job, Basis: Job Date. Columns are matched by name.
+PROFIT_REQUIRED = ("Location", "LOB", "Job No.", "Job Date", "Organization", "Income (INR)", "Expense (INR)", "Profit (INR)")
 PROFIT_TOLERANCE = 1.0          # rupees: how far the lines may differ from the report's own grand total before the file is rejected
+

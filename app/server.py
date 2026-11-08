@@ -379,7 +379,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             accepted = c.execute(select(imports.c.company, imports.c.report_type,
                 imports.c.range_from, imports.c.range_to).where(
                 imports.c.status == "promoted", imports.c.range_from.is_not(None),
-                imports.c.range_to.is_not(None))).all()
+                imports.c.range_to.is_not(None), (imports.c.report_type != "JP") | imports.c.columns.not_like('%"Charge"%'))).all()
         def missing(ranges, start, end):
             cursor = start
             gaps = []

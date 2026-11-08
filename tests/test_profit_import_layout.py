@@ -1,78 +1,83 @@
-"""Format/date-scope validation must agree in preview and ingestion."""
-import os
-import tempfile
-import unittest
+"""Job-summary import contract, company/range isolation and legacy rejection."""
+import os,tempfile,unittest,copy
 from pathlib import Path
-from datetime import date,datetime,timedelta
+from datetime import datetime,date,timedelta
 from unittest.mock import patch
-import pandas as pd
 from openpyxl import Workbook
-from sqlalchemy import select,func
-from app import profit as J,processor as P,admin_ops as A
+from sqlalchemy import select,insert
+from app import profit as J,processor as P,admin_ops as A,dataset as D
 from app.db import get_engine,imports,profit_lines
 
 class ProfitLayoutTests(unittest.TestCase):
     def setUp(self):
-        self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name)
+        self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name);self.n=0
         self.engine=get_engine('sqlite:///'+str(self.root/'test.db'))
-        self.env=patch.dict(os.environ,REPORT_STORAGE_MODE='replace');self.env.start()
-    def tearDown(self):
-        self.env.stop();self.engine.dispose();self.tmp.cleanup()
-    def workbook(self,name='summary.xlsx',summary=True,basis='Job Date',bill=datetime(2026,1,3),title_range='From 01-Jan-2026 to 31-Dec-2026',unicode_spaces=False):
-        wb=Workbook();ws=wb.active
-        label='Job Profit Analysis Report' if summary else 'Charge wise Detail'
-        if unicode_spaces:label=label.replace(' ','\u00a0')
-        ws.append(['New Globe Logistik LLP\n'+label+' '+title_range]);ws.append(['Basis : '+basis])
-        if summary:
-            ws.append(['Location','LOB','Job No.','Job Date','Organization','Income (INR)','Expense (INR)'])
-            ws.append(['Mumbai','FFWD AIR EXP','J1',datetime(2026,1,2),'Customer',100,50])
-        else:
-            ws.append(['Location','LOB','Job No.','Job Date','Organization','Charge','Date','Income (INR)','Expense (INR)'])
-            ws.append(['Mumbai','FFWD AIR EXP','J1',datetime(2026,1,2),'Customer','Freight',bill,100,50])
-            ws.append(['Total','','','','','','',100,50])
-        path=self.root/name;wb.save(path);return str(path)
-    def count(self,table):
-        with self.engine.connect() as c:return c.execute(select(func.count()).select_from(table)).scalar()
-    def test_summary_preview_is_explicit_and_read_only(self):
-        path=self.workbook()
-        self.assertEqual(J.profit_layout(path),'job_summary')
-        preview=A.preview_any(self.engine,path)
-        self.assertEqual(preview['verdict'],'rejected')
-        self.assertIn('job-level profit summary',preview['message'])
-        self.assertIn('Billing Date',preview['message'])
-        self.assertEqual(self.count(imports),0)
-    def test_summary_import_cannot_replace_finance_even_with_approval(self):
-        detail=self.workbook(name='detail.xlsx',summary=False,basis='Billing Date')
-        self.assertEqual(P.ingest_file(self.engine,detail,datetime(2026,11,7))['status'],'promoted')
-        summary=self.workbook()
-        result=P.ingest_file(self.engine,summary,datetime(2026,11,8),source_ref='audit-message',approve_review=True)
-        self.assertEqual(result['status'],'failed');self.assertEqual(self.count(profit_lines),1)
-        with self.engine.connect() as c:
-            row=c.execute(select(imports).where(imports.c.id==result['import_id'])).mappings().one()
-        self.assertEqual((row['report_type'],row['source_ref']),('JP','audit-message'))
-    def test_preview_and_import_hold_job_date_charge_detail(self):
-        path=self.workbook(summary=False,basis='Job Date')
-        preview=A.preview_any(self.engine,path);result=P.ingest_file(self.engine,path,datetime(2026,11,7))
-        self.assertEqual((preview['verdict'],result['status']),('needs_review','needs_review'))
-        self.assertEqual(preview['message'],result['message']);self.assertEqual(self.count(profit_lines),0)
-    def test_preview_and_import_hold_missing_or_out_of_range_billing_dates(self):
-        for index,bill in enumerate([None,datetime(2025,12,31),datetime(2027,1,1)]):
-            path=self.workbook(name=f'detail-{index}.xlsx',summary=False,basis='Billing Date',bill=bill)
-            preview=A.preview_any(self.engine,path);result=P.ingest_file(self.engine,path,datetime(2026,11,7))
-            self.assertEqual((preview['verdict'],result['status']),('needs_review','needs_review'))
-            self.assertEqual(preview['message'],result['message'])
-        self.assertEqual(self.count(profit_lines),0)
-    def test_unicode_space_detail_title_and_valid_preview_still_work(self):
-        path=self.workbook(summary=False,basis='Billing Date',unicode_spaces=True)
-        self.assertTrue(J.is_profit_report(path));self.assertEqual(A.preview_any(self.engine,path)['verdict'],'ready')
-        self.assertEqual(P.ingest_file(self.engine,path,datetime(2026,11,7))['status'],'promoted')
-    def test_billing_timestamp_on_last_day_is_in_scope(self):
-        path=self.workbook(summary=False,basis='Billing Date',bill=datetime(2026,12,31,23,59,59))
-        self.assertEqual(A.preview_any(self.engine,path)['verdict'],'ready')
-        self.assertEqual(P.ingest_file(self.engine,path,datetime(2027,1,2))['status'],'promoted')
-    def test_register_is_not_misclassified(self):
-        wb=Workbook();ws=wb.active;ws.append(['New Globe Logistik LLP']);ws.append(['Shipment Register(Air Export)'])
-        ws.append(['Shipment No','Shipment Date','Branch','Customer','Status','Job Owner']);ws.append(['J1',datetime(2026,1,1),'Mumbai','Customer','Open','Owner'])
-        path=self.root/'register.xlsx';wb.save(path)
-        self.assertIsNone(J.profit_layout(str(path)))
-        self.assertEqual(A.preview_any(self.engine,str(path))['report_type'],'AE')
+        self.env=patch.dict(os.environ,REPORT_STORAGE_MODE='replace',REPORT_STATIC_HISTORY='0');self.env.start()
+    def tearDown(self):self.env.stop();self.engine.dispose();self.tmp.cleanup()
+    def workbook(self,company='New Globe Logistik LLP',year=2026,basis='Job Date',rows=None,reverse=False,grand=True,legacy=False,dup_header=False,missing=None):
+        self.n+=1;w=Workbook();s=w.active
+        s.append([company+'\n'+('Charge wise Detail' if legacy else 'Job\u00a0Profit\u00a0Analysis\u00a0Report')+f' From 01-Jan-{year} to 31-Dec-{year}'])
+        s.append(['Basis : '+basis])
+        h=['Location','LOB','Job No.','Job Date','Organization','Income (INR)','Expense (INR)','Profit (INR)','Sales Person']
+        records=copy.deepcopy(rows) if rows is not None else [dict(zip(h,['Mumbai','FFWD AIR EXP','J1',datetime(year,1,2),'Customer',100,50,50,'Sales']))]
+        if missing:h.remove(missing)
+        if reverse:h=h[::-1]
+        if dup_header:h.append('Job No.')
+        s.append(h)
+        for row in records:s.append([row.get(k,'') for k in h])
+        if grand:
+            totals={k:sum(float(x.get(k,0)) for x in records if isinstance(x.get(k,0),(int,float))) for k in ['Income (INR)','Expense (INR)','Profit (INR)']}
+            totals['Location']='Total';s.append([totals.get(k,'') for k in h])
+        s.append(['Generated by test']) if h[0]=='Location' else None
+        p=self.root/f'{self.n}.xlsx';w.save(p);return str(p)
+    def load(self,p,approve=False):return P.ingest_file(self.engine,p,datetime(2026,11,8)+timedelta(minutes=self.n),source_ref='test-source',approve_review=approve)
+    def live(self):return J.profit_snapshot(self.engine)
+    def test_new_summary_preview_read_only_and_import(self):
+        p=self.workbook();v=A.preview_any(self.engine,p);self.assertEqual(v['verdict'],'ready');self.assertEqual(len(self.live()),0)
+        result=self.load(p);self.assertEqual(result['status'],'promoted');self.assertEqual(len(self.live()),1)
+        row=self.live().iloc[0];self.assertEqual((row.income,row.expense,row.customer),(100,50,'Customer'));self.assertIsNone(row.trans_date)
+        with self.engine.connect() as c:self.assertEqual(c.execute(select(imports.c.source_ref).where(imports.c.id==result['import_id'])).scalar(),'test-source')
+    def test_reordered_columns_match_and_do_not_duplicate(self):
+        self.load(self.workbook());result=self.load(self.workbook(reverse=True));self.assertEqual(result['status'],'promoted');self.assertEqual((result['new'],result['changed']), (0,0));self.assertEqual(len(self.live()),1)
+    def test_both_companies_and_history_are_isolated(self):
+        for co in ['New Globe Logistik LLP','Neutral Consolidation Services LLP']:
+            for year in [2025,2026]:self.assertEqual(self.load(self.workbook(company=co,year=year))['status'],'promoted')
+        self.assertEqual(len(self.live()),4);self.assertEqual(set(self.live().company),{'NG','NCS'})
+    def test_legacy_rejected_even_when_approved(self):
+        self.load(self.workbook());p=self.workbook(legacy=True,basis='Billing Date');self.assertEqual(A.preview_any(self.engine,p)['verdict'],'rejected');self.assertEqual(self.load(p,True)['status'],'failed');self.assertEqual(len(self.live()),1)
+    def test_invalid_date_basis_missing_totals_and_headers_rejected(self):
+        for kwargs in [dict(basis='Billing Date'),dict(grand=False),dict(dup_header=True),dict(missing='Job Date'),dict(missing='Profit (INR)')]:
+            p=self.workbook(**kwargs);self.assertIn(A.preview_any(self.engine,p)['verdict'],['failed','rejected']);self.assertEqual(self.load(p,True)['status'],'failed')
+        self.assertEqual(len(self.live()),0)
+    def test_duplicates_bad_amounts_bad_profit_and_outside_dates_rejected(self):
+        base={'Location':'Mumbai','LOB':'FFWD AIR EXP','Job No.':'J1','Job Date':datetime(2026,1,1),'Organization':'A','Income (INR)':100,'Expense (INR)':50,'Profit (INR)':50}
+        for records in [[base,base],[dict(base,**{'Income (INR)':'bad'})],[dict(base,**{'Profit (INR)':55})],[dict(base,**{'Job Date':datetime(2025,12,31)})],[dict(base,**{'Job Date':None})]]:
+            self.assertEqual(self.load(self.workbook(rows=records),True)['status'],'failed')
+        self.assertEqual(len(self.live()),0)
+    def test_end_of_day_job_date_valid(self):
+        row={'Location':'Mumbai','LOB':'FFWD AIR EXP','Job No.':'J1','Job Date':datetime(2026,12,31,23,59),'Organization':'A','Income (INR)':100,'Expense (INR)':50,'Profit (INR)':50}
+        self.assertEqual(self.load(self.workbook(rows=[row]))['status'],'promoted')
+    def test_incomplete_grand_total_is_rejected(self):
+        p=self.workbook();rep=J.read_profit(p);rep.grand['Income (INR)']=101;self.assertTrue(J.validate_profit(rep))
+    def test_retained_legacy_rows_are_not_counted(self):
+        p=self.workbook();self.load(p)
+        with self.engine.begin() as c:
+            row=dict(c.execute(select(profit_lines)).mappings().one());row.pop('id');row.update(key='legacy',income=999,extra={'Charge':'Freight'});c.execute(insert(profit_lines).values(**row))
+        self.assertEqual(len(self.live()),1);self.assertEqual(self.live().income.sum(),100)
+    def test_source_attributes_override_register_and_old_preferences_are_safe(self):
+        from scripts.test_daily_replacement import ReplacementTests
+        f=ReplacementTests();f.setUp()
+        try:
+            reg=f.register();reg.df['Sales Person']='Stale register sales';f.load(reg)
+            rep=f.profit();rep.df.loc[0,'Job No.']='JOB-0';rep.df['Sales Person']='Source sales';rep.df['Job Owner']='Source owner'
+            f.load_profit(rep);ds=D.build_full(f.engine)
+            self.assertEqual(ds['cols']['x_salesperson']['d'][ds['cols']['x_salesperson']['pc'][0]],'Source sales')
+            self.assertNotIn('p_charge',ds['cols']);self.assertNotIn('p_party',ds['cols'])
+            self.assertTrue(all(x==-1 for x in ds['p']['td']))
+            self.assertEqual(J.profit_coverage(f.engine,date(2026,11,8),2,1).query('year==2026').iloc[0]['lines'],3)
+        finally:f.tearDown()
+
+    def test_file_duplicate_detection(self):
+        p=self.workbook();self.load(p);self.assertEqual(self.load(p)['status'],'duplicate');self.assertEqual(len(self.live()),1)
+
+if __name__=='__main__':unittest.main()
