@@ -360,6 +360,85 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         return {"queue": q, "users": nu, "needs_attention": held, "health": P.health(engine, date.today(), datetime.utcnow(), float(s["max_age_hours"])), "coverage": df_json(P.coverage(engine, date.today(), yrs, fy)),
                 "profit_coverage": df_json(J.profit_coverage(engine, date.today(), yrs, fy)), "settings": s, "mail_configured": mailer.configured(), "data_version": store.version, "setup": setup_checks()}
 
+    @app.get("/api/admin/data-freshness")
+    def a_data_freshness(user: dict = Depends(admin)):
+        """Read-only LOB/year inventory with import provenance; never modifies reporting data."""
+        from .db import profit_lines
+        from sqlalchemy import extract
+        kinds = {"AE": "Air Export", "AI": "Air Import", "OE": "Ocean Export",
+                 "OI": "Ocean Import", "JP": "Job Profit"}
+        with engine.connect() as c:
+            ship_counts = c.execute(
+                select(shipments.c.company, shipments.c.report_type,
+                       extract("year", shipments.c.shipment_date).label("yr"),
+                       func.count().label("qty"))
+                .where(shipments.c.to_import.is_(None), shipments.c.shipment_date.is_not(None))
+                .group_by(shipments.c.company, shipments.c.report_type,
+                          extract("year", shipments.c.shipment_date))).all()
+            profit_counts = c.execute(
+                select(profit_lines.c.company,
+                       extract("year", profit_lines.c.job_date).label("yr"),
+                       func.count().label("qty"))
+                .where(profit_lines.c.to_import.is_(None), profit_lines.c.job_date.is_not(None))
+                .group_by(profit_lines.c.company, extract("year", profit_lines.c.job_date))).all()
+            audit = c.execute(
+                select(imports.c.id, imports.c.company, imports.c.report_type,
+                       imports.c.status, imports.c.received_at, imports.c.report_time,
+                       imports.c.range_from, imports.c.range_to, imports.c.file_name,
+                       imports.c.source, imports.c.new_rows, imports.c.changed_rows,
+                       imports.c.ended_rows, imports.c.message)
+                .where(imports.c.company.in_(["NG", "NCS"]),
+                       imports.c.report_type.in_(list(kinds)))
+                .order_by(imports.c.id.desc())).mappings().all()
+        counts = {}
+        for company, kind, yr, qty in ship_counts:
+            if yr is not None and kind in kinds:
+                key = (company, kind, int(yr))
+                counts[key] = counts.get(key, 0) + int(qty)
+        for company, yr, qty in profit_counts:
+            if yr is not None:
+                key = (company, "JP", int(yr))
+                counts[key] = counts.get(key, 0) + int(qty)
+        years = sorted({k[2] for k in counts} | {date.today().year, date.today().year - 1}, reverse=True)
+        def overlaps(item, yr):
+            start, end = item["range_from"], item["range_to"]
+            return (start is None or start.year <= yr) and (end is None or end.year >= yr)
+        result = []
+        for company in ("NG", "NCS"):
+            for yr in years:
+                for kind, label in kinds.items():
+                    matches = [a for a in audit if a["company"] == company and
+                               a["report_type"] == kind and overlaps(a, yr)]
+                    success = next((a for a in matches if a["status"] == "promoted"), None)
+                    latest = matches[0] if matches else None
+                    count = counts.get((company, kind, yr), 0)
+                    if not count and not matches:
+                        status = "not_loaded"
+                    elif latest and latest["status"] in ("failed", "needs_review"):
+                        status = "attention"
+                    elif success:
+                        status = "loaded"
+                    else:
+                        status = "unverified"
+                    result.append({
+                        "company": company, "year": yr, "report_type": kind, "lob": label,
+                        "rows": count, "status": status,
+                        "last_success": success["received_at"].isoformat() + "Z" if success and success["received_at"] else None,
+                        "last_report_time": success["report_time"].isoformat() + "Z" if success and success["report_time"] else None,
+                        "last_attempt": latest["received_at"].isoformat() + "Z" if latest and latest["received_at"] else None,
+                        "last_attempt_status": latest["status"] if latest else None,
+                        "file_name": success["file_name"] if success else None,
+                        "source": success["source"] if success else None,
+                        "range_from": success["range_from"].isoformat() if success and success["range_from"] else None,
+                        "range_to": success["range_to"].isoformat() if success and success["range_to"] else None,
+                        "new_rows": success["new_rows"] if success else None,
+                        "changed_rows": success["changed_rows"] if success else None,
+                        "removed_rows": success["ended_rows"] if success else None,
+                        "last_error": latest["message"] if status == "attention" else None
+                    })
+        return {"rows": result, "timestamp_note": "Last successful import uses the recorded import receipt timestamp (UTC), not a separately tracked commit timestamp.",
+                "count_note": "Counts are current open shipment/job rows by their own dates; not cumulative import-file row counts."}
+
     @app.get("/api/admin/reconciliation")
     def a_reconciliation(user: dict = Depends(admin)):
         """Temporary read-only import diagnostics; administrator session required."""
