@@ -184,6 +184,7 @@ class SchedulerCoreTests(unittest.TestCase):
     def test_excel_formula_injection_is_escaped(self):
         for value in ("=1+1", "+cmd", "-1+1", "@SUM(A1:A2)", "\t=1", "\r=1"):
             self.assertTrue(safe_excel_text(value).startswith("'"))
+        self.assertTrue(safe_excel_text("  =1+1").startswith("'"))
         self.assertEqual(safe_excel_text("Normal customer"), "Normal customer")
         self.assertEqual(safe_excel_text(None), "")
 
