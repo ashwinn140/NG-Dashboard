@@ -21,7 +21,7 @@ class MetricAPITests(unittest.TestCase):
  def test_activity_review_is_scoped_and_does_not_call_sparse_history_lost(self):
   self.login(False)
   r=self.c.post('/api/metrics/activity',json=dict(metric='ops.shipments',indices=[0,1],context={'as_of':'2026-11-09'}));self.assertEqual(r.status_code,200,r.text)
-  self.assertTrue(all(x['company']=='NG' and x['status']=='insufficient_history' for x in r.json()['customers']))
+  self.assertTrue(all(x['company']=='NG' and x['selected_lob_activity']['classification']=='insufficient_history' for x in r.json()['customers']))
   r=self.c.post('/api/metrics/evidence',json=dict(metric='ops.shipments',indices=[0],dataset_built_at='stale'))
   self.assertEqual(r.status_code,400)
  def test_financial_evidence_export_and_invalid_index(self):
