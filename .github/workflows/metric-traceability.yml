@@ -37,3 +37,16 @@ jobs:
           node frontend/tests/metric_drawer_test.js
           node frontend/tests/explicit_reconciliation_test.js
           node frontend/tests/visual_trace_test.js
+      - name: Synthetic runtime visual inventory and coverage
+        run: |
+          python scripts/audit_visual_contract.py
+          node frontend/tests/runtime_inventory.js
+      - name: Upload visual inventory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ng-dashboard-visual-inventory
+          path: |
+            audit/runtime_visual_inventory.json
+            audit/runtime_visual_inventory.csv
+          if-no-files-found: warn

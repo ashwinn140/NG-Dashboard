@@ -169,6 +169,15 @@ const VERIFIED_METRIC_EXPLANATIONS = Object.freeze({
   'profit per job': ['Shows average booked profit per selected job.', 'Divides selected total job-summary Profit by the selected job count, where the count is non-zero.'],
   'shipments': ['Shows the number of shipment-register records in scope.', 'Counts selected shipment-register rows after the active shipment-date and other filters.'],
   'air chargeable weight (tonnes)': ['Shows total chargeable airfreight weight for the selected shipments.', 'Adds chargeable weight from selected air shipment-register records, in tonnes.'],
+  'air chargeable weight': ['Shows total chargeable airfreight weight for the selected shipments.', 'Adds chargeable weight from selected air shipment-register records, in tonnes.'],
+  'customers': ['Shows how many distinct customers have job-profit records in the selected scope.', 'Groups eligible Job Profit Analysis rows by the normalized customer dimension and counts the resulting customer groups.'],
+  'biggest customer': ['Shows the leading customer’s share of total booked profit.', 'Divides the highest individual customer-group Profit by total selected customer-group Profit. Because other customers may have negative profit, the share can exceed 100% or be negative when total profit is negative.'],
+  'best customer': ['Shows the highest booked profit among the selected Explorer dimension values.', 'Groups eligible Job Profit Analysis rows by the currently selected Explorer dimension and takes the highest positive group Profit. The dimension selection and active filters define the comparison scope.'],
+  'air export shipments': ['Shows the number of air-export shipment records in the selected scope.', 'Counts selected Air Export shipment-register records.'],
+  'with usable rates': ['Shows the share of selected air-export shipments with usable buy and sell rates.', 'Divides selected Air Export records with both rates passing the configured rate validation by all selected Air Export records.'],
+  'jobs compared': ['Shows how many matched jobs have both shipment-register rate data and job-profit data.', 'Counts eligible Air Export rate records linked to a Job Profit Analysis job and passing the configured rate validation.'],
+  'difference': ['Shows the difference between booked job profit and estimated airfreight margin for matched jobs.', 'Subtracts estimated freight margin, calculated from usable sell and buy rates multiplied by chargeable weight, from booked Job Profit Analysis profit. This is not a like-for-like comparison: estimated margin covers freight only while booked profit may include other charges.'],
+
   'sea teus': ['Shows total container volume in twenty-foot-equivalent units.', 'Adds TEUs from selected ocean shipment-register records; the displayed total is rounded to a whole TEU.'],
   'jobs with cost booked': ['Shows what share of selected jobs have booked costs.', 'Divides jobs with booked expenses by all selected jobs, multiplied by 100; unavailable if no jobs are selected.'],
   'profit after expected costs': ['Shows an estimated profit after allowing for costs not yet booked.', 'Subtracts estimated missing costs from selected booked profit. For selected jobs with positive income and zero expense, multiplies income by the expense-to-income ratio of all authorized jobs with positive income and expense in the same line of business; uses the overall authorized ratio if no line-of-business benchmark exists, or zero if no benchmark exists. The benchmark spans the authorized dataset, including dates outside the selection. This is an estimate, not actual booked profit.'],
@@ -251,7 +260,41 @@ function businessMeaning(label, note, metricExplanation) {
     reportingWindow ? h('p', {class: 'meta'}, 'Dashboard date selection: ' + fRange({from:reportingWindow.from,to:reportingWindow.to}) + (hasDashboardComparison ? '; dashboard comparison: ' + fRange({from:reportingWindow.pfrom,to:reportingWindow.pto}) : '; dashboard comparison: off') + '. Date basis: ' + dateBasis + '. Company, line-of-business and other selected filters apply only where supported by this visual. This is dashboard context, not certification of a visual-specific date or comparison calculation.') : null,
     note ? h('p', {class:'meta'}, 'Visual note: ' + note) : null);
 }
-function card(title, note, body, cls) { return h('article', {class: 'card ' + (cls || '')}, h('h2', {class: 'h'}, title), note ? h('p', {class: 'note'}, note) : null, body, businessMeaning(title, note)); }
+function traceExplanation(trace,title) {
+ if(!trace)return null;
+ const m=trace.metric,k=trace.dimension;
+ if((k&&!COLS[k])||title==='Income against margin')return null;
+ const ops={ 'ops.shipments':'shipment records','ops.air_weight':'air chargeable weight (tonnes)','ops.teu':'ocean TEUs' };
+ const fin={ 'profit.gp':'gross profit','profit.income':'income','profit.expense':'expense' };
+ if(ops[m]){
+  const measure=ops[m],dim=k&&COLS[k]?COLS[k].l.toLowerCase():null;
+  const grouping=dim?'Groups selected shipment-register rows by '+dim+' and sums '+measure+'.':'Uses the selected shipment-register rows represented by this visual.';
+  const caveat=m==='ops.shipments'?'Counts eligible shipment-register records.':m==='ops.air_weight'?'Sums Chargeable Wt for air export and import records, expressed in tonnes.':'Sums recorded TEUs for ocean export and import records.';
+  return ['Shows '+measure+' for the visual and active filters.',caveat+' '+grouping+' The drawer lists the exact contributing source rows for the selected reporting scope.'];
+ }
+ const rateOps={
+  'ops.rate_below_buy':['Air-export shipments priced below buy','Counts air-export records with usable buy and sell rates where Sell Rate is below Buy Rate; rate parsing and maximum-rate rules follow Definitions.'],
+  'ops.rate_margin':['Estimated air-export freight margin','Sums (Sell Rate − Buy Rate) × Chargeable Weight for air-export records with usable rates. This is estimated freight margin, not booked job profit.'],
+  'ops.rate_margin_kg':['Estimated freight margin per kg','Divides total estimated air-export freight margin by total chargeable weight for records with usable rates; this is a weighted ratio, not an average of row rates.'],
+  'ops.rate_air_exports':['Air-export shipment count','Counts air-export register records in the selected scope.'],
+  'ops.rate_usable':['Share of air exports with usable rates','Divides air-export records with usable buy and sell rates by all selected air-export records.']
+ };
+ if(rateOps[m])return [rateOps[m][0],rateOps[m][1]+' The drawer lists the exact contributing air-export source rows.'];
+ if(fin[m]){
+  const measure=fin[m],dim=k&&COLS[k]?COLS[k].l.toLowerCase():null;
+  const formula=m==='profit.gp'?'Sums Income less Expense (INR) across eligible Job Profit Analysis rows.':m==='profit.income'?'Sums Income (INR) across eligible Job Profit Analysis rows.':'Sums Expense (INR) across eligible Job Profit Analysis rows.';
+  return ['Shows '+measure+' for the visual and active filters.',formula+(dim?' Groups the eligible rows by '+dim+'.':'')+' The drawer lists the exact contributing job-summary rows.'];
+ }
+ return null;
+}
+function card(title, note, body, cls, trace) {
+  const explanation=traceExplanation(trace,title);
+  const action = explanation ? h('button', {type: 'button', class: 'mt-info', style: 'margin-top:0;white-space:nowrap', 'data-trace-metric': trace.metric, 'data-trace-dimension': trace.dimension || '', title: 'Open calculation and contributing records for ' + title, 'aria-label': 'Open calculation and contributing records for ' + title, onclick: (e) => { e.preventDefault(); e.stopPropagation(); const q = window.NG?.traceVisual?.(trace.metric, trace.dimension, title); if (q) window.MetricTrace?.openWithRequest(q); }}, 'Calculation & records') : null;
+  const heading = action ? h('div', {style: 'display:flex;align-items:center;justify-content:space-between;gap:.5rem;min-width:0;flex-wrap:wrap'}, h('h2', {class: 'h'}, title), action) : h('h2', {class: 'h'}, title);
+  return h('article', {class: 'card ' + (cls || '')}, heading, note ? h('p', {class: 'note'}, note) : null, body, businessMeaning(title, note, explanation));
+}
+function opsVisualMetric() { return R.useVol ? (R.air ? 'ops.air_weight' : 'ops.teu') : 'ops.shipments'; }
+function profitRankMetric() { return S.rank === 'income' ? 'profit.income' : S.rank === 'expense' ? 'profit.expense' : 'profit.gp'; }
 function kpi(label, value, delta, note, tone, previousValue, metricExplanation) {
   // Promoted ERP records are the reporting source of truth. A zero prior
   // value is a valid baseline, but a percentage cannot be calculated from it.
@@ -332,15 +375,15 @@ function pageOverview() {
   const lanes = laneList();
   return h('div', null, h('div', {class: 'kpis'}, kp),
     h('div', {class: 'grid'},
-      card('Trend', (R.useVol ? (R.air ? 'Chargeable weight (tonnes)' : 'TEUs') : 'Shipments') + ' per ' + grainOf(R.w) + ', stacked by report. Click a bar to zoom the date range; click a legend item to filter.', trendChart(), 'full'),
-      card('Top ' + S.def.topN + ' customers', 'Click a customer to filter everything; click again to remove.', rankedKey('customer')),
-      card('Top ' + S.def.topN + ' branches', 'Click a branch to filter everything.', rankedKey('branch')),
-      card('Top ' + S.def.topN + ' lanes', 'Origin port to destination port. Click a lane to filter both ports.', lanes),
-      card('Top ' + S.def.topN + ' airlines and shipping lines', 'Carrier on each shipment.', rankedKey('carrier')),
-      card('Shipment mix', 'Share of shipments. Click an item to filter.', h('div', null, mixBlock('report', 'Report'), mixBlock('nomination', 'Nomination'), mixBlock('consol', 'Consol type'), mixBlock('cargo', 'Cargo type')))));
+      card('Trend', (R.useVol ? (R.air ? 'Chargeable weight (tonnes)' : 'TEUs') : 'Shipments') + ' per ' + grainOf(R.w) + ', stacked by report. Click a bar to zoom the date range; click a legend item to filter.', trendChart(), 'full', {metric: opsVisualMetric(), dimension: null}),
+      card('Top ' + S.def.topN + ' customers', 'Click a customer to filter everything; click again to remove.', rankedKey('customer'), null, {metric: opsVisualMetric(), dimension: 'customer'}),
+      card('Top ' + S.def.topN + ' branches', 'Click a branch to filter everything.', rankedKey('branch'), null, {metric: opsVisualMetric(), dimension: 'branch'}),
+      card('Top ' + S.def.topN + ' lanes', 'Origin port to destination port. Click a lane to filter both ports.', lanes, null, {metric: opsVisualMetric(), dimension: null}),
+      card('Top ' + S.def.topN + ' airlines and shipping lines', 'Carrier on each shipment.', rankedKey('carrier'), null, {metric: opsVisualMetric(), dimension: 'carrier'}),
+      card('Shipment mix', 'Share of shipments. Click an item to filter.', h('div', null, mixBlock('report', 'Report'), mixBlock('nomination', 'Nomination'), mixBlock('consol', 'Consol type'), mixBlock('cargo', 'Cargo type')), null, {metric: 'ops.shipments', dimension: null})));
 }
 function laneAgg() {
-  const m = mask({skip: ['origin', 'destination']}), o = COLS.origin.c, d = COLS.destination.c, c = COLS.carrier.c, map = new Map(), DEST_N = Math.max(1, COLS.destination.d.length); let tot = 0;
+  const m = mask(), o = COLS.origin.c, d = COLS.destination.c, c = COLS.carrier.c, map = new Map(), DEST_N = Math.max(1, COLS.destination.d.length); let tot = 0;
   for (let i = 0; i < N; i++) if (m[i]) { const k = o[i] * DEST_N + d[i]; let e = map.get(k); if (!e) { e = {o: o[i], d: d[i], cnt: 0, v: 0, air: 0, sea: 0, car: new Set()}; map.set(k, e); } e.cnt++; const v = vi(i); e.v += v; tot += v; if (mode[i]) e.sea += teus[i]; else e.air += chg[i]; e.car.add(c[i]); }
   return {rows: [...map.values()], tot};
 }
@@ -384,8 +427,8 @@ function pageCustomers() {
   const mov = hasPrev ? rows.filter((r) => r.delta !== 0).concat(lost) : [], gain = mov.filter((r) => r.delta > 0).sort((a, b) => b.delta - a.delta).slice(0, S.def.topN), lose = mov.filter((r) => r.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, S.def.topN);
   const moverList = (arr, sign) => arr.length ? h('div', {class: 'rank'}, arr.map((r) => h('button', {type: 'button', class: 'row', onclick: () => toggle(key, r.j)}, h('span', {class: 'lab', title: COLS.customer.d[r.j]}, COLS.customer.d[r.j]), h('span', {class: 'track'}, h('span', {class: 'fill', style: 'width:' + Math.min(100, Math.abs(r.delta) / Math.abs(arr[0].delta) * 100) + '%;background:var(--' + (sign > 0 ? 'ok' : 'bad') + ')'})), h('span', {class: 'val'}, (sign > 0 ? '+' : '−') + fInt(Math.abs(r.delta)) + ' shipments')))) : (hasPrev ? emptyNote() : h('p', {class: 'empty'}, 'No earlier period to compare with. Choose a shorter date range, for example the last 30 days.'));
   return h('div', null, h('div', {class: 'grid'},
-    card('Customers', null, h('div', null, h('div', {class: 'frow'}, dlButton('Download Excel', exportCust)), note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody))), 'full'),
-    card('Customer by month', 'Top ' + S.def.heatN + ' customers by ' + (R.useVol ? 'volume' : 'shipments') + '. Click a cell to focus that customer and month.', heat, 'full'),
+    card('Customers', null, h('div', null, h('div', {class: 'frow'}, dlButton('Download Excel', exportCust)), note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody))), 'full', {metric: 'ops.shipments', dimension: 'customer'}),
+    card('Customer by month', 'Top ' + S.def.heatN + ' customers by ' + (R.useVol ? 'volume' : 'shipments') + '. Click a cell to focus that customer and month.', heat, 'full', {metric: opsVisualMetric(), dimension: 'customer'}),
     card('Growing accounts', 'Biggest increase in shipments against the ' + cmpLabel() + '.', moverList(gain, 1)),
     card('Declining accounts', 'Biggest fall in shipments against the ' + cmpLabel() + '.', moverList(lose, -1))));
 }
@@ -395,10 +438,10 @@ function pageLanes() {
     downloadXlsx('lanes_' + fIso(dDate(MAXDATE)) + '.xlsx', [{name: 'Lanes', freeze: true, filter: true, cols: [46, 12, 18, 12, 12], rows: [['Lane', 'Shipments', 'Air chargeable weight (t)', 'Sea TEUs', 'Carriers'].map(HDR)].concat(list.map((e) => [COLS.origin.d[e.o] + ' → ' + COLS.destination.d[e.d], {v: e.cnt, s: 3}, e.air ? {v: +e.air.toFixed(3), s: 4} : '', e.sea ? {v: Math.round(e.sea), s: 3} : '', {v: e.car.size, s: 3}]))}, settingsSheet([[HDR('Range'), fDay(R.w.from) + ' to ' + fDay(R.w.to)]])]); };
   const tbl = h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, h('thead', null, h('tr', null, h('th', null, 'Lane'), h('th', {class: 'n'}, 'Shipments'), h('th', {class: 'n'}, 'Air weight (t)'), h('th', {class: 'n'}, 'Sea TEUs'), h('th', {class: 'n'}, 'Carriers'))),
     h('tbody', null, shown.map((e) => h('tr', {class: 'click' + (laneSelected(e) ? ' on' : ''), onclick: () => laneClick(e)}, h('td', null, COLS.origin.d[e.o] + ' → ' + COLS.destination.d[e.d]), h('td', {class: 'n'}, fInt(e.cnt)), h('td', {class: 'n'}, e.air ? f1(e.air) : '–'), h('td', {class: 'n'}, e.sea ? fInt(Math.round(e.sea)) : '–'), h('td', {class: 'n'}, fInt(e.car.size)))))));
-  return h('div', {class: 'grid'}, card('Lanes', 'Top ' + shown.length + ' of ' + fInt(a.rows.length) + ' lanes by shipments. Click a row to filter both ports.', h('div', null, h('div', {class: 'frow'}, dlButton('Download Excel', exportLanes)), tbl), 'full'),
-    card('Top ' + S.def.topN + ' origin ports', null, rankedKey('origin')), card('Top ' + S.def.topN + ' destination ports', null, rankedKey('destination')),
-    card('Top ' + S.def.topN + ' airlines and shipping lines', null, rankedKey('carrier')), card('Top ' + S.def.topN + ' trade lanes', 'From the ERP’s Trade Lane Name column.', rankedKey('x_tradelanename')),
-    card('Top ' + S.def.topN + ' destination countries', null, rankedKey('x_dischargecountry')), card('Top ' + S.def.topN + ' origin agents', null, rankedKey('x_originagent')));
+  return h('div', {class: 'grid'}, card('Lanes', 'Top ' + shown.length + ' of ' + fInt(a.rows.length) + ' lanes by shipments. Click a row to filter both ports.', h('div', null, h('div', {class: 'frow'}, dlButton('Download Excel', exportLanes)), tbl), 'full', {metric: 'ops.shipments', dimension: null}),
+    card('Top ' + S.def.topN + ' origin ports', null, rankedKey('origin'), null, {metric: opsVisualMetric(), dimension: 'origin'}), card('Top ' + S.def.topN + ' destination ports', null, rankedKey('destination'), null, {metric: opsVisualMetric(), dimension: 'destination'}),
+    card('Top ' + S.def.topN + ' airlines and shipping lines', null, rankedKey('carrier'), null, {metric: opsVisualMetric(), dimension: 'carrier'}), card('Top ' + S.def.topN + ' trade lanes', 'From the ERP’s Trade Lane Name column.', rankedKey('x_tradelanename'), null, {metric: opsVisualMetric(), dimension: 'x_tradelanename'}),
+    card('Top ' + S.def.topN + ' destination countries', null, rankedKey('x_dischargecountry'), null, {metric: opsVisualMetric(), dimension: 'x_dischargecountry'}), card('Top ' + S.def.topN + ' origin agents', null, rankedKey('x_originagent'), null, {metric: opsVisualMetric(), dimension: 'x_originagent'}));
 }
 function pageOps() {
   const M = mask({dates: 'none'}), st = COLS.stage.c, open = [];
@@ -460,7 +503,7 @@ function pageShip() {
     pager.replaceChildren(h('button', {type: 'button', class: 'btn', disabled: S2.page === 0, onclick: () => { S2.page--; draw(); }}, 'Previous'), h('button', {type: 'button', class: 'btn', disabled: S2.page >= pages - 1, onclick: () => { S2.page++; draw(); }}, 'Next')); };
   q.addEventListener('input', () => { S2.q = q.value; S2.page = 0; draw(); }); draw();
   const dl = h('button', {type: 'button', class: 'btn on', onclick: () => { const blob = new Blob(['\ufeff' + csvOf(M)], {type: 'text/csv'}), a = h('a', {href: URL.createObjectURL(blob), download: 'shipments_' + fIso(dDate(MAXDATE)) + '.csv'}); document.body.append(a); a.click(); a.remove(); }}, 'Download CSV (' + fInt(idx.length) + ' rows, all columns)'), dx = dlButton('Download Excel (' + fInt(idx.length) + ' rows)', () => { const t = shipTable(M), isD = new Set([3, 21, 22]); downloadXlsx('shipments_' + fIso(dDate(MAXDATE)) + '.xlsx', [{name: 'Shipments', freeze: true, filter: true, cols: t.head.map((x, k) => (k === 5 || k === 6 || k === 7 ? 30 : 16)), rows: [t.head.map(HDR)].concat(t.rows.map((r) => r.map((v, k) => (isD.has(k) && v ? {v: serial(isoD(v)), s: 5} : (typeof v === 'number' ? v : v))))) }, settingsSheet()]); });
-  return h('div', {class: 'grid'}, card('Shipments', 'Every shipment in the current selection. The CSV carries all filtered rows with the extra columns, and opens in Excel.', h('div', null, h('div', {class: 'frow'}, q, dx, dl), note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody)), pager), 'full'));
+  return h('div', {class: 'grid'}, card('Shipments', 'Every shipment in the current selection. The CSV carries all filtered rows with the extra columns, and opens in Excel.', h('div', null, h('div', {class: 'frow'}, q, dx, dl), note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody)), pager), 'full', {metric: 'ops.shipments', dimension: null}));
 }
 function pageChanges() {
   if (D.storage_mode === 'replace') return card('Daily report replacement', 'The latest data is kept for each reporting period.', h('p', {class: 'empty'}, 'Daily reports update the dates and branches they cover. Other periods stay available. Earlier versions of changed or removed records are not retained, so a before-and-after comparison is unavailable.'), 'full');
@@ -915,10 +958,10 @@ function ppOverview() {
     h('span', {class: 'track'}, h('span', {class: 'fill', style: 'width:' + (r.jobs / bmx * 100) + '%;background:' + (r.g === 0 ? 'var(--bad)' : r.g >= 5 ? 'var(--warn)' : '#4c78a8')})), h('span', {class: 'val'}, fInt(r.jobs) + ' jobs · ' + money(r.profit))))) : emptyNote();
   const bridge = bridgeChart([{l1: 'Income', v: t.inc, total: true, color: '#4c78a8'}, {l1: 'Expense', l2: 'booked', v: -t.exp, color: '#f58518'}, {l1: 'Profit', l2: 'as booked', v: t.profit, total: true, color: '#1a7f4b'}, {l1: 'Expected', l2: 'unbooked cost', v: -ex.est, color: '#f58518', est: true}, {l1: 'Estimated', l2: 'profit', v: t.profit - ex.est, total: true, color: '#1a7f4b', est: true}]);
   return h('div', null, banner, h('div', {class: 'kpis'}, kp), h('div', {class: 'grid'},
-    card('From income to profit', 'The pale bars are an estimate of costs still to be booked.', bridge), card('By company', 'Click a company to filter everything.', compTbl),
+    card('From income to profit', 'The pale bars are an estimate of costs still to be booked.', bridge), card('By company', 'Click a company to filter everything.', compTbl, null, {metric: 'profit.gp', dimension: 'company'}),
     card('Income and expense by week', 'By ' + 'job date' + '. Click a week to zoom in.', weekChart(R.M), 'full'),
-    card('Top ' + S.def.topN + ' branches', 'Ranked by ' + S.rank + '. Click to filter.', pkeyRank('branch', {color: '#4c78a8'})), card('Top ' + S.def.topN + ' lines of business', 'Click to filter.', pkeyRank('p_lob', {color: '#54a24b'})),
-    card('Top ' + S.def.topN + ' customers', 'Click to filter.', pkeyRank('customer', {color: '#b279a2'})), card('Top ' + S.def.topN + ' sales people', 'Profit by the ERP Sales Person. Job report values take priority; a unique register match is a fallback for omitted columns. Click to filter.', pkeyRank('x_salesperson', {color: '#72b7b2'})), card('Top ' + S.def.topN + ' trade lanes', 'From the register. Click to filter.', pkeyRank('x_tradelanename', {color: '#e45756'})), card('How healthy are the jobs?', 'Jobs by margin band. Click a band to filter.', bands)));
+    card('Top ' + S.def.topN + ' branches', 'Ranked by ' + S.rank + '. Click to filter.', pkeyRank('branch', {color: '#4c78a8'}), null, {metric: profitRankMetric(), dimension: 'branch'}), card('Top ' + S.def.topN + ' lines of business', 'Click to filter.', pkeyRank('p_lob', {color: '#54a24b'}), null, {metric: profitRankMetric(), dimension: 'p_lob'}),
+    card('Top ' + S.def.topN + ' customers', 'Click to filter.', pkeyRank('customer', {color: '#b279a2'}), null, {metric: profitRankMetric(), dimension: 'customer'}), card('Top ' + S.def.topN + ' sales people', 'Profit by the ERP Sales Person. Job report values take priority; a unique register match is a fallback for omitted columns. Click to filter.', pkeyRank('x_salesperson', {color: '#72b7b2'}), null, {metric: profitRankMetric(), dimension: 'x_salesperson'}), card('Top ' + S.def.topN + ' trade lanes', 'From the register. Click to filter.', pkeyRank('x_tradelanename', {color: '#e45756'}), null, {metric: profitRankMetric(), dimension: 'x_tradelanename'}), card('How healthy are the jobs?', 'Jobs by margin band. Click a band to filter.', bands)));
 }
 function ppBranches() {
   const m = maskP({skip: ['company', 'branch']}), NB = COLS.branch.d.length, rows = groupByP((i) => pco[i] * NB + COLS.branch.pc[i], m, 2 * NB, (g) => COLS.branch.d[g % NB]).map((r) => Object.assign(r, {co: Math.floor(r.g / NB), br: r.g % NB}));
@@ -974,8 +1017,8 @@ function ppCustomers() {
     svg.append('text').attr('class', 'tick').attr('x', W / 2).attr('y', H - 2).attr('text-anchor', 'middle').text('Income'); svg.append('text').attr('class', 'tick').attr('transform', 'rotate(-90)').attr('x', -H / 2).attr('y', 11).attr('text-anchor', 'middle').text('Margin');
     pts.forEach((r) => svg.append('circle').attr('cx', x(r.inc)).attr('cy', y(r.margin)).attr('r', rad(Math.abs(r.profit))).attr('fill', r.profit < 0 ? '#c2362b' : '#4c78a8').attr('opacity', sel.size && !sel.has(r.g) ? 0.25 : 0.65).style('cursor', 'pointer').on('click', () => {toggle('customer',r.g);}).append('title').text(r.label + ': income ' + money(r.inc) + ', profit ' + money(r.profit) + ', margin ' + fMargin(r.margin))); }
   return h('div', null, h('div', {class: 'kpis'}, kpi('Customers', fInt(rows.length), null, 'With at least one line'), kpi('Customers making 80% of profit', fInt(n80), null, 'Of those with a positive profit'), kpi('Biggest customer', top1 ? fS(top1.profit / (tot || 1)) : '–', null, top1 ? top1.label : ''), kpi('Loss-making customers', fInt(rows.filter((r) => r.profit < 0).length), null, 'Profit below zero in this selection', 'bad')),
-    h('div', {class: 'grid', style: 'margin-top:.9rem'}, card('Customers', null, h('div', null, h('div', {class: 'frow'}, dlButton('Download Excel', exportC)), note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody))), 'full'),
-      card('Income against margin', 'Each bubble is a customer (largest 60 by income); size is profit, red is a loss. Customers high on the right and low on the chart earn little on big volumes. Click to filter.', sc, 'full')));
+    h('div', {class: 'grid', style: 'margin-top:.9rem'}, card('Customers', null, h('div', null, h('div', {class: 'frow'}, dlButton('Download Excel', exportC)), note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody))), 'full', {metric: 'profit.gp', dimension: 'customer'}),
+      card('Income against margin', 'Each bubble is a customer (largest 60 by income); size is profit, red is a loss. Customers high on the right and low on the chart earn little on big volumes. Click to filter.', sc, 'full', {metric: 'profit.gp', dimension: 'customer'})));
 }
 function ppJobs() {
   const jobs = pbyJob(R.M), st = S.jobs, q = h('input', {type: 'search', class: 'q', placeholder: 'Search job, customer, branch…', 'aria-label': 'Search jobs', value: st.q}), note = h('p', {class: 'note'}), thead = h('thead'), tbody = h('tbody'), sels = S.sel.jobstatus || new Set();
@@ -988,7 +1031,7 @@ function ppJobs() {
   q.addEventListener('input', () => { st.q = q.value; draw(); }); draw();
   const exportJ = () => downloadXlsx('jobs_' + fIso(dDate(MAXDATE)) + '.xlsx', [{name: 'Jobs', freeze: true, filter: true, cols: [24, 18, 16, 16, 44, 16, 16, 16, 12, 8, 18], rows: [['Company', 'Branch', 'Line', 'Job', 'Customer', 'Income', 'Expense', 'Profit', 'Margin', 'Lines', 'Status'].map(HDR)].concat(last.map((e, i) => { const x = i + 2; return [COMP[e.company], e.branch, e.lob, e.job, e.customer, {v: +e.inc.toFixed(2), s: 3}, {v: +e.exp.toFixed(2), s: 3}, {f: 'F' + x + '-G' + x, s: 3}, {f: 'IF(F' + x + '<=0,"",H' + x + '/F' + x + ')', s: 2}, {v: e.lines, s: 3}, COLS.jobstatus.d[e.status]]; }))}, settingsSheet()]);
   const fb = (g, t) => h('button', {type: 'button', class: 'btn' + (g === 'all' ? (sels.size === 0 ? ' on' : '') : sels.size === 1 && sels.has(g) ? ' on' : ''), onclick: () => { if (g === 'all') delete S.sel.jobstatus; else S.sel.jobstatus = new Set([g]); renderAll(); }}, t);
-  return h('div', {class: 'grid'}, card('Jobs', 'One row per job in the current selection. Profit is income minus the costs booked so far.', h('div', null, h('div', {class: 'frow'}, q, h('div', {class: 'segs'}, fb('all', 'All jobs'), fb(3, 'Loss-making'), fb(1, 'Cost not booked'), fb(2, 'Costs booked, no income recorded'), fb(4, 'Low margin')), dlButton('Download Excel', exportJ)), note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody))), 'full'));
+  return h('div', {class: 'grid'}, card('Jobs', 'One row per job in the current selection. Profit is income minus the costs booked so far.', h('div', null, h('div', {class: 'frow'}, q, h('div', {class: 'segs'}, fb('all', 'All jobs'), fb(3, 'Loss-making'), fb(1, 'Cost not booked'), fb(2, 'Costs booked, no income recorded'), fb(4, 'Low margin')), dlButton('Download Excel', exportJ)), note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody))), 'full', {metric: 'profit.gp', dimension: null}));
 }
 function ppQuality() {
   const m = maskP({skip: 'jobstatus'}), stat = groupByP('jobstatus', m), g = (n) => stat.find((r) => r.label === n) || {jobs: 0, inc: 0, exp: 0, profit: 0}, total = totalsP(m), jobs = pbyJob(m), ex = pExpectedByLob(m);
@@ -1101,7 +1144,7 @@ function ppExplorer() {
     downloadXlsx('profitability_by_' + d.l.toLowerCase().replace(/[^a-z]+/g, '_') + '_' + fIso(dDate(MAXDATE)) + '.xlsx', [{name: 'Profitability', freeze: true, filter: true, cols: [42, 16, 16, 16, 12, 10, 16, 14, 14, 14, 16], rows: [[d.l, 'Income', 'Expense', 'Profit', 'Margin', 'Jobs', 'Profit per job', 'Share of profit', 'Air tonnes', 'Air profit', 'Profit per air tonne', 'Sea TEUs', 'Sea profit', 'Profit per sea TEU'].map(HDR)]
       .concat(list.map((r, i) => { const x = i + 2; return [r.label, {v: +r.inc.toFixed(2), s: 3}, {v: +r.exp.toFixed(2), s: 3}, {f: 'B' + x + '-C' + x, s: 3}, {f: 'IF(B' + x + '<=0,"",D' + x + '/B' + x + ')', s: 2}, {v: r.jobs, s: 3}, {f: 'IF(F' + x + '=0,"",D' + x + '/F' + x + ')', s: 3}, {f: 'IF(SUM(D$2:D$' + n + ')=0,"",D' + x + '/SUM(D$2:D$' + n + '))', s: 2}, {v: +r.airT.toFixed(3), s: 4}, {v: +r.airP.toFixed(2), s: 3}, {f: 'IF(I' + x + '=0,"",J' + x + '/I' + x + ')', s: 3}, {v: Math.round(r.seaT), s: 3}, {v: +r.seaP.toFixed(2), s: 3}, {f: 'IF(L' + x + '=0,"",M' + x + '/L' + x + ')', s: 3}]; }))
       .concat([[HDR('Total'), {f: 'SUM(B2:B' + n + ')', s: 3}, {f: 'SUM(C2:C' + n + ')', s: 3}, {f: 'SUM(D2:D' + n + ')', s: 3}, {f: 'IF(B' + tr + '<=0,"",D' + tr + '/B' + tr + ')', s: 2}, {f: 'SUM(F2:F' + n + ')', s: 3}]])}, settingsSheet([[HDR('Rows by'), d.l]])]); };
-  root.append(h('div', {class: 'grid'}, card('Top ' + S.def.topN + ' by ' + S.rank, 'Ranked by ' + S.rank + '. Click a bar to filter everything.', prankList(rows, (r) => toggle(key, r.g), (r) => sel.has(r.g), {color: '#4c78a8'})),
+  root.append(h('div', {class: 'grid'}, card('Top ' + S.def.topN + ' by ' + S.rank, 'Ranked by ' + S.rank + '. Click a bar to filter everything.', prankList(rows, (r) => toggle(key, r.g), (r) => sel.has(r.g), {color: '#4c78a8'}), null, {metric: profitRankMetric(), dimension: key}),
     card('All rows', 'Profit per air tonne and per sea TEU use only jobs matched to the register: air by chargeable tonnes, sea by TEUs (full-container loads).', h('div', null, h('div', {class: 'frow'}, dlButton('Download Excel', exportE)), note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody))), 'full')));
   return root;
 }
@@ -1180,7 +1223,7 @@ function sOwner() {
   if (!FIN) cmpTbl.querySelectorAll('tr').forEach(row => Array.from(row.children).slice(4).forEach(cell => cell.remove()));
   return h('div', null, h('p', {class: 'meta'}, 'Operations and accounting together, for the filters above. Shipments are counted by shipment date and profit by job date, within the same date range.'),
     h('h2', {class: 'h', style: 'margin:.4rem 0'}, 'Operations'), h('div', {class: 'kpis'}, opsK), FIN ? h('h2', {class: 'h', style: 'margin:.9rem 0 .4rem'}, 'Accounting') : null, FIN ? h('div', {class: 'kpis'}, accK) : null,
-    h('div', {class: 'grid', style: 'margin-top:.9rem'}, sVariance(), alertsCard, card('The two companies', 'Click a company to filter everything.', cmpTbl), card('Shipments by month', 'Click a month to zoom in.', monthBars(M)), FIN ? card('Profit by week', 'Job date. Click a week to zoom in.', weekChart(pm)) : null,
+    h('div', {class: 'grid', style: 'margin-top:.9rem'}, sVariance(), alertsCard, card('The two companies', 'Click a company to filter everything.', cmpTbl, null, {metric: 'profit.gp', dimension: 'company'}), card('Shipments by month', 'Click a month to zoom in.', monthBars(M), null, {metric: 'ops.shipments', dimension: null}), FIN ? card('Profit by week', 'Job date. Click a week to zoom in.', weekChart(pm), null, {metric: 'profit.gp', dimension: null}) : null,
       FIN ? card('Top ' + S.def.topN + ' customers by profit', 'Click to filter.', pkeyRank('customer', {color: '#b279a2'})) : null, FIN ? card('Top ' + S.def.topN + ' sales people by profit', 'Click to filter.', pkeyRank('x_salesperson', {color: '#72b7b2'})) : null, FIN ? card('Top ' + S.def.topN + ' branches by profit', 'Click to filter.', pkeyRank('branch', {color: '#4c78a8'})) : null));
 }
 function sScore() {
@@ -1337,7 +1380,7 @@ function ppRates() {
   const eaCard = card('Estimated against actual', 'Jobs in both the register (rates) and the profit report. The estimate covers freight only, while actual profit covers every charge, and most jobs have no cost booked yet, so expect actual to exceed the estimate for now.', ea.length ? h('div', null, h('div', {class: 'kpis'}, kpi('Jobs compared', fInt(ea.length), null, ''), kpi('Estimated freight margin', money(tE), null, 'From the rates'), kpi('Actual profit', money(tAct), null, 'From the profit report'), kpi('Difference', sgn(tAct - tE) + money(Math.abs(tAct - tE)), null, 'Actual minus estimate')),
     h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, h('thead', null, h('tr', null, ['Job', 'Customer', 'Estimated', 'Actual', 'Difference'].map((x, k) => h('th', {class: k > 1 ? 'n' : ''}, x)))), h('tbody', null, ea.sort((a, b) => Math.abs(b.act - b.est) - Math.abs(a.act - a.est)).slice(0, 25).map((e) => h('tr', null, h('td', null, D.no[e.s]), h('td', null, catv('customer', e.s)), h('td', {class: 'n'}, money(e.est)), h('td', {class: 'n'}, money(e.act)), h('td', {class: 'n ' + (e.act - e.est >= 0 ? 'ok' : 'bad')}, sgn(e.act - e.est) + money(Math.abs(e.act - e.est))))))))) : h('p', {class: 'empty'}, 'No air export job with usable rates matches the profit report for these filters.'), 'full');
   const qual = card('How the rates were read', 'The rate columns are free text. The first number is taken as the rate per kg. Limits are under Definitions.', h('ul', {class: 'notes'}, h('li', null, fInt(bad.clean) + ' shipments have plain numbers in both columns.'), h('li', null, fInt(bad.text) + ' have text such as “512.00 ALL IN” or “840nn”; the number is used (Definitions can switch this off).'), h('li', null, fInt(bad.lump) + ' have a figure above ₹' + fInt(S.def.rateMax) + ' per kg, which is a lump sum, so they are left out.'), h('li', null, fInt(bad.foreign) + ' are in a foreign currency and are left out.'), h('li', null, fInt(bad.none) + ' have a blank or unreadable rate, or no weight.')));
-  root.append(h('p', {class: 'meta'}, 'Estimated freight margin = (sell rate − buy rate) × chargeable weight, for air exports, for every month of the year. It is an estimate of freight only: other charges, duties and unbooked costs are not in it.'), kp, h('div', {class: 'grid', style: 'margin-top:.9rem'}, card('Estimated freight margin by month', 'Shipment date. Hover a bar for the value.', c1), card('Margin per kg by month', 'Weighted by chargeable weight.', c2), card('Variance: estimated freight margin', 'Change in value and percentage against the earlier period, by any angle.', vcard, 'full'), card('Selling below buy', 'The 40 shipments where the sell rate is under the buy rate. A pricing control issue.', bt, 'full'), eaCard, qual));
+  root.append(h('p', {class: 'meta'}, 'Estimated freight margin = (sell rate − buy rate) × chargeable weight, for air exports, for every month of the year. It is an estimate of freight only: other charges, duties and unbooked costs are not in it.'), kp, h('div', {class: 'grid', style: 'margin-top:.9rem'}, card('Estimated freight margin by month', 'Shipment date. Hover a bar for the value.', c1, null, {metric: 'ops.rate_margin', dimension: null}), card('Margin per kg by month', 'Weighted by chargeable weight.', c2, null, {metric: 'ops.rate_margin_kg', dimension: null}), card('Variance: estimated freight margin', 'Change in value and percentage against the earlier period, by any angle.', vcard, 'full'), card('Selling below buy', 'The 40 shipments where the sell rate is under the buy rate. A pricing control issue.', bt, 'full', {metric: 'ops.rate_below_buy', dimension: null}), eaCard, qual));
   return root;
 }
 // ================================================================ build your own visual: any measure by any angle, saved to My dashboard
@@ -1720,11 +1763,88 @@ function metricTraceVariance(metric,pr,displayed){
  for(let i=0;i<m.length;i++){if(dates[i]<pr.cur.from||dates[i]>pr.cur.to)m[i]=0;if(dates[i]<pr.prev.from||dates[i]>pr.prev.to)p[i]=0;}
  const q=metricTraceSelection(metric,'Variance');q.indices=Array.from(m).flatMap((v,i)=>v?[i]:[]);q.previous_indices=Array.from(p).flatMap((v,i)=>v?[i]:[]);q.displayed_value=displayed;q.context.period=pr;q.context.active_min=1;q.context.date_basis=metric==='ops.invoiced_count'?'First parsed invoice date':fin?'Job Date':'Shipment Date';return q;
 }
+function metricTraceMasks(metric,key) {
+ const fin=metric.startsWith('profit.'),skip=new Set([...(key?[key]:[])]);
+ if(fin&&S.page==='p_explorer'){const d=EXP_DIMS[S.exp.dim]||EXP_DIMS[0];skip.add(d.k);}
+ if(fin&&S.page==='p_quality')skip.add(metric==='profit.intercompany_proxy'?'p_ic':'jobstatus');
+ if(fin&&S.page==='p_customers')skip.add('customer');
+ const opt={skip:[...skip]};
+ let m,p;
+ if((fin&&S.page==='p_compare')||(!fin&&S.page==='compare')){
+  const pr=periods(S.cmp);if(pr.err)throw Error(pr.err);
+  m=fin?maskP({...opt,dates:'none'}):mask({...opt,dates:'none'});
+  p=fin?maskP({...opt,dates:'none'}):mask({...opt,dates:'none'});
+  const ds=fin?pdate:date;
+  for(let i=0;i<m.length;i++){if(ds[i]<pr.cur.from||ds[i]>pr.cur.to)m[i]=0;if(ds[i]<pr.prev.from||ds[i]>pr.prev.to)p[i]=0;}
+ }else{
+  m=fin?maskP(opt):mask(opt);p=fin?maskP({...opt,dates:'prev'}):mask({...opt,dates:'prev'});
+ }
+ if(fin&&S.page==='p_explorer'){const d=EXP_DIMS[S.exp.dim]||EXP_DIMS[0];if(d.mode!=null)for(let i=0;i<NP;i++)if(psidx[i]<0||mode[psidx[i]]!==d.mode){m[i]=0;p[i]=0;}}
+ if(!fin&&(['ops.waiting_lock','ops.financials_open','ops.old_open','ops.oldest_open','ops.locked_no_invoice','ops.overdue_invoice'].includes(metric)||(metric==='ops.lock_lag'&&(S.group==='summary'||S.page==='ops')))){m=mask({...opt,dates:'none'});p=new Uint8Array(N);}
+ if(metric.startsWith('ops.rate_'))for(let i=0;i<N;i++)if(rtype[i]!==0){m[i]=0;p[i]=0;}
+ if(metric.startsWith('profit.rate_matched_'))for(let i=0;i<NP;i++){const si=psidx[i];if(si<0||rtype[si]!==0||!rateOK(si)){m[i]=0;p[i]=0;}}
+ return {m,p};
+}
+function metricTraceValue(metric,m,p) {
+ const fin=metric.startsWith('profit.');
+ if(!fin){
+  const f=opsFacts(m),ids=Array.from(m).flatMap((v,i)=>v?[i]:[]);
+  if(metric==='ops.shipments')return f.n;
+  if(metric==='ops.air_weight')return f.air;
+  if(metric==='ops.teu')return f.sea;
+  if(metric==='ops.active_customers')return S.group==='summary'?f.cust:activeCust(m);
+  if(metric==='ops.waiting_lock')return ids.filter(i=>COLS.stage.c[i]===STAGE_PEND).length;
+  if(metric==='ops.financials_open')return ids.filter(i=>COLS.stage.c[i]===STAGE_FIN).length;
+  if(metric==='ops.old_open'||metric==='ops.oldest_open'){const a=ids.filter(i=>COLS.stage.d[COLS.stage.c[i]]!=='Closed').map(i=>OPS_MAX-date[i]);return metric==='ops.old_open'?a.filter(x=>x>S.def.oldDays).length:Math.max(0,...a);}
+  if(metric==='ops.lock_lag')return f.lag;
+  if(metric==='ops.invoiced_share')return ids.length?ids.filter(i=>invN[i]>0).length/ids.length:null;
+  if(metric==='ops.invoice_lag'||metric==='ops.lock_invoice_lag'){const a=ids.filter(i=>invN[i]>0&&inv1[i]>0&&(metric==='ops.invoice_lag'||opsD[i]>0));return a.length?d3.sum(a,i=>inv1[i]-(metric==='ops.invoice_lag'?date[i]:opsD[i]))/a.length:null;}
+  if(metric==='ops.locked_no_invoice'||metric==='ops.overdue_invoice'){const a=ids.filter(i=>opsD[i]>0&&invN[i]===0);return metric==='ops.locked_no_invoice'?a.length:a.filter(i=>OPS_MAX-opsD[i]>S.def.unbilledDays).length;}
+  if(metric==='ops.customer_concentration')return top10(m,R.useVol);
+  if(metric.startsWith('ops.rate_')){const all=ids.filter(i=>rtype[i]===0),ok=all.filter(rateOK),kg=d3.sum(ok,i=>ckg[i]),sell=d3.sum(ok,i=>rsell[i]*ckg[i]),buy=d3.sum(ok,i=>rbuy[i]*ckg[i]);return {'ops.rate_air_exports':all.length,'ops.rate_usable':all.length?ok.length/all.length:null,'ops.rate_sell':kg?sell/kg:null,'ops.rate_buy':kg?buy/kg:null,'ops.rate_margin_kg':kg?(sell-buy)/kg:null,'ops.rate_margin':sell-buy,'ops.rate_below_buy':ok.filter(i=>rsell[i]<rbuy[i]).length}[metric];}
+  if(metric==='ops.period_new_customers'||metric==='ops.period_absent_customers'){const a=new Map(),b=new Map();for(let i=0;i<N;i++){if(m[i])a.set(COLS.customer.c[i],(a.get(COLS.customer.c[i])||0)+1);if(p?.[i])b.set(COLS.customer.c[i],(b.get(COLS.customer.c[i])||0)+1);}const cur=metric==='ops.period_new_customers'?a:b,other=metric==='ops.period_new_customers'?b:a;return [...cur].filter(([k,v])=>v>=S.def.activeMin&&!other.has(k)).length;}
+  return undefined;
+ }
+ const t=totalsP(m),jobs=pbyJob(m);
+ if(metric==='profit.gp')return t.profit;
+ if(metric==='profit.income')return t.inc;
+ if(metric==='profit.expense')return t.exp;
+ if(metric==='profit.jobs')return t.jobs;
+ if(metric==='profit.margin')return t.margin;
+ if(metric==='profit.per_job')return t.jobs?t.profit/t.jobs:null;
+ if(metric==='profit.cost_coverage')return t.jobs?t.booked/t.jobs:null;
+ if(metric==='profit.expected_adjusted')return t.profit-pExpectedByLob(m).est;
+ if(metric==='profit.cost_not_booked_proxy')return jobs.filter(r=>r.status===1).length;
+ if(metric==='profit.billing_pending_proxy')return jobs.filter(r=>r.status===2).length;
+ if(metric==='profit.loss_making')return jobs.filter(r=>r.status===3).length;
+ if(metric==='profit.low_margin')return jobs.filter(r=>r.status===4).length;
+ if(metric==='profit.negative_income_rows')return Array.from(m).filter((v,i)=>v&&pinc[i]<0).length;
+ if(metric==='profit.intercompany_proxy')return jobs.filter(r=>pcatv('p_ic',r.i0)==='Intercompany').length;
+ if(['profit.customers','profit.customers_80','profit.biggest_customer','profit.loss_customers'].includes(metric)){const a=groupByP('customer',m).sort((x,y)=>y.profit-x.profit),total=d3.sum(a,r=>r.profit),positive=d3.sum(a.filter(r=>r.profit>0),r=>r.profit);let cum=0,n=0;a.forEach(r=>{if(r.profit>0&&cum<.8*positive){cum+=r.profit;n++;}});return {'profit.customers':a.length,'profit.customers_80':n,'profit.biggest_customer':a.length?a[0].profit/(total||1):null,'profit.loss_customers':a.filter(r=>r.profit<0).length}[metric];}
+ if(['profit.air_yield','profit.ocean_yield','profit.matched_share','profit.best_dimension'].includes(metric)){const d=EXP_DIMS[S.exp.dim]||EXP_DIMS[0],a=groupByP(d.k,m);if(metric==='profit.air_yield')return d3.sum(a,r=>r.airT)>0?d3.sum(a,r=>r.airP)/d3.sum(a,r=>r.airT):null;if(metric==='profit.ocean_yield')return d3.sum(a,r=>r.seaT)>0?d3.sum(a,r=>r.seaP)/d3.sum(a,r=>r.seaT):null;if(metric==='profit.matched_share')return t.jobs?jobs.filter(r=>psidx[r.i0]>=0).length/t.jobs:null;return d3.max(a.filter(r=>r.profit>0),r=>r.profit)??null;}
+ if(metric.startsWith('profit.rate_matched_')){const ids=Array.from(m).flatMap((v,i)=>v&&psidx[i]>=0?[psidx[i]]:[]),ok=ids.filter(rateOK),kg=d3.sum(ok,i=>ckg[i]),sell=d3.sum(ok,i=>rsell[i]*ckg[i]),buy=d3.sum(ok,i=>rbuy[i]*ckg[i]);return {'profit.rate_matched_count':ok.length,'profit.rate_matched_estimate':sell-buy,'profit.rate_matched_actual':t.profit,'profit.rate_matched_difference':t.profit-(sell-buy)}[metric];}
+ return undefined;
+}
 function metricTraceCategory(metric,key,code){
- const fin=metric.startsWith('profit.'),m=fin?maskP({skip:key}):mask({skip:key}),p=fin?maskP({skip:key,dates:'prev'}):mask({skip:key,dates:'prev'}),codes=fin?COLS[key].pc:COLS[key].c;
- for(let i=0;i<m.length;i++)if(codes[i]!==code){m[i]=0;p[i]=0;}
- const q=metricTraceSelection(metric,COLS[key].l+': '+COLS[key].d[code]);q.indices=Array.from(m).flatMap((v,i)=>v?[i]:[]);q.previous_indices=Array.from(p).flatMap((v,i)=>v?[i]:[]);q.context.segment={dimension:COLS[key].l,value:COLS[key].d[code]};
- if(fin){const t=totalsP(m);q.displayed_value=metric==='profit.income'?t.inc:metric==='profit.expense'?t.exp:t.profit;}else{const t=opsFacts(m);q.displayed_value=metric==='ops.air_weight'?t.air:metric==='ops.teu'?t.sea:t.n;}
+ const {m,p}=metricTraceMasks(metric,key),codes=COLS[key].pc||COLS[key].c;
+ for(let i=0;i<m.length;i++)if(m[i]&&codes[i]!==code)m[i]=0;
+ for(let i=0;i<p.length;i++)if(p[i]&&codes[i]!==code)p[i]=0;
+ const q=metricTraceSelection(metric,COLS[key].l+': '+(COLS[key].d[code]??code));
+ q.indices=Array.from(m).flatMap((v,i)=>v?[i]:[]);q.previous_indices=Array.from(p).flatMap((v,i)=>v?[i]:[]);
+ q.context.segment={dimension:COLS[key].l||key,value:COLS[key].d[code]??code};
+ if(q.context.filters){q.context.filters={...q.context.filters};delete q.context.filters[key];}
+ const value=metricTraceValue(metric,m);if(value===undefined)delete q.displayed_value;else q.displayed_value=value;
+ return q;
+}
+function metricTraceVisual(metric,key,label) {
+ const q=metricTraceSelection(metric,label);
+ if(!key)return q;
+ if(S.sel[key]&&S.sel[key].size===1)return metricTraceCategory(metric,key,[...S.sel[key]][0]);
+ const {m,p}=metricTraceMasks(metric,key);
+ q.indices=Array.from(m).flatMap((v,i)=>v?[i]:[]);q.previous_indices=Array.from(p).flatMap((v,i)=>v?[i]:[]);
+ if(q.context.filters){q.context.filters={...q.context.filters};delete q.context.filters[key];}
+ q.context.visual_dimension=COLS[key]?.l||key;
+ const value=metricTraceValue(metric,m);if(value===undefined)delete q.displayed_value;else q.displayed_value=value;
  return q;
 }
 function metricTraceSelection(metric,label) {
@@ -1750,6 +1870,6 @@ function metricTraceSelection(metric,label) {
  if(['profit.customers','profit.customers_80','profit.biggest_customer','profit.loss_customers'].includes(metric)){const rs=groupByP('customer',m).sort((a,b)=>b.profit-a.profit),total=d3.sum(rs,r=>r.profit),positive=d3.sum(rs.filter(r=>r.profit>0),r=>r.profit);let cum=0,num=0;rs.forEach(r=>{if(r.profit>0&&cum<.8*positive){cum+=r.profit;num++;}});values[metric]={'profit.customers':rs.length,'profit.customers_80':num,'profit.biggest_customer':rs.length?rs[0].profit/(total||1):null,'profit.loss_customers':rs.filter(r=>r.profit<0).length}[metric];}
  return {metric,dataset_built_at:D.built_at,displayed_value:values[metric],indices:Array.from(m).flatMap((v,i)=>v?[i]:[]),previous_indices:Array.from(p).flatMap((v,i)=>v?[i]:[]),context:{low_margin:S.def.lowMargin,top_n:S.def.topN,concentration_measure:R.useVol?(R.air?'air_weight_t':'teu'):'count',dimension_key:(EXP_DIMS[S.exp.dim]||EXP_DIMS[0]).k,rate_mode:S.def.rateMode,rate_max:S.def.rateMax,active_min:S.group==='summary'?1:S.def.activeMin,old_days:S.def.oldDays,unbilled_days:S.def.unbilledDays,age_as_of:OPS_MAX,period:(S.page==='p_compare'||S.page==='compare')?periods(S.cmp):win(),date_basis:fin?'Job Date':'Shipment Date',page:S.page,visual:label,filters:Object.fromEntries(Object.entries(S.sel).map(([k,v])=>[k,[...v].map(i=>COLS[k]?.d[i]??i)]))}};
 }
-window.NG = {visualMetricPayload,traceVariance:metricTraceVariance,periods,win,pctOf,pctChange,traceCategory:metricTraceCategory,exportVisibleVisuals,traceSelection:metricTraceSelection,agentRows, runVisual, visGet, visSave, defCfg, VTEMPLATES, rateOK, rmargin, saveView, applyView, viewsGet, goto, setGroup, opsFacts, maskP, groupByP, totalsP, pbyJob, pExpectedByLob, money, NP, NPA, NJ, pinc, pexp, pjob, psidx, pjInc, pjExp, D, S, DEFAULTS, renderDefs, COLS, D, mask, compute, renderAll, toggle, csvOf, openMenu, menuAll, menuClear, get R() { return R; }, N, MAXDATE, MINDATE};
+window.NG = {visualMetricPayload,traceVariance:metricTraceVariance,periods,win,pctOf,pctChange,traceCategory:metricTraceCategory,traceVisual:metricTraceVisual,exportVisibleVisuals,traceSelection:metricTraceSelection,agentRows, runVisual, visGet, visSave, defCfg, VTEMPLATES, rateOK, rmargin, saveView, applyView, viewsGet, goto, setGroup, opsFacts, laneAgg, maskP, groupByP, totalsP, pbyJob, pExpectedByLob, money, NP, NPA, NJ, pinc, pexp, pjob, psidx, pjInc, pjExp, D, S, DEFAULTS, renderDefs, COLS, D, mask, compute, renderAll, toggle, csvOf, openMenu, menuAll, menuClear, get R() { return R; }, N, MAXDATE, MINDATE};
 })();
 
