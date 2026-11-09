@@ -116,8 +116,7 @@ class SchedulerServiceTests(unittest.TestCase):
                          "row_count": 3, "file_size": 9},
         }
         worker = service.SchedulerWorker(self.engine, store=None)
-        with patch.object(service, "prepare_workbook", return_value=prepared), \\
-             patch.object(mailer, "send", return_value=True) as send:
+        with patch.object(service, "prepare_workbook", return_value=prepared) as prepare, patch.object(mailer, "send", return_value=True) as send:
             self.assertTrue(worker.process_one())
         send.assert_called_once()
         sent = send.call_args.kwargs
