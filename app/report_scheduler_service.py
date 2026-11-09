@@ -306,7 +306,7 @@ def enqueue_due_schedules(engine, now: datetime | None = None) -> int:
     for schedule in due:
         scheduled_for = schedule["next_run_at"]
         definition = schedule["definition"]
-        next_at = _next_for(definition, scheduled_for)
+        next_at = _next_for(definition, now)
         key = f"schedule:{schedule['id']}:{scheduled_for.isoformat()}:{schedule['report_version']}"
         try:
             with engine.begin() as conn:
