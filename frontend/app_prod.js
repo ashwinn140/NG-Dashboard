@@ -477,7 +477,10 @@ function pageCustomers() {
       table.append(h('tbody',null,jobs.map(job=>h('tr',null,h('td',null,job.company),h('td',null,job.job_no),h('td',null,job.job_date),h('td',null,job.lob),h('td',null,job.job_owner)))));
       content.append(table);
       const latest=jobs[0];
-      status.textContent='Latest owner: '+latest.job_owner+' · Latest job date: '+latest.job_date+' · '+jobs.length+' distinct jobs shown.';
+      // Keep the latest Job Owner visible without opening the history dialog.
+      const ownerSummary=h('div',{class:'meta',style:'margin:10px 0 14px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface, #f7f9fc)'},h('strong',null,'Latest job owner: '),latest.job_owner || 'Owner unavailable',h('span',{style:'margin-left:10px'},'· '+latest.job_no+' · '+latest.job_date));
+      content.prepend(ownerSummary);
+      status.textContent='Showing '+jobs.length+' most recent distinct jobs. Latest job owner is shown above; owner values come only from JPR.';
     }).catch(error=>{status.textContent=error.message;status.className='bad';});
   }
   const sel = S.sel[key] || new Set(), hasPrev = R.np > 0; const rows = []; for (let j = 0; j < sz; j++) if (cnt[j] > 0 || sel.has(j)) rows.push({j, cnt: cnt[j], air: air[j], sea: sea[j], share: totC ? cnt[j] / totC : 0, delta: hasPrev ? cnt[j] - pc[j] : 0, last: last[j], v: vol[j]});
