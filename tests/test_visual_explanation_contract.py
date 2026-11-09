@@ -76,6 +76,12 @@ class VisualExplanationContract(unittest.TestCase):
     def test_ambiguous_active_customer_label_not_assigned_one_formula(self):
         self.assertNotIn("'active customers': [", APP)
 
+    def test_active_customer_definitions_are_visual_specific(self):
+        self.assertIn("function kpi(label, value, delta, note, tone, previousValue, metricExplanation)", APP)
+        self.assertIn("businessMeaning(label, note, metricExplanation)", APP)
+        self.assertIn("Shows customers meeting the configured activity threshold.", APP)
+        self.assertIn("Shows customers with at least one selected shipment.", APP)
+
     def test_no_demo_rows_generated(self):
         self.assertIn("const DEMO_KEEP = [0, 0.86, 0.72], demoSrc = [], demoK = []", APP)
 
