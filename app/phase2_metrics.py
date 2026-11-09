@@ -104,7 +104,7 @@ def cross_lob_customer_activity(dates_by_lob: dict, as_of: date,
         classification = "active_in_selected_scope"
     elif inactive_selected and active_elsewhere:
         classification = "inactive_in_selected_lob_active_elsewhere"
-    elif inactive_selected and complete and overall["status"] == "inactive":
+    elif complete and overall["status"] == "inactive":
         classification = "verified_company_wide_inactivity"
     elif inactive_selected:
         classification = "inactive_in_selected_lob_no_other_visible_activity"
