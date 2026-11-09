@@ -523,3 +523,14 @@ The integrated HTML Help/User Guide is now complete enough for the first product
 - Delivery provider success/failure/unknown states; no credentials, report contents or provider response bodies in logs.
 - Report link requires login, enforces recipient scope at retrieval, expires/revokes safely, and cannot be forwarded to a broader-privilege user.
 - Export content matches the existing on-demand report for the same user, filters and snapshot.
+
+
+## Production baseline update after targeted evidence fixes — 9 November 2026
+
+- The latest deployed production commit is now `f79b6285efb9742ea4892c5744473eb259916679`, Railway deployment `6c5a073a-080a-46f5-8767-91cf04b86272`, status SUCCESS, region `iad`.
+- PR #35 (`0757124f`) deployed the Calculation & records action on Operations Compare's Running total and Period by period visuals. Its full Metric traceability workflow passed.
+- PR #36 (`f79b6285`) deployed Calculation & records actions on Summary's Top N customers, sales people and branches by profit. Its full Metric traceability workflow passed.
+- Post-deployment HTTP sample for the new active deployment returned HTTP 200 for `/`, `/api/me`, `/api/dataset`, `/api/prefs`, `/api/metrics/definitions`, and `/assets/metric_trace.js`; no 4xx/5xx appeared in the retrieved sample. This is a production HTTP smoke check, not authenticated browser/responsive/accessibility acceptance.
+- PR #37 (`feature/profit-compare-evidence-2026-11-09`) is open and not deployed. It corrects the Profit Compare evidence period-state mismatch, adds evidence actions to four Profit Compare visuals, verifies the seven previously unverified finance explanations, and corrects margin-band labels with edge tests. Latest CI run `42658738004` is queued after the first run caught a missing sort-state fixture in the new test; the fixture was corrected without changing product behavior.
+- The post-PR #34 artifact is now an historical baseline for explanation coverage; PR #35/#36 add five evidence actions. Regenerate the runtime inventory after PR #37 is merged/deployed before stating the new action-coverage counts.
+- The deployed source contract remains the simple job-level JPR, one row per job, Job Date. No Chargewise/charge-wise code or data source has been introduced.
