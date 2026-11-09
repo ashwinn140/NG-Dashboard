@@ -5,6 +5,7 @@ on:
       - 'app/phase2_*.py'
       - 'app/server.py'
       - 'app/web/opportunities.html'
+      - 'app/web/admin.html'
       - 'tests/test_phase2_*.py'
       - '.github/workflows/phase2-tests.yml'
   workflow_dispatch:
@@ -20,3 +21,13 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_phase2_*.py' -v
       - name: Compile server without executing it
         run: python -m py_compile app/server.py app/phase2_metrics.py app/phase2_coverage.py
+      - name: Check admin page JavaScript syntax
+        run: |
+          python - <<'PY'
+          import pathlib, re
+          html = pathlib.Path("app/web/admin.html").read_text()
+          scripts = re.findall(r"<script>(.*?)</script>", html, re.S)
+          inline = [s for s in scripts if s.strip()]
+          pathlib.Path("/tmp/admin-inline.js").write_text(chr(10).join(inline))
+          PY
+          node --check /tmp/admin-inline.js

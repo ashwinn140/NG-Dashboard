@@ -1,6 +1,9 @@
 """Read-only Phase 2 readiness contract tests."""
 import json
+import pathlib
 import unittest
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
 from app.phase2_coverage import report_field_coverage, job_history_field_coverage
 
 
@@ -68,6 +71,14 @@ class CoverageTests(unittest.TestCase):
         row = next(x for x in result if x["company"] == "NCS" and x["report_type"] == "JP")
         self.assertEqual(row["status"], "invalid_column_metadata")
         self.assertNotIn("private job rows", repr(result))
+
+
+    def test_admin_overview_surfaces_job_history_readiness_without_row_data(self):
+        ui = (ROOT / "app" / "web" / "admin.html").read_text()
+        self.assertIn("Job history source readiness", ui)
+        self.assertIn("job_history_fields", ui)
+        self.assertIn("Header presence does not prove job-to-register matching", ui)
+        self.assertIn("Matched register fallback", ui)
 
 
 if __name__ == "__main__":
