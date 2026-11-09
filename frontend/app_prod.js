@@ -478,7 +478,7 @@ function pageCustomers() {
       content.append(table);
       const latest=jobs[0];
       // Keep the latest Job Owner visible without opening the history dialog.
-      const ownerSummary=h('div',{class:'meta',style:'margin:10px 0 14px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface, #f7f9fc)'},h('strong',null,'Latest job owner: '),latest.job_owner || 'Owner unavailable',h('span',{style:'margin-left:10px'},'· '+latest.job_no+' · '+latest.job_date));
+      const ownerSummary=h('div',{class:'meta',style:'margin:10px 0 14px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface, #f7f9fc)'},h('strong',null,'Latest JPR job owner: '),latest.job_owner || 'Owner unavailable',h('span',{style:'margin-left:10px'},'· '+latest.job_no+' · '+latest.job_date));
       content.prepend(ownerSummary);
       status.textContent='Showing '+jobs.length+' most recent distinct jobs. Latest job owner is shown above; owner values come only from JPR.';
     }).catch(error=>{status.textContent=error.message;status.className='bad';});
@@ -488,17 +488,19 @@ function pageCustomers() {
     const list = rows.slice().sort((a,b)=>b.cnt-a.cnt);
     try {
       const historyRows = [[HDR('Customer'),HDR('Company'),HDR('Job No.'),HDR('Job Date'),HDR('LOB'),HDR('Job Owner'),HDR('Owner status')]];
+      const lastShipmentOwners = new Map();
       for (let offset=0; offset<list.length; offset+=100) {
         const batch=list.slice(offset,offset+100);
         const histories=await loadRecentJobs(batch.map(r=>({customer:COLS.customer.d[r.j],companies:historyCompanies(r.j),lobs:historyLobs()})));
         histories.forEach(history=>{
           const jobs=history.jobs||[];
+          lastShipmentOwners.set(history.customer,history.last_shipment_job_owner || 'Owner unavailable');
           if (!jobs.length) historyRows.push([history.customer,'','','','','Owner unavailable','No JPR history returned']);
           else jobs.forEach(job=>historyRows.push([history.customer,job.company,job.job_no,job.job_date,job.lob,job.job_owner,job.owner_status]));
         });
       }
-      const customerRows=[['Customer','Shipments','Air chargeable weight (t)','Sea TEUs','Share of shipments','Change vs comparison (shipments)','Last shipment','Last job owner'].map(HDR)];
-      list.forEach(r=>customerRows.push([COLS.customer.d[r.j],{v:r.cnt,s:3},r.air?{v:+r.air.toFixed(3),s:4}:'',r.sea?{v:Math.round(r.sea),s:3}:'',{v:r.share,s:2},hasPrev?{v:r.delta,s:3}:'',r.last>0?{v:serial(r.last),s:5}:'', 'See Last 5 Jobs sheet for source-backed owner history']));
+      const customerRows=[['Customer','Shipments','Air chargeable weight (t)','Sea TEUs','Share of shipments','Change vs comparison (shipments)','Last shipment','Last shipment job owner'].map(HDR)];
+      list.forEach(r=>customerRows.push([COLS.customer.d[r.j],{v:r.cnt,s:3},r.air?{v:+r.air.toFixed(3),s:4}:'',r.sea?{v:Math.round(r.sea),s:3}:'',{v:r.share,s:2},hasPrev?{v:r.delta,s:3}:'',r.last>0?{v:serial(r.last),s:5}:'', lastShipmentOwners.get(COLS.customer.d[r.j]) || 'Owner unavailable']));
       downloadXlsx('customers_'+fIso(dDate(MAXDATE))+'.xlsx',[
         {name:'Customers',freeze:true,filter:true,cols:[42,12,18,12,18,18,16],rows:customerRows},
         {name:'Last 5 Jobs',freeze:true,filter:true,cols:[38,12,22,16,28,30,20],rows:historyRows},
@@ -507,7 +509,7 @@ function pageCustomers() {
     } catch(error) { alert('Customer export was not completed: '+error.message); }
   };
   const tbody = h('tbody'), note = h('p', {class: 'note'});
-  const cols = [{k: 'name', t: 'Customer'}, {k: 'cnt', t: 'Shipments', num: true}, {k: 'air', t: 'Air weight (t)', num: true}, {k: 'sea', t: 'Sea TEUs', num: true}, {k: 'share', t: 'Share', num: true}, {k: 'delta', t: 'Change vs previous', num: true}, {k: 'last', t: 'Last shipment', num: true}, {k: 'jobOwner', t: 'Last job owner', sort:false}, {k:'history',t:'Last 5 jobs',sort:false}];
+  const cols = [{k: 'name', t: 'Customer'}, {k: 'cnt', t: 'Shipments', num: true}, {k: 'air', t: 'Air weight (t)', num: true}, {k: 'sea', t: 'Sea TEUs', num: true}, {k: 'share', t: 'Share', num: true}, {k: 'delta', t: 'Change vs previous', num: true}, {k: 'last', t: 'Last shipment', num: true}, {k: 'jobOwner', t: 'Last shipment job owner', sort:false}, {k:'history',t:'Last 5 jobs',sort:false}];
   const thead = h('thead'); const draw = () => {
     const s = S.cust, f = s.sort === 'name' ? (a, b) => COLS.customer.d[a.j].localeCompare(COLS.customer.d[b.j]) : (a, b) => a[s.sort] - b[s.sort]; rows.sort((a, b) => f(a, b) * s.dir);
     thead.replaceChildren(sortHead(cols, s, draw)); const shown = rows.slice(0, S.def.tableRows);
@@ -525,8 +527,7 @@ function pageCustomers() {
         const histories=await loadRecentJobs(batch.map(r=>({customer:COLS.customer.d[r.j],companies:historyCompanies(r.j),lobs:historyLobs()})));
         histories.forEach(history=>{
           const row=batch.find(r=>COLS.customer.d[r.j]===history.customer);
-          const latest=(history.jobs||[])[0];
-          if(row) row.jobOwner=latest ? (latest.job_owner || 'Owner unavailable') : 'No JPR job';
+          if(row) row.jobOwner=history.last_shipment_job_owner || 'Owner unavailable';
         });
       }
       draw();
