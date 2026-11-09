@@ -2,7 +2,7 @@
 import unittest
 from datetime import date
 
-from app.customer_history import build_recent_jobs
+from app.customer_history import build_recent_jobs, build_last_shipment_owners
 
 
 class CustomerHistoryTests(unittest.TestCase):
@@ -131,6 +131,63 @@ class CustomerHistoryTests(unittest.TestCase):
                 app.state.store.stop = True
                 app.state.store.wake.set()
             fixture.tearDown()
+
+
+    def test_last_shipment_owner_matches_shipment_number_and_date_not_latest_jpr_job(self):
+        shipments = [
+            {"company": "NG", "report_type": "AE", "shipment_no": "SHIP-07",
+             "shipment_date": date(2026, 11, 7), "customer": "Acme"},
+            {"company": "NG", "report_type": "AE", "shipment_no": "SHIP-06",
+             "shipment_date": date(2026, 11, 6), "customer": "Acme"},
+        ]
+        jpr = [
+            {"company": "NG", "job_no": "SHIP-07", "job_date": date(2026, 11, 7),
+             "lob": "FFWD AIR EXP", "extra": {"Job Owner": "Shipment Owner"}},
+            {"company": "NG", "job_no": "OTHER-LATEST", "job_date": date(2026, 11, 9),
+             "lob": "FFWD AIR EXP", "extra": {"Job Owner": "Newer JPR Owner"}},
+            {"company": "NG", "job_no": "SHIP-06", "job_date": date(2026, 11, 6),
+             "lob": "FFWD AIR EXP", "extra": {"Job Owner": "Older Shipment Owner"}},
+        ]
+        result = build_last_shipment_owners(shipments, jpr, lobs=["AE"])
+        self.assertEqual(result["acme"]["last_shipment_job_owner"], "Shipment Owner")
+        self.assertEqual(result["acme"]["last_shipment_date"], "2026-11-07")
+        self.assertEqual(result["acme"]["last_shipment_numbers"], ["SHIP-07"])
+
+    def test_last_shipment_owner_uses_unique_job_number_fallback_when_dates_differ(self):
+        shipments = [{"company": "NG", "report_type": "AE", "shipment_no": "SHIP-1",
+                      "shipment_date": date(2026, 11, 7), "customer": "Acme"}]
+        jpr = [{"company": "NG", "job_no": "SHIP-1", "job_date": date(2026, 11, 5),
+                "lob": "FFWD AIR EXP", "extra": {"Job Owner": "Matched Owner"}}]
+        result = build_last_shipment_owners(shipments, jpr, lobs=["AE"])
+        self.assertEqual(result["acme"]["last_shipment_job_owner"], "Matched Owner")
+
+    def test_last_shipment_owner_does_not_guess_when_fallback_job_number_is_ambiguous(self):
+        shipments = [{"company": "NG", "report_type": "AE", "shipment_no": "REUSED",
+                      "shipment_date": date(2026, 11, 7), "customer": "Acme"}]
+        jpr = [
+            {"company": "NG", "job_no": "REUSED", "job_date": date(2026, 11, 5),
+             "lob": "FFWD AIR EXP", "extra": {"Job Owner": "Owner A"}},
+            {"company": "NG", "job_no": "REUSED", "job_date": date(2026, 11, 6),
+             "lob": "FFWD AIR EXP", "extra": {"Job Owner": "Owner B"}},
+        ]
+        result = build_last_shipment_owners(shipments, jpr, lobs=["AE"])
+        self.assertEqual(result["acme"]["last_shipment_job_owner"], "Owner unavailable")
+
+    def test_multiple_shipments_on_last_date_report_multiple_owners(self):
+        shipments = [
+            {"company": "NG", "report_type": "AE", "shipment_no": "SHIP-A",
+             "shipment_date": date(2026, 11, 7), "customer": "Acme"},
+            {"company": "NG", "report_type": "AE", "shipment_no": "SHIP-B",
+             "shipment_date": date(2026, 11, 7), "customer": "Acme"},
+        ]
+        jpr = [
+            {"company": "NG", "job_no": "SHIP-A", "job_date": date(2026, 11, 7),
+             "lob": "FFWD AIR EXP", "extra": {"Job Owner": "Owner A"}},
+            {"company": "NG", "job_no": "SHIP-B", "job_date": date(2026, 11, 7),
+             "lob": "FFWD AIR EXP", "extra": {"Job Owner": "Owner B"}},
+        ]
+        result = build_last_shipment_owners(shipments, jpr, lobs=["AE"])
+        self.assertEqual(result["acme"]["last_shipment_job_owner"], "Multiple owners")
 
 
 if __name__ == "__main__":
