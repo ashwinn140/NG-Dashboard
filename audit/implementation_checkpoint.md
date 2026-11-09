@@ -547,3 +547,11 @@ The integrated HTML Help/User Guide is now complete enough for the first product
 - PR #35 and #36 added five actions (Operations Compare Running total/Period by period; Summary Top N customers/sales people/branches). PR #37 added four actions (Profit Compare Period by period, Biggest increases/decreases, Variance by branch) and fixed Profit Compare trace periods to use `S.pcmp` rather than Operations `S.cmp`.
 - PR #37 also completed verified explanations for all seven formerly unverified finance visuals and corrected margin-band labels for the actual rounding and negative-expense (>100% margin) behavior.
 - Next targeted candidates are one-measure compare cards and source-backed rankings. Do not add actions to mixed-source or dual-date visuals until the evidence request can represent all contributing measures/date bases accurately.
+
+
+## Simple job-level JPR preservation check
+
+- `app/profit.py` validates the simple Job Profit Analysis Report contract, checks the report-level Profit against Income less Expense, and rejects duplicate job identities at the job/date/LOB grain.
+- `app/store.py` selects current JPR imports while excluding charge-detail imports via the source-column metadata filter; no charge-wise calculation path was added.
+- Existing targeted tests in `tests/test_profit_import_layout.py` cover the legacy Charge wise Detail layout being explicitly flagged and confirm that charge/party-level columns are not exposed in the normalized dataset. These tests remain in the CI workflow.
+- All new evidence actions and explanations in PRs #35–#37 use the existing job-level JPR and Job Date where finance is involved. No Chargewise source workbook or charge-wise analysis is required or introduced.
