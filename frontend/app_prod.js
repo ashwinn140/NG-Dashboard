@@ -309,13 +309,27 @@ function traceExplanation(trace,title) {
  if(!trace)return null;
  const m=trace.metric,k=trace.dimension;
  if((k&&!COLS[k])||title==='Income against margin')return null;
- const ops={ 'ops.shipments':'shipment records','ops.air_weight':'air chargeable weight (tonnes)','ops.teu':'ocean TEUs' };
+ const ops={
+  'ops.shipments':'shipment records','ops.air_weight':'air chargeable weight (tonnes)','ops.teu':'ocean TEUs',
+  'ops.invoiced_share':'shipment-register rows with invoice references','ops.invoice_lag':'invoiced shipments with a parsed first invoice date',
+  'ops.lock_invoice_lag':'operations-locked shipments with a parsed first invoice date','ops.locked_no_invoice':'operations-locked shipments with no invoice reference',
+  'ops.overdue_invoice':'operations-locked shipments with no invoice reference beyond the configured ageing threshold'
+ };
  const fin={ 'profit.gp':'gross profit','profit.income':'income','profit.expense':'expense','profit.cost_not_booked_proxy':'jobs with no recorded cost','profit.loss_making':'loss-making jobs','profit.expected_cost_only':'estimated unbooked costs' };
  if(ops[m]){
   const measure=ops[m],dim=k&&COLS[k]?COLS[k].l.toLowerCase():null;
   const grouping=dim?'Groups selected shipment-register rows by '+dim+' and sums '+measure+'.':'Uses the selected shipment-register rows represented by this visual.';
-  const caveat=m==='ops.shipments'?'Counts eligible shipment-register records.':m==='ops.air_weight'?'Sums Chargeable Wt for air export and import records, expressed in tonnes.':'Sums recorded TEUs for ocean export and import records.';
-  return ['Shows '+measure+' for the visual and active filters.',caveat+' '+grouping+' The drawer lists the exact contributing source rows for the selected reporting scope.'];
+  const caveat={
+   'ops.shipments':'Counts eligible shipment-register records.',
+   'ops.air_weight':'Sums Chargeable Wt for air export and import records, expressed in tonnes.',
+   'ops.teu':'Sums recorded TEUs for ocean export and import records.',
+   'ops.invoiced_share':'Invoice reference means a parsed invoice in either Invoice No. & Date or Billing Details; it does not prove accounting settlement.',
+   'ops.invoice_lag':'Averages first parsed invoice date minus Shipment Date for rows with an invoice reference and parsed date.',
+   'ops.lock_invoice_lag':'Averages first parsed invoice date minus Operations Locked On for rows with both dates.',
+   'ops.locked_no_invoice':'Counts rows with an Operations Locked On date and zero invoice references. The billing panel intentionally ignores the shipment-date filter for this all-open-work measure.',
+   'ops.overdue_invoice':'Counts rows with an Operations Locked On date, zero invoice references, and age greater than the configured threshold as of the latest shipment-register date.'
+  }[m]||'Uses eligible shipment-register records.';
+  return ['Shows '+measure+' for the visual and active filters.',caveat+' '+grouping+' The drawer lists the exact contributing shipment-register rows and, where the authorized finance snapshot contains a unique match, the linked JPR job number, date, LOB and owner.'];
  }
  const rateOps={
   'ops.rate_below_buy':['Air-export shipments priced below buy','Counts air-export records with usable buy and sell rates where Sell Rate is below Buy Rate; rate parsing and maximum-rate rules follow Definitions.'],
