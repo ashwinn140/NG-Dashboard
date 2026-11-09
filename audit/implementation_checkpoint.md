@@ -389,3 +389,19 @@ The integrated HTML Help/User Guide is now complete enough for the first product
 - No source code, database schema, production business data, environment variables or Railway configuration changed.
 - Created continuation branch `audit/production-verification-2026-11-09` from the deployed main commit to preserve this checkpoint update without changing production.
 
+
+
+## Cross-LOB PR #28 CI review — 9 November 2026
+
+- PR #28 head `c2683d8e7589a5ffa8783f3602fcb0db5dda25b0` was checked against its actual GitHub Actions run.
+- Run `42646614859`, Metric traceability checks, failed in the backend test stage. The isolated Phase 2 unit workflow `42646614298` passed.
+- Backend suite ran 163 tests and ended with 2 failures and 1 error:
+  1. `test_metric_api.py::test_activity_review_is_scoped_and_does_not_call_sparse_history_lost` raises `KeyError: 'status'` because the legacy assertion expects the old top-level response field after the response contract changed to `selected_lob_activity.classification`.
+  2. `test_cross_lob_activity_api.py::test_full_scope_identifies_active_customer_in_another_lob` got `insufficient_history` instead of `inactive_in_selected_lob_active_elsewhere`.
+  3. `test_cross_lob_activity_api.py::test_restricted_user_cannot_learn_other_lob_activity` got `insufficient_history` instead of `inactive_in_selected_lob_no_other_visible_activity`.
+- Build succeeded; later fixture/frontend/runtime steps were skipped because backend suite failed. No visual inventory artifact was uploaded.
+- PR #28 cannot be merged or deployed. Its current base has conflicts with main and must be updated.
+- Additional code-review observation: recent-JPR SQL predicate uses `lower(trim(customer))`, while Python grouping collapses all whitespace and uses `casefold()`; add consistent normalization and regression coverage for repeated internal spaces.
+- A review comment documenting these failures and required remediation was posted to PR #28. A formal GitHub REQUEST_CHANGES review was unavailable because this account is the PR author.
+- No source code, production data, database schema or deployment was changed.
+- Next steps: rebase/update PR #28 on latest main; diagnose why seeded AE/OI register history is not present in classifier inputs (assert query result counts and per-LOB dates); update stale legacy API test to new response contract; align customer-name matching; rerun full Metric traceability workflow and isolated tests. Do not merge until green.
