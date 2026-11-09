@@ -9,7 +9,8 @@ from .db import imports, shipments, profit_lines, org_master
 REPS = [("NG", "AE"), ("NG", "AI"), ("NG", "OE"), ("NG", "OI"), ("NCS", "AE"), ("NCS", "AI"), ("NCS", "OE"), ("NCS", "OI")]
 EXTRAS = ["Sales Person", "Trade Lane Name", "Loading Country", "Discharge Country", "Collection Executive", "Business Dimension", "Inco Terms", "Freight Type", "Contract Type",
           "Commodity Type", "Co-Load Type", "Origin Agent", "Customer Branch", "Document Executive (UDF)", "Place Of Execution", "Container Types"]
-DASHBOARD_COLUMNS = sorted(set(EXTRAS) | {c for cols in CFG.SOURCE_COLUMNS.values() for c in cols} |
+UNIT_COLUMNS = ["Unit"] + [f"Unit.{i}" for i in range(1, 8)]   # the register repeats "Unit" (weight, packages, volume...)
+DASHBOARD_COLUMNS = sorted(set(EXTRAS) | set(UNIT_COLUMNS) | {c for cols in CFG.SOURCE_COLUMNS.values() for c in cols} |
                            {"Booking Thru", "Invoice No. & Date", "Billing Details", "Buy Rate (UDF)", "Sell Rate (UDF)", "Dest. Agent", "Destination Agent"})
 norm = lambda s: re.sub(r"[^a-z0-9]", "", str(s).lower())
 INV_RE = re.compile(r"([A-Za-z0-9/\-\.]+?)\s*dt\.?\s*(\d{1,2})[-/ ]([A-Za-z]{3})[A-Za-z]*[-/ ](\d{4})", re.I)
@@ -26,8 +27,17 @@ def _clean(v):
     return "" if t in ("0", "0.0", "nan", "NaN") else t
 
 
+_PLACEHOLDER_WORDS = {"na", "nil", "pending"}
+
+
+def _placeholder(t):
+    """N/A, NIL and Pending (any case or punctuation, no digits) mean "no invoice", not an invoice reference."""
+    return bool(t) and not re.search(r"\d", t) and re.sub(r"[^a-z]", "", t.lower()) in _PLACEHOLDER_WORDS
+
+
 def _docs(v):
-    t = _txt(v)
+    t = _clean(v)   # a bare 0 / nan placeholder is an empty cell, not an invoice reference
+    if _placeholder(t): t = ""
     if not re.search(r"\w", t): return set(), False
     out = set()
     for doc, d_, m_, y_ in INV_RE.findall(t):
@@ -40,6 +50,18 @@ def _inv(a, b):
     da, ta = _docs(a); db, tb = _docs(b); both = da | db
     if not (ta or tb): return (-1, 0)
     return ((min(d for _, d in both) - EPOCH).days if both else -1, max(1, min(len(both), 250)))
+
+
+def volume_cbm(A):
+    """Register Volume in cubic metres. Rows whose volume unit is CCM (cubic centimetres) are divided by 1,000,000.
+    The unit sits in one of several repeated "Unit" columns, so a row counts as CCM if any of its unit cells says CCM
+    (the other Unit columns hold weight and package units such as KGS, PKG, NOS)."""
+    vol = pd.to_numeric(A["Volume"], errors="coerce").fillna(0) if "Volume" in A.columns else pd.Series([0.0] * len(A), index=A.index)
+    ccm = pd.Series(False, index=A.index)
+    for c in UNIT_COLUMNS:
+        if c in A.columns:
+            ccm |= A[c].fillna("").astype(str).str.strip().str.upper().eq("CCM")
+    return vol.where(~ccm, vol / 1_000_000)
 
 
 def _rate(v):
@@ -239,7 +261,7 @@ def build_full(engine) -> dict:
     num = lambda col: pd.to_numeric(A[col], errors="coerce").fillna(0) if col in A.columns else pd.Series([0.0] * N)
     out = {"reps": [[c_, r_] for c_, r_ in REPS], "ckg": pd.to_numeric(A.get("Chargeable Wt", pd.Series([0] * N)), errors="coerce").fillna(0).tolist(), "rbuy": RBUY, "rbf": RBF, "rsell": RSELL, "rsf": RSF,
            "inv1": INV1, "invN": INVN, "rep": A["_rep"].tolist(), "no": A["Shipment No"].astype(str).tolist(), "date": days(sd).tolist(), "ops": days(ops).tolist(), "fin": days(fin).tolist(),
-           "gross": (num("Gross Weight") / 1000).tolist(), "chg": (num("Chargeable Wt") / 1000).tolist(), "teus": num("TEUs").tolist(), "cbm": num("Volume").tolist(),
+           "gross": (num("Gross Weight") / 1000).tolist(), "chg": (num("Chargeable Wt") / 1000).tolist(), "teus": num("TEUs").tolist(), "cbm": volume_cbm(A).tolist(),
            "agentInfo": AGENTINFO, "cols": pcols, "p": PROFIT}
     meta = []
     for ri, (co, rt) in enumerate(REPS):
