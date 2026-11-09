@@ -405,3 +405,12 @@ The integrated HTML Help/User Guide is now complete enough for the first product
 - A review comment documenting these failures and required remediation was posted to PR #28. A formal GitHub REQUEST_CHANGES review was unavailable because this account is the PR author.
 - No source code, production data, database schema or deployment was changed.
 - Next steps: rebase/update PR #28 on latest main; diagnose why seeded AE/OI register history is not present in classifier inputs (assert query result counts and per-LOB dates); update stale legacy API test to new response contract; align customer-name matching; rerun full Metric traceability workflow and isolated tests. Do not merge until green.
+
+
+### Follow-up test-only diagnostic commits on PR #28
+- Updated `tests/test_metric_api.py` to assert the new nested `selected_lob_activity.classification` response contract rather than the removed legacy top-level `status`.
+- Added assertion diagnostics to the two cross-LOB API integration tests so the complete per-LOB classifier result is printed if the classification still fails.
+- PR #28 head now reports `dedbb7ebe6f363fcd5d6f7f781984968499d5659`.
+- The GitHub workflow query did not surface a new run for this updated head during this session. The previous failing run `42646614859` is still the only verified CI evidence; the test-only commits are not yet certified.
+- Root cause of the two per-LOB integration classification failures remains unresolved. Do not infer that the test-only changes fixed them. Continue with a run that exposes `per_lob` / `last_shipment` values, then correct the data/query path.
+- The PR remains open, diverged from main (15 commits ahead, 10 behind at last comparison), and non-mergeable. Do not merge or deploy.
