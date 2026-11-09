@@ -6,6 +6,7 @@ server-side queue, permissions, freshness and delivery controls are integrated.
 from __future__ import annotations
 
 import calendar
+import json
 import re
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -72,7 +73,7 @@ class ScheduleValidationError(ValueError):
     pass
 
 
-def _date(value: str, label: str) -> date:
+def _parse_date(value: str, label: str) -> date:
     try:
         return date.fromisoformat(value)
     except (TypeError, ValueError):
@@ -175,7 +176,7 @@ def period_bounds(period: str, as_of: date, fiscal_start_month: int = 4,
         return date(fy_year - 1, fiscal_start_month, 1), fy_start
     if not start_date or not end_date:
         raise ScheduleValidationError("Fixed range requires both start_date and end_date.")
-    start, end = _date(start_date, "start_date"), _date(end_date, "end_date")
+    start, end = _parse_date(start_date, "start_date"), _parse_date(end_date, "end_date")
     if start > end:
         raise ScheduleValidationError("start_date must be on or before end_date.")
     return start, end + timedelta(days=1)
@@ -216,8 +217,8 @@ def validate_schedule(user: dict, payload: dict) -> dict:
     run_at_local = payload.get("run_at_local", "08:00")
     if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", str(run_at_local)):
         raise ScheduleValidationError("Run time must use HH:MM (24-hour local time).")
-    weekday = payload.get("weekday")
-    monthday = payload.get("monthday")
+    weekday = payload.get("weekday", 0 if frequency == "weekly" else None)
+    monthday = payload.get("monthday", 1 if frequency == "monthly" else None)
     if frequency == "weekly" and (not isinstance(weekday, int) or not 0 <= weekday <= 6):
         raise ScheduleValidationError("Weekly schedules require weekday 0–6 (Monday=0).")
     if frequency == "monthly" and (not isinstance(monthday, int) or not 1 <= monthday <= 31):
@@ -305,12 +306,12 @@ def safe_excel_text(value):
 
 # --------------------------------------------------------------------------- dataset -> workbook pilot
 from io import BytesIO
-from datetime import date as _date, timedelta as _timedelta
+from datetime import date as _date_cls, timedelta as _timedelta
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 
-EPOCH = _date(1970, 1, 1)
+EPOCH = _date_cls(1970, 1, 1)
 MAX_EXPORT_ROWS = 100_000
 MAX_WORKBOOK_BYTES = 20 * 1024 * 1024
 
