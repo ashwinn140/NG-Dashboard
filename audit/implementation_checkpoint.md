@@ -492,3 +492,34 @@ The integrated HTML Help/User Guide is now complete enough for the first product
 - High-value verified action gaps include Operations Compare — Running total and Period by period (both use Shipment Date and have exact current/prior source rows); Summary — Top N customers by profit, Top N sales people by profit and Top N branches by profit (simple JPR, Job Date); and selected branch profitability tables/charts. Metadata cards and already-detailed tables remain excluded unless a separate source-evidence need is demonstrated.
 - PR #35 was opened to add Calculation & records to the two Operations Compare charts only. It uses the existing metric trace path and adds targeted tests for current and comparison Shipment Date masks. PR #35 CI run `42656564418` was in progress at this checkpoint; no merge or deployment has occurred.
 - Next evidence-only visual work after PR #35: add narrowly scoped actions to the three Summary Top N JPR rankings only if targeted tests confirm that the drawer returns the full selected job-level JPR population used to compute those rankings. Do not attach one-measure actions to multi-measure or mixed-source cards (e.g. scorecards, Income against margin, shipment-vs-invoice dual-date charts) without a purpose-built multi-source evidence contract.
+
+
+## Secure Report Scheduler — implementation discovery and design guardrails
+
+### Verified current state
+- No `report_schedules`, `report_runs`, durable outbox, or report-delivery tables exist in `app/db.py`; no scheduled-report API routes or worker were found in `app/server.py`.
+- `app/mailer.py` already supports HTTPS delivery through Resend or SMTP and is used by the sign-in email flow. It returns only a boolean, has no report-attachment support or provider message ID, and keeps its test/development OUTBOX in process memory. It is not a durable scheduler or delivery ledger.
+- The `users` table already stores active status, role, companies, LOBs and finance permission. These must be re-read at execution time; schedule-time permissions cannot be trusted later.
+- Existing exports and metric evidence are snapshot-bound. Scheduled output must reuse the existing permitted dataset/metric/export path, not issue new ad hoc SQL or reconstruct financial totals.
+- No report-scheduler feature is currently deployed. Do not describe the existing login email as scheduled report delivery.
+
+### Safe v1 design (before code)
+1. Persist schedules, due occurrences, run records and delivery attempts in PostgreSQL. Use a dedicated worker or scheduled worker process; never use in-memory timers or FastAPI background tasks as the durable queue.
+2. Claim due work transactionally with row locking/lease expiry and a unique occurrence key (schedule + scheduled local occurrence). Make worker restart and concurrent replicas safe.
+3. Revalidate the owner and every recipient at execution: active account, current role, company/LOB scope and finance permission. Generate one recipient-specific report per scope; never send a combined multi-recipient report that leaks broader data.
+4. V1 recipients should be existing active dashboard users only. Do not permit arbitrary external email addresses until an explicit admin approval and data-classification policy exists.
+5. Deliver a login-required in-app report link, not a public URL or attachment, in v1. The report endpoint must re-check the recipient's current permissions and the run's snapshot. A revoked user must not be able to retrieve a previously scheduled report.
+6. Apply a freshness gate across every source required by the report. If the shipment register or simple JPR is stale/missing, mark the run skipped-stale, notify the owner, and send no data.
+7. Extend the mail transport separately from sign-in mail: structured provider response/message ID, bounded timeout, sanitized errors, provider idempotency where supported, and an explicit unknown-delivery state for ambiguous SMTP outcomes. Do not silently retry an ambiguous send if that could duplicate sensitive reports.
+8. Support pause, resume, edit, cancel, timezone-aware daily/weekly/monthly cadence, DST-safe occurrence calculation, preview/test-to-self, and a complete audit trail of schedule changes, execution, skip/failure reasons and delivery states.
+9. Keep the current simple job-level JPR as the only finance source and use Job Date. Do not add Chargewise/charge-wise analysis, attachments, or external recipients in v1.
+
+### Required acceptance tests before enabling delivery
+- Permission revocation and user deactivation between schedule creation and execution.
+- Finance vs operations user visibility; company and LOB isolation; per-recipient report generation.
+- Unauthorized/external recipient rejection and admin-only approval path if later added.
+- Stale/missing shipment or JPR source blocks delivery; fresh source binds the exact snapshot.
+- Duplicate occurrence, two concurrent workers, lease expiry, restart recovery, retry backoff, cancellation while queued/running, and ambiguous provider timeout.
+- Delivery provider success/failure/unknown states; no credentials, report contents or provider response bodies in logs.
+- Report link requires login, enforces recipient scope at retrieval, expires/revokes safely, and cannot be forwarded to a broader-privilege user.
+- Export content matches the existing on-demand report for the same user, filters and snapshot.
