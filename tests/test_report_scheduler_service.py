@@ -66,7 +66,7 @@ class SchedulerServiceTests(unittest.TestCase):
         self.assertEqual(service.list_schedules(self.engine, self.user["id"]), [])
         history = service.list_runs(self.engine, self.user["id"], schedule["id"])
         self.assertEqual(len(history), 1)
-        self.assertEqual(history[0]["status"], "queued")
+        self.assertEqual(history[0]["status"], "cancelled")
 
     def test_due_schedule_enqueue_is_idempotent(self):
         schedule = service.create_schedule(self.engine, self.user, self.definition())
