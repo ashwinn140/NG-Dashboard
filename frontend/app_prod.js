@@ -342,6 +342,12 @@ function traceExplanation(trace,title) {
  if(fin[m]){
   const measure=fin[m],dim=k&&COLS[k]?COLS[k].l.toLowerCase():null;
   const formula=title==='Income against margin'?'Each bubble represents one customer. Horizontal position is recorded income, vertical position is gross-profit margin (income less expense divided by income), and bubble area scales with the absolute value of gross profit; only the 60 highest-income customers with a defined margin are plotted.':
+   title==='From income to profit'?'Income and booked expense are summed from eligible JPR job rows; booked gross profit is Income minus Expense. The pale expected-cost bar estimates expense for positive-income jobs with zero recorded expense using the same-LOB booked expense/income ratio, falling back to the overall authorized ratio and then zero. Estimated profit is booked gross profit less that estimate; it is not booked cost.':
+   title==='Income and expense by week'?'Sums JPR Income and Expense separately into weekly buckets using Job Date. The plotted difference is booked gross profit; it is not shipment date or invoice date.':
+   title==='How healthy are the jobs?'?'Groups distinct jobs into the dashboard margin bands using each job\'s aggregated income, expense and gross profit. Bands follow the configured margin thresholds and the dashboard status precedence; the source records are the JPR job summaries.':
+   title==='Branch by line of business'?'Groups JPR job-summary income and expense by both Branch and Line of Business; profit is income minus expense. Select a heat-map cell to apply both dimensions, then open records for that exact intersection.':
+   title==='New Globe against Neutral Consolidation'?'Groups booked gross profit by Branch and Company. The chart compares New Globe and Neutral Consolidation separately; select a bar to filter to that company and branch before opening the contributing jobs.':
+   title==='All rows'?'Lists JPR job-summary records for the finance columns in this combined scorecard. Income, expense, profit, margin and job counts come from JPR by Job Date; shipment, volume and operational-lock columns are sourced separately and are not part of this finance evidence export.':
    m==='profit.gp'?'Sums Income less Expense (INR) across eligible Job Profit Analysis rows.':
    m==='profit.income'?'Sums Income (INR) across eligible Job Profit Analysis rows.':
    m==='profit.expense'?'Sums Expense (INR) across eligible Job Profit Analysis rows.':
