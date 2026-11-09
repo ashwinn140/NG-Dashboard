@@ -90,6 +90,17 @@ for(const [page,title] of [
 n.setGroup('summary');n.S.page='s_score';n.renderAll();
 const scorecard=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()==='All rows');
 assert.ok(scorecard?.querySelector('.mt-info'),'finance scorecard exposes Calculation & records');
+n.setGroup('profit');n.S.page='p_quality';n.renderAll();
+for(const title of ['Expected costs on jobs with none booked','Who needs to book costs','Biggest losses','Biggest jobs with no cost booked']){
+ const c=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()===title);
+ assert.ok(c?.querySelector('.mt-info'),'finance quality visual exposes Calculation & records: '+title);
+}
+assert.ok(w.document.querySelectorAll('#page .card.kpi .mt-info').length>=6,'all finance quality KPI tiles expose calculation and records');
+n.setGroup('profit');n.S.page='p_rates';n.renderAll();
+for(const title of ['Estimated freight margin by month','Margin per kg by month','Variance: estimated freight margin','Selling below buy','Estimated against actual']){
+ const c=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()===title);
+ assert.ok(c?.querySelector('.mt-info'),'rate-analysis visual exposes Calculation & records: '+title);
+}
 explanation('profit','p_compare','Period by period: profit','page-specific Profit Compare controls');
 explanation('profit','p_compare','Biggest increases by branch','current and comparison Job Date periods');
 explanation('profit','p_compare','Biggest decreases by branch','current and comparison Job Date periods');
