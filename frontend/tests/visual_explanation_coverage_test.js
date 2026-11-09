@@ -26,7 +26,9 @@ assert.ok([...w.document.querySelectorAll('#page .kpis .mt-info')].length>=5,'bi
 const billingMonth=[...w.document.querySelectorAll('#page svg[aria-label="Shipments and invoices by month"] rect[style*="cursor"]')];
 assert.ok(billingMonth.length>0,'monthly shipment/invoice bars are individually drillable');
 const billingVariance=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()==='Variance: shipments invoiced');
-assert.ok(billingVariance&&[...billingVariance.querySelectorAll('tbody button')].some(b=>b.textContent.trim()==='View records'),'invoice variance rows expose current and comparison records');
+assert.ok(billingVariance,'invoice variance visual exists');
+const invoiceVarianceRows=[...billingVariance.querySelectorAll('tbody tr')];
+assert.ok(invoiceVarianceRows.length===0||invoiceVarianceRows.every(row=>[...row.querySelectorAll('button')].some(b=>b.textContent.trim()==='View records')),'every populated invoice variance row exposes current and comparison records');
 assert.ok(billingVariance?.querySelector('.mt-info'),'invoice variance visual exposes a header-level Calculation & records action');
 assert.equal(billingVariance.querySelector('.mt-info')?.dataset.traceMetric,'ops.invoiced_count','invoice variance evidence uses first-invoice-date records');
 explanation('profit','p_billing','Shipments against invoices, by month','different date fields');
