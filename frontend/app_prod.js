@@ -158,7 +158,7 @@ window.CHART_COLORS = ['#4c78a8', '#f58518', '#54a24b', '#b279a2', '#e45756', '#
 function businessMeaning(label, note) {
   const name = String(label || '').trim();
   const lower = name.toLowerCase();
-  const formula = /gross profit|\\bgp\\b/.test(lower)
+  const formula = /gross profit|\bgp\b/.test(lower)
     ? 'Gross profit = recorded income minus recorded expense for the selected jobs.'
     : /margin %|margin rate|profit margin/.test(lower)
     ? 'Margin percentage = gross profit divided by income, multiplied by 100, where income is non-zero.'
@@ -178,7 +178,7 @@ function businessMeaning(label, note) {
     ? 'Difference between the selected current and comparison periods; percentage change uses the previous value as the denominator when non-zero.'
     : '';
   const meaning = 'Shows ' + name.toLowerCase() + ' for the selected reporting scope.';
-  const calculation = formula || (note ? 'Calculated from the source records using the measure and aggregation described above this visual.' : 'Uses the records matching the current filters; consult the visual labels for its unit and aggregation.');
+  const calculation = formula || (note ? 'This visual uses the source-data calculation described in its note. A metric-specific formula is not yet verified.' : 'Metric-specific formula not yet verified; refer to the displayed measure and source report before using this figure for decisions.');
   return h('details', {class: 'business-explanation', style: 'margin-top:.55rem;font-size:.78rem'},
     h('summary', {style: 'cursor:pointer'}, 'Business meaning & calculation'),
     h('p', null, h('strong', null, 'What this means: '), meaning),
