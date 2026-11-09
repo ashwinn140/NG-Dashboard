@@ -12,7 +12,10 @@ APP = (ROOT / "frontend" / "app_prod.js").read_text(encoding="utf-8")
 
 class VisualExplanationContract(unittest.TestCase):
     def test_shared_cards_include_explanation(self):
-        self.assertRegex(APP, r"function card\(title, note, body, cls\).*businessMeaning\(title, note\)")
+        self.assertRegex(APP, r"function card\\(title, note, body, cls, trace\\)\\s*\\{[\\s\\S]*?businessMeaning\\(title, note\\)")
+        self.assertIn("Calculation & records", APP)
+        self.assertIn("traceVisual", APP)
+        self.assertIn("aria-label': 'Open calculation and contributing records for ' + title", APP)
 
     def test_shared_kpis_include_explanation(self):
         self.assertIn("businessMeaning(label, note)", APP)
