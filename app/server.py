@@ -376,12 +376,10 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             key = (company, normalize_customer(customer))
             group = groups.setdefault(key, {
                 "company": company, "customer": customer, "indices": [],
-                "selected_dates": [], "selected_lobs": set(),
+                "selected_dates": [], "selected_lobs": set(selected_lobs),
             })
             group["indices"].append(row["source_index"])
             group["selected_dates"].append(shipment_day)
-            if row.get("lob") in selected_lobs:
-                group["selected_lobs"].add(row["lob"])
 
         if not groups:
             return {
