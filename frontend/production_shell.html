@@ -208,6 +208,7 @@ body.ux-dashboard .ux-rail .ux-nav button{min-height:43px;display:flex;align-ite
 body.ux-dashboard.ux-rail-collapsed .ux-rail .ux-nav button{justify-content:center;font-size:1.1rem}
 body.ux-dashboard.ux-rail-collapsed .ux-rail .ux-nav a{font-size:0}
 body.ux-dashboard.ux-rail-collapsed .ux-rail .ux-nav a:before{content:'⚙';font-size:1.1rem}
+body.ux-dashboard.ux-rail-collapsed .ux-rail .ux-nav a.ux-help:before{content:'?';font-size:1.1rem}
 body.ux-dashboard .ux-rail{box-sizing:border-box}
 body.ux-dashboard .ux-tools .ux-tool{white-space:nowrap}
 body.ux-dashboard .ux-inspector{z-index:100}
@@ -400,6 +401,7 @@ const nav=rail.querySelector('.ux-nav');
 const destinations=[['⌂','Leadership Overview','summary'],['▤','Operations','ops'],['◫','Profitability','profit'],['▦','My visuals','mine']];
 destinations.forEach(([symbol,label,key])=>{const b=document.createElement('button');b.type='button';b.innerHTML='<span aria-hidden="true">'+symbol+'</span> <span class="ux-label"></span>';b.querySelector('.ux-label').textContent=label;b.onclick=()=>{document.querySelector('#grpSeg [data-v="'+key+'"]')?.click();rail.classList.remove('ux-mobile-open')};nav.append(b);ux.addCommand(label,()=>b.click())});
 const partner=document.createElement('a');partner.href='/customer360';partner.textContent='◈ Customer & Partner 360';partner.className='ux-label';nav.append(partner);ux.addCommand('Customer & Partner 360',()=>location.assign('/customer360'));
+const help=document.createElement('a');help.href='/help';help.textContent='ⓘ Help & User Guide';help.className='ux-label ux-help';nav.append(help);ux.addCommand('Help & User Guide',()=>location.assign('/help'));
 const admin=document.createElement('a');admin.href='/admin';admin.textContent='⚙ Administration';admin.className='ux-label';nav.append(admin);ux.addCommand('Administration',()=>location.assign('/admin'));
 const toggle=rail.querySelector('.ux-rail-toggle');
 toggle.onclick=()=>{if(matchMedia('(max-width:1023px)').matches){rail.classList.toggle('ux-mobile-open')}else{document.body.classList.toggle('ux-rail-collapsed');try{localStorage.setItem('ng.ux.rail',document.body.classList.contains('ux-rail-collapsed')?'collapsed':'expanded')}catch(e){}}};
