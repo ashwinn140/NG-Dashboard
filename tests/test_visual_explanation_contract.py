@@ -23,7 +23,7 @@ class VisualExplanationContract(unittest.TestCase):
         self.assertIn("How it is calculated:", APP)
 
     def test_reporting_periods_shown(self):
-        self.assertIn("Reporting dates:", APP)
+        self.assertIn("Dashboard date selection:", APP)
         self.assertIn("reportingWindow.pfrom", APP)
         self.assertIn("reportingWindow.pto", APP)
 
@@ -53,6 +53,14 @@ class VisualExplanationContract(unittest.TestCase):
     def test_no_title_based_formula_guessing(self):
         self.assertNotIn("/shipments|shipment count/.test(lower)", APP)
         self.assertNotIn("/chargeable weight/.test(lower)", APP)
+
+    def test_specific_kpi_formulas_not_title_guesses(self):
+        for label in ("air chargeable weight (tonnes)", "sea teus",
+                      "active customers", "jobs with cost booked",
+                      "profit after expected costs", "shipments invoiced",
+                      "jobs matched to the register"):
+            with self.subTest(label=label):
+                self.assertIn("'" + label + "': [", APP)
 
     def test_no_demo_rows_generated(self):
         self.assertIn("const DEMO_KEEP = [0, 0.86, 0.72], demoSrc = [], demoK = []", APP)
