@@ -8,6 +8,7 @@ import logging
 import threading
 import time
 from datetime import date, datetime, timedelta, timezone
+from string import Formatter
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, insert, select, update
@@ -76,7 +77,7 @@ def _report_definition(user: dict, payload: dict) -> dict:
     for template in (subject, message):
         # Reject unknown or malformed replacement fields when the schedule is saved.
         try:
-            keys = {field.split(".", 1)[0].split("[", 1)[0] for _, field, _, _ in __import__("string").Formatter().parse(template) if field}
+            keys = {field for _, field, _, _ in Formatter().parse(template) if field}
         except ValueError as exc:
             raise ScheduleValidationError("Email subject or message has invalid template syntax.") from exc
         if not keys.issubset(ALLOWED_TEMPLATE_KEYS):
@@ -444,7 +445,7 @@ class SchedulerWorker:
                 "content": prepared["workbook"]["content"], "content_type": XLSX_MIME,
             }])
             if not sent:
-                attempts = run["attempts"] + 1
+                attempts = run["attempts"]
                 if attempts < 3:
                     self._finish(run_id, status="retry_wait",
                                  retry_after=_now() + timedelta(minutes=5 * (2 ** (attempts - 1))),
