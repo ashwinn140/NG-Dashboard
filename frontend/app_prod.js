@@ -1517,7 +1517,32 @@ function ppBilling() {
     vr = vr.filter((r) => !(S.def.varMinBase > 0 && r.prev < S.def.varMinBase) && !(S.def.varMinAbs > 0 && r.adelta < S.def.varMinAbs) && !(S.def.varMinPct > 0 && (r.pct == null ? r.cur > 0 ? false : true : Math.abs(r.pct) < S.def.varMinPct)) && (bl.vshow === 'all' || (bl.vshow === 'up' && r.delta > 0) || (bl.vshow === 'down' && r.delta < 0)));
     const vc = [{k: 'label', t: dims.find((x) => x[0] === vk) ? dims.find((x) => x[0] === vk)[1] : 'Rows'}, {k: 'cur', t: pr.curName || 'This period', num: true}, {k: 'prev', t: pr.prevName || 'Comparison', num: true}, {k: 'delta', t: 'Change', num: true}, {k: 'pct', t: 'Change %', num: true}, {k:'evidence',t:'Underlying records'}], vh = h('thead'), vb = h('tbody'); let vlast = [];
     const vdraw = () => { const st = bl.vsort, f = st.sort === 'label' ? (a, b) => a.label.localeCompare(b.label) : st.sort === 'adelta' ? (a, b) => a.adelta - b.adelta : (a, b) => (a[st.sort] == null ? -1e18 : a[st.sort]) - (b[st.sort] == null ? -1e18 : b[st.sort]); const list = vr.slice().sort((a, b) => f(a, b) * st.dir); vlast = list; const shown = list.slice(0, S.def.tableRows); vh.replaceChildren(sortHead(vc, st, vdraw));
-      vb.replaceChildren(...shown.map((r) => h('tr', {class: 'click', onclick: () => toggle(vk, r.g)}, h('td', null, r.label), h('td', {class: 'n'}, fInt(r.cur)), h('td', {class: 'n'}, fInt(r.prev)), h('td', {class: 'n ' + (r.delta >= 0 ? 'ok' : 'bad')}, (r.delta >= 0 ? '+' : '−') + fInt(Math.abs(r.delta))), h('td', {class: 'n ' + (r.delta >= 0 ? 'ok' : 'bad')}, r.pct == null ? (r.cur > 0 ? 'new' : '–') : fPctS(r.pct / 100)),h('td',null,h('button',{type:'button',class:'mt-info',style:'white-space:nowrap',onclick:(e)=>{e.stopPropagation();const q=window.NG?.traceVariance?.('ops.invoiced_count',pr,r.cur);if(q){const ci=[],pi=[];for(let i=0;i<N;i++)if(mv[i]&&cv[i]===r.g&&inv1[i]>0){if(inv1[i]>=pr.cur.from&&inv1[i]<=pr.cur.to)ci.push(i);if(inv1[i]>=pr.prev.from&&inv1[i]<=pr.prev.to)pi.push(i);}q.indices=ci;q.previous_indices=pi;q.context.date_basis='First parsed invoice date';q.context.segment={dimension:COLS[vk].l,value:r.label};if(q.context.filters){q.context.filters={...q.context.filters};delete q.context.filters[vk];}window.MetricTrace?.openWithRequest(q);}},'View records'))))); };
+      const renderedRows = shown.map((r) => h('tr',
+        {class: 'click', onclick: () => toggle(vk, r.g)},
+        h('td', null, r.label),
+        h('td', {class: 'n'}, fInt(r.cur)),
+        h('td', {class: 'n'}, fInt(r.prev)),
+        h('td', {class: 'n ' + (r.delta >= 0 ? 'ok' : 'bad')}, (r.delta >= 0 ? '+' : '−') + fInt(Math.abs(r.delta))),
+        h('td', {class: 'n ' + (r.delta >= 0 ? 'ok' : 'bad')}, r.pct == null ? (r.cur > 0 ? 'new' : '–') : fPctS(r.pct / 100)),
+        h('td', null, h('button', {type: 'button', class: 'mt-info', style: 'white-space:nowrap', onclick: (e) => {
+          e.stopPropagation();
+          const q = window.NG?.traceVariance?.('ops.invoiced_count', pr, r.cur);
+          if (q) {
+            const ci = [], pi = [];
+            for (let i = 0; i < N; i++) if (mv[i] && cv[i] === r.g && inv1[i] > 0) {
+              if (inv1[i] >= pr.cur.from && inv1[i] <= pr.cur.to) ci.push(i);
+              if (inv1[i] >= pr.prev.from && inv1[i] <= pr.prev.to) pi.push(i);
+            }
+            q.indices = ci;
+            q.previous_indices = pi;
+            q.context.date_basis = 'First parsed invoice date';
+            q.context.segment = {dimension: COLS[vk].l, value: r.label};
+            if (q.context.filters) { q.context.filters = {...q.context.filters}; delete q.context.filters[vk]; }
+            window.MetricTrace?.openWithRequest(q);
+          }
+        }}, 'View records'))
+      ));
+      vb.replaceChildren(...renderedRows);
     vdraw();
     const expV = () => { const list = vlast, n2 = list.length + 1; downloadXlsx('invoicing_variance_' + fIso(dDate(MAXDATE)) + '.xlsx', [{name: 'Variance', freeze: true, filter: true, cols: [42, 16, 16, 14, 12], rows: [[vc[0].t, 'Shipments invoiced: ' + (pr.curName || 'this period'), 'Shipments invoiced: ' + (pr.prevName || 'comparison'), 'Change', 'Change %'].map(HDR)].concat(list.map((r, i) => { const x = i + 2; return [r.label, {v: r.cur, s: 3}, {v: r.prev, s: 3}, {f: 'B' + x + '-C' + x, s: 3}, {f: 'IF(C' + x + '=0,"",D' + x + '/C' + x + ')', s: 2}]; })).concat([[HDR('Total'), {f: 'SUM(B2:B' + n2 + ')', s: 3}, {f: 'SUM(C2:C' + n2 + ')', s: 3}, {f: 'B' + (n2 + 1) + '-C' + (n2 + 1), s: 3}, {f: 'IF(C' + (n2 + 1) + '=0,"",D' + (n2 + 1) + '/C' + (n2 + 1) + ')', s: 2}]])}, settingsSheet([[HDR('Period'), pr.title]])]); };
     vroot.append(h('p', {class: 'meta'}, h('strong', null, 'Shipments invoiced: ' + fInt(tA) + ' against ' + fInt(tB)), ' (' + (tB > 0 ? fPctS((tA - tB) / tB) : 'no comparison data') + ') · ' + pr.title), cmpControls(),
