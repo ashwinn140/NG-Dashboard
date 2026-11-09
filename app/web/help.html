@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Performance Hub · Help & User Guide</title>
+<style>
+:root{color-scheme:light;--ink:#173142;--muted:#647987;--line:#dce6e9;--bg:#f3f6f7;--panel:#fff;--teal:#087d79;--soft:#eaf5f3;--amber:#fff5e2}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 system-ui,-apple-system,Segoe UI,sans-serif}
+a{color:var(--teal)}button,input,select{font:inherit}button{cursor:pointer;border:1px solid var(--line);background:white;border-radius:8px;padding:9px 13px;color:var(--ink)}
+button:hover{border-color:var(--teal)}:focus-visible{outline:3px solid #50b9c5;outline-offset:2px}
+header{background:white;border-bottom:1px solid var(--line);padding:15px max(18px,calc((100vw - 1180px)/2));display:flex;align-items:center;justify-content:space-between;gap:14px;position:sticky;top:0;z-index:2}
+.brand{font-weight:800;letter-spacing:-.3px}.brand small{display:block;font-weight:500;color:var(--muted);letter-spacing:1px;font-size:10px}
+main{max-width:1180px;margin:auto;padding:28px 20px 60px}.eyebrow{font-size:11px;letter-spacing:1.8px;color:var(--teal);font-weight:750}h1{font-size:30px;letter-spacing:-.8px;margin:5px 0 4px}h2{font-size:18px;margin:0 0 9px}h3{font-size:14px;margin:0 0 7px}.muted{color:var(--muted)}.lead{max-width:800px;margin:0 0 22px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;min-width:0}
+section{margin-top:25px}.card p{margin:6px 0}.card ul{margin:8px 0 0;padding-left:19px}.note{background:var(--amber);border:1px solid #ead8ac;border-radius:9px;padding:12px 14px;font-size:12px;margin:15px 0}
+.searchrow{display:flex;gap:9px;align-items:center;margin:12px 0}.searchrow input{flex:1;min-width:0;border:1px solid var(--line);border-radius:8px;padding:12px;background:white;color:var(--ink)}
+#metricList{display:grid;gap:9px}.metric{background:white;border:1px solid var(--line);border-radius:10px;padding:0 14px}.metric summary{cursor:pointer;padding:13px 0;font-weight:650}.metric summary span{font-size:11px;color:var(--muted);font-weight:500;margin-left:7px}.metric dl{display:grid;grid-template-columns:150px minmax(0,1fr);gap:8px 13px;margin:0 0 14px}.metric dt{color:var(--muted);font-size:12px}.metric dd{margin:0;overflow-wrap:anywhere}.metric[hidden]{display:none}
+.pill{display:inline-block;border-radius:30px;background:var(--soft);color:#21665e;padding:3px 8px;font-size:11px}.status{font-size:12px;color:var(--muted);min-height:22px}
+@media(max-width:700px){header{padding:12px 15px}main{padding:22px 14px 45px}h1{font-size:25px}.grid{grid-template-columns:1fr}.metric dl{grid-template-columns:1fr;gap:2px}.metric dd{margin-bottom:8px}.searchrow{align-items:stretch;flex-direction:column}}
+</style>
+</head>
+<body>
+<header><div class="brand">NG Performance Hub<small>HELP & USER GUIDE</small></div><a href="/" aria-label="Back to dashboard">← Back to dashboard</a></header>
+<main>
+<div class="eyebrow">GETTING STARTED</div><h1>Help & User Guide</h1>
+<p class="lead muted">A practical guide to reading the dashboard, applying filters, understanding dates and checking the source behind each metric. The metric dictionary below is loaded from the same permission-aware definitions used by the dashboard.</p>
+<div class="note"><strong>Important:</strong> A calculation marked code-verified means the implementation and source mapping are documented in the application. It does not, by itself, mean every historical source file or production row has been independently reconciled.</div>
+<div class="grid">
+<article class="card"><h2>1. Your access scope</h2><p>Your login determines which companies, lines of business and financial information you can see. Access is enforced by the server, not just by hiding dashboard controls.</p><ul><li>Company and LOB filters can only narrow your permitted data.</li><li>Finance metrics and financial exports require finance permission.</li><li>Exports use the same server-side access scope as the page.</li></ul></article>
+<article class="card"><h2>2. Filters and selections</h2><p>Different filter dimensions work together using <strong>AND</strong>. Multiple values selected within one dimension work using <strong>OR</strong>.</p><ul><li>Search supports partial text matching where the selector provides it.</li><li>Clear a single filter to broaden that dimension; Reset clears the current selection.</li><li>A visual click may filter the rest of the dashboard. Use the clear/reset controls to return to the broader view.</li></ul></article>
+<article class="card"><h2>3. Reporting dates</h2><p><strong>Operations:</strong> shipment activity is based on Shipment Date.</p><p><strong>Finance:</strong> income, expense and booked GP are based on Job Date from the simple Job Profit Analysis Report.</p><p>Job Date is not Billing Date. Do not interpret it as the invoice date.</p></article>
+<article class="card"><h2>4. Comparisons and percentages</h2><p>Comparison views show the actual current and comparison periods. Previous-period comparisons may use an equal-length preceding window; YoY and fiscal-year comparisons follow their selected basis.</p><ul><li>A zero prior-period baseline has no mathematically valid percentage change.</li><li>Negative baselines use the absolute prior value as the percentage denominator.</li><li>Missing history is not the same as zero activity.</li></ul></article>
+<article class="card"><h2>5. Customer & Partner 360</h2><p>Use relationship filters to explore customers, shippers, consignees, agents, locations, branches and sales attribution.</p><ul><li>Relationship activity is a review signal, not confirmation that a customer is lost.</li><li>Cross-LOB context uses only the shipment-register rows currently loaded and visible to your login.</li><li>Customer matching is source-name based where a verified ERP customer code is not available. Similar names are not automatically merged.</li></ul><p><a href="/customer360">Open Customer & Partner 360 →</a></p></article>
+<article class="card"><h2>6. Last five jobs and Job Owner</h2><p>Operations → Customers provides a View jobs action where available. It shows up to five recent distinct JPR jobs for the selected customer within your permitted company/LOB scope.</p><ul><li>Job identity: company + LOB + Job No. + Job Date.</li><li>Owner is taken from the JPR source. Missing or conflicting owner values are shown as unavailable rather than guessed.</li><li>History reflects the currently loaded JPR snapshot; it is not an all-time guarantee beyond loaded history.</li></ul></article>
+<article class="card"><h2>7. Booked and estimated finance</h2><p>Booked GP is Income less Expense from the accepted simple JPR. A zero recorded expense does not prove that no cost was incurred.</p><ul><li>Expected missing cost is a separately identified estimate, not a booked cost or liability.</li><li>Rate-based freight margin is an estimate from eligible matched rate rows, not necessarily ledger GP.</li><li>Use the metric explanation and evidence action before interpreting an exception count.</li></ul></article>
+<article class="card"><h2>8. Exports and evidence</h2><p>Use the page's export action to download the selected view. Financial values are omitted for users without finance access.</p><ul><li>Calculation & records opens the evidence behind supported metrics.</li><li>Evidence is bound to the dataset snapshot and the filters used for the visual.</li><li>Missing source values remain unavailable; they are not silently converted to zero unless the metric definition explicitly says so.</li></ul></article>
+</div>
+<section>
+<div class="eyebrow">SOURCE-BACKED DEFINITIONS</div><h2>Metric Dictionary</h2>
+<p class="muted">Search by metric name, source field, formula, reporting date or limitation. Finance-only definitions are supplied only when your login has finance permission.</p>
+<div class="searchrow"><input id="metricSearch" type="search" placeholder="Search metrics, fields, formulas or limitations…" aria-label="Search metric definitions"><button id="clearSearch" type="button">Clear</button></div>
+<div id="metricStatus" class="status" role="status">Loading permission-filtered metric definitions…</div>
+<div id="metricList"></div>
+</section>
+</main>
+<script>
+'use strict';
+const $=id=>document.getElementById(id), list=$('metricList');
+let metrics=[];
+function field(dl,label,value){if(value===undefined||value===null||value==='')return;const dt=document.createElement('dt');dt.textContent=label;const dd=document.createElement('dd');dd.textContent=Array.isArray(value)?value.join(', '):String(value);dl.append(dt,dd);}
+function render(){const q=$('metricSearch').value.trim().toLocaleLowerCase();list.replaceChildren();const rows=metrics.filter(m=>[m.id,m.title,m.meaning,m.outcome,m.report,m.source_columns,m.date_column,m.formula,m.aggregation,m.exclusions,m.caveat,m.validation].flat().filter(Boolean).join(' ').toLocaleLowerCase().includes(q));$('metricStatus').textContent=rows.length+' of '+metrics.length+' definitions shown. Definitions follow your current access permissions.';for(const m of rows){const d=document.createElement('details');d.className='metric';const sum=document.createElement('summary');sum.append(document.createTextNode(m.title+' '));const badge=document.createElement('span');badge.textContent=m.unit||m.id;sum.append(badge);d.append(sum);const dl=document.createElement('dl');field(dl,'Metric ID',m.id);field(dl,'What it means',m.meaning);field(dl,'Why it matters',m.outcome);field(dl,'Source report',m.report);field(dl,'Exact source columns',m.source_columns);field(dl,'Calculation',m.formula);field(dl,'Aggregation',m.aggregation);field(dl,'Reporting date',m.date_column);field(dl,'Exclusions and conditions',m.exclusions);field(dl,'Important limitation',m.caveat);field(dl,'Access',m.permissions);field(dl,'Null handling',m.null_handling);field(dl,'Verification',m.validation||m.readiness);d.append(dl);list.append(d);}}
+$('metricSearch').addEventListener('input',render);$('clearSearch').onclick=()=>{$('metricSearch').value='';render();$('metricSearch').focus();};
+(async()=>{try{const r=await fetch('/api/metrics/definitions',{credentials:'same-origin'});if(r.status===401){location.href='/login';return;}if(!r.ok)throw Error('Metric definitions are temporarily unavailable.');const data=await r.json();metrics=Array.isArray(data.metrics)?data.metrics:[];render();}catch(e){$('metricStatus').textContent=e.message;}})();
+</script>
+</body></html>
