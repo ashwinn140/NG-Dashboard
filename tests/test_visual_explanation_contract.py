@@ -27,19 +27,17 @@ class VisualExplanationContract(unittest.TestCase):
         self.assertIn("reportingWindow.pfrom", APP)
         self.assertIn("reportingWindow.pto", APP)
 
-    def test_gp_pattern_has_word_boundaries(self):
-        self.assertIn(r"/gross profit|\bgp\b/", APP)
-        self.assertNotIn(r"/gross profit|\\bgp\\b/", APP)
-
-    def test_unverified_calculations_not_asserted(self):
-        self.assertIn("Metric-specific formula not yet verified", APP)
+    def test_exact_metric_registry_and_conservative_fallback(self):
+        self.assertIn("VERIFIED_METRIC_EXPLANATIONS", APP)
+        self.assertIn("Calculation not yet verified against this visual", APP)
+        self.assertNotIn("/gross profit|", APP)
 
     def test_manual_finance_margin_has_explanation(self):
         self.assertIn("businessMeaning('Margin', 'Profit divided by income", APP)
 
     def test_profit_job_metrics_have_explicit_formulas(self):
-        self.assertIn("Profit = income minus booked expense", APP)
-        self.assertIn("Total profit divided by the number of selected jobs", APP)
+        self.assertIn("Adds job profit, calculated as each job", APP)
+        self.assertIn("Divides selected total job-summary Profit by the selected job count", APP)
 
     def test_all_known_manual_kpis_have_explanations(self):
         for label in ('Top customer concentration', 'Customers only in current period',
@@ -52,12 +50,9 @@ class VisualExplanationContract(unittest.TestCase):
         self.assertIn("businessMeaning(label, note)); };", APP)
         self.assertIn("businessMeaning(label, 'Current versus previous reporting period')); };", APP)
 
-    def test_shipment_formula_does_not_capture_invoice_metric(self):
-        self.assertIn('/^(shipments|air export shipments|sea export shipments|air import shipments|sea import shipments)$/', APP)
-        self.assertNotIn('/shipments|shipment count/.test(lower)', APP)
-
-    def test_weight_explanation_mentions_display_unit(self):
-        self.assertIn('converted to the displayed weight unit', APP)
+    def test_no_title_based_formula_guessing(self):
+        self.assertNotIn("/shipments|shipment count/.test(lower)", APP)
+        self.assertNotIn("/chargeable weight/.test(lower)", APP)
 
     def test_no_demo_rows_generated(self):
         self.assertIn("const DEMO_KEEP = [0, 0.86, 0.72], demoSrc = [], demoK = []", APP)
