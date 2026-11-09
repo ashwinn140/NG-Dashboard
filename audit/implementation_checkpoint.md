@@ -555,3 +555,11 @@ The integrated HTML Help/User Guide is now complete enough for the first product
 - `app/store.py` selects current JPR imports while excluding charge-detail imports via the source-column metadata filter; no charge-wise calculation path was added.
 - Existing targeted tests in `tests/test_profit_import_layout.py` cover the legacy Charge wise Detail layout being explicitly flagged and confirm that charge/party-level columns are not exposed in the normalized dataset. These tests remain in the CI workflow.
 - All new evidence actions and explanations in PRs #35–#37 use the existing job-level JPR and Job Date where finance is involved. No Chargewise source workbook or charge-wise analysis is required or introduced.
+
+
+## Production update after PR #38
+
+- PR #38 merged as `fb45d87ecbde5d33072646342c5827ba9c85a1df` and deployed successfully as Railway deployment `cc8f0560-91e2-4403-b5a6-2580b9851ae1`.
+- All three production services are online. PR #38 adds Calculation & records to Operations Compare's Biggest increases by customer, Biggest decreases by customer and Variance by customer; the full Metric traceability workflow passed, including the synthetic runtime visual inventory.
+- PR #39 is open to add source evidence to the Customers page's Growing accounts and Declining accounts rankings. Its test pins the exact current/previous Shipment Date masks. No merge or deployment yet.
+- The latest production baseline is `fb45d87`. The most recent full visual inventory is the PR #37 artifact; PR #38 adds three actions and PR #39 will trigger a fresh inventory if merged.
