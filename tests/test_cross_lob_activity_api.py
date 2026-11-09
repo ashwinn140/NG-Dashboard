@@ -78,8 +78,7 @@ class CrossLobActivityApiTests(unittest.TestCase):
     def activity(self, client, csrf):
         dataset_response = client.get("/api/dataset")
         self.assertEqual(dataset_response.status_code, 200)
-        import gzip
-        data = json.loads(gzip.decompress(dataset_response.content))
+        data = json.loads(dataset_response.content)
         indices = [
             i for i, rep in enumerate(data["rep"])
             if data["reps"][rep][1] == "AE"
