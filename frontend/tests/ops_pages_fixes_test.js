@@ -50,4 +50,14 @@ async function boot(mutate){
   }
   dom.window.close()}
 
+ // Filter popovers must not stringify null DOM placeholders after real options.
+ {const {dom,w,d,ng}=await boot();ng.setGroup('profit');ng.renderAll();
+  const anchor=d.querySelector('.fbtn');ng.openMenu('p_lob',anchor);
+  const stray=()=>[...d.querySelector('#ml').childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent.trim()).filter(Boolean);
+  check('populated filter menu has no literal null placeholder',!stray().includes('null'),stray());
+  const q=d.querySelector('#mq');q.value='no-such-lob-fixture';q.dispatchEvent(new w.Event('input'));
+  check('empty filter search keeps its meaningful empty state',d.querySelector('#ml').textContent.includes('No matching values.'));
+  ng.openMenu('__add',anchor);
+  check('add-filter menu has no literal null placeholder',!stray().includes('null'),stray());dom.window.close()}
+
  console.log(fails?'FAILED '+fails:'ALL PASSED');process.exit(fails?1:0)})().catch(e=>{console.error(e);process.exit(1)});

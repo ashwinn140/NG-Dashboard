@@ -10,7 +10,7 @@ Shipments, profit, billing and agent reports for New Globe and Neutral Consolida
 One web app: it receives the ERP's Excel reports by email, keeps the history in a database, and shows the dashboards, reports and admin portal to signed-in people.
 
 ```
-ERP -> Gmail -> Apps Script (every 15 min) -> /api/ingest -> queue -> database -> dashboard (per person) 
+ERP -> Gmail -> Apps Script (every hour) -> /api/ingest -> queue -> database -> dashboard (per person) 
                                                          \-> admin portal: manual upload, previous years, organization master, users
 ```
 
@@ -115,7 +115,7 @@ Database: SQLite locally; on Railway set DATABASE_URL to the Postgres address. N
 
 For New Globe and Neutral Consolidation Services, keep earlier reporting years once
 and refresh eight department shipment registers and two job profitability reports daily.
-The Gmail collector checks for new reports every three hours.
+The Gmail collector checks for new reports every hour. The installed `collectReports` time-driven trigger was verified as “Every hour” on 9 November 2026; recent executions completed successfully. The installer defaults to the same hourly cadence.
 
 Set `REPORT_STORAGE_MODE=replace` on the app service to update existing records in place.
 Shipments missing from the new report are removed only inside its dates and branches;

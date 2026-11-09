@@ -1,5 +1,6 @@
 const{JSDOM,VirtualConsole}=require('jsdom'),fs=require('fs'),assert=require('node:assert/strict');
 const result=JSON.parse(fs.readFileSync('/tmp/metric-ui-evidence.json','utf8')),errors=[],calls=[],vc=new VirtualConsole();vc.on('jsdomError',e=>{if(!/navigation/.test(e.message))errors.push(e.message)});
+result.records[0].income=20856.85;result.records[0].expense=12500;result.records[0].profit=20856.85-12500;
 const html='<html><head></head><body><div class="kpi"><span class="kl">Profit</span><div class="kv">₹4,776</div></div><script>'+fs.readFileSync('app/web/metric_trace.js','utf8')+'</script></body></html>';
 const dom=new JSDOM(html,{url:'http://audit.test',runScripts:'dangerously',virtualConsole:vc,beforeParse(w){w.MetricTraceContext=metric=>({metric,indices:[0,1],previous_indices:[]});w.URL.createObjectURL=()=> 'blob:test';w.URL.revokeObjectURL=()=>{};w.fetch=async(u,opt)=>{calls.push([u,opt]);return{ok:true,status:200,json:async()=>u==='/api/me'?{csrf:'test'}:u==='/api/metrics/definitions'?{metrics:[result.metric]}:result,blob:async()=>new Blob(['test'])}}}});
 (async()=>{const w=dom.window,d=w.document,value=d.querySelector('.kv');await new Promise(r=>setTimeout(r,20));
@@ -7,6 +8,7 @@ const dom=new JSDOM(html,{url:'http://audit.test',runScripts:'dangerously',virtu
  value.click();await new Promise(r=>setTimeout(r,20));assert.equal(d.querySelector('.mt-overlay').hidden,true,'ordinary KPI value click must not open reconciliation');assert.equal(d.querySelector('#mtSearch'),null);
  const trigger=d.querySelector('.mt-info');assert.ok(trigger);assert.equal(trigger.textContent,'Calculation & records');trigger.focus();trigger.click();
  for(let i=0;i<100&&!d.querySelector('#mtSearch');i++)await new Promise(r=>setTimeout(r,10));
+ assert.ok(d.querySelector('#mtTable').textContent.includes('8,356.85'),'Currency cells round the live floating-point subtraction tail to paise');assert.ok(!d.querySelector('#mtTable').textContent.includes('8356.849999'),'Binary floating-point tails must not be displayed');
  assert.ok(d.querySelector('#mtSearch'));assert.equal(d.querySelector('.mt-overlay').hidden,false);assert.equal(d.querySelector('[role=dialog]').getAttribute('aria-modal'),'true');assert.equal(d.querySelector('.mt-drawer').style.width,'');
  assert.ok(d.querySelector('#mtCount').textContent.includes(result.records.length+' matching'));
  d.querySelector('#mtSearch').value='doesnotexist';d.querySelector('#mtSearch').dispatchEvent(new w.Event('input'));assert.ok(d.querySelector('#mtCount').textContent.includes('0 matching'));

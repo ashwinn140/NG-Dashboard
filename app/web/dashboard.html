@@ -2054,14 +2054,14 @@ function renderMenu() {
   document.querySelector('#menu .ma').style.display = key === '__add' ? 'none' : '';
   if (key === '__add') {
     mh.textContent = 'Add a filter'; const opts = EXTRA.concat(S.group === 'profit' ? PEXTRA : []).filter((k) => !S.extra.includes(k) && (!needle || COLS[k].l.toLowerCase().includes(needle)));
-    ml.replaceChildren(...opts.map((k) => h('button', {type: 'button', class: 'mo pick', onclick: () => { S.extra.push(k); closeMenu(); renderAll(); const b = document.querySelector('.fbtn[data-key="' + k + '"]'); if (b) openMenu(k, b); }}, h('span', {class: 'mt'}, COLS[k].l), h('i', null, fInt(COLS[k].d.length) + ' values'))), opts.length ? null : h('p', {class: 'empty'}, 'No more columns match.'));
+    ml.replaceChildren(...opts.map((k) => h('button', {type: 'button', class: 'mo pick', onclick: () => { S.extra.push(k); closeMenu(); renderAll(); const b = document.querySelector('.fbtn[data-key="' + k + '"]'); if (b) openMenu(k, b); }}, h('span', {class: 'mt'}, COLS[k].l), h('i', null, fInt(COLS[k].d.length) + ' values'))), ...(opts.length ? [] : [h('p', {class: 'empty'}, 'No more columns match.')]));
     $('mf').textContent = 'Every other column of the ERP report can be added here in the live system.'; return;
   }
   mh.textContent = COLS[key].l; const pro = S.group === 'profit', m = pro ? maskP({skip: key}) : mask({skip: key}), c = pro ? COLS[key].pc : COLS[key].c, cnt = new Float64Array(COLS[key].d.length); for (let i = 0, nn = pro ? NP : N; i < nn; i++) if (m[i]) cnt[c[i]]++;
   const sel = S.sel[key] || new Set(); let ids = []; for (let j = 0; j < cnt.length; j++) if ((cnt[j] > 0 || sel.has(j)) && (!needle || COLS[key].d[j].toLowerCase().includes(needle))) ids.push(j);
   ids.sort((a, b) => cnt[b] - cnt[a]); MENU.visible = ids; const shown = ids.slice(0, 300);
   ml.replaceChildren(...shown.map((j) => h('label', {class: 'mo' + (cnt[j] === 0 ? ' zero' : '')}, h('input', {type: 'checkbox', checked: sel.has(j), onchange: () => toggle(key, j)}), h('span', {class: 'mt', title: COLS[key].d[j]}, COLS[key].d[j]), h('i', null, fInt(cnt[j])),
-    h('button', {type: 'button', class: 'only', onclick: (e) => { e.preventDefault(); e.stopPropagation(); setOnly(key, j); }}, 'Only'))), ids.length ? null : h('p', {class: 'empty'}, 'No matching values.'));
+    h('button', {type: 'button', class: 'only', onclick: (e) => { e.preventDefault(); e.stopPropagation(); setOnly(key, j); }}, 'Only'))), ...(ids.length ? [] : [h('p', {class: 'empty'}, 'No matching values.')]));
   $('mf').textContent = fInt(ids.length) + ' values' + (ids.length > 300 ? ' (first 300 shown; type to narrow)' : '') + '. Counts follow the other filters. Select all ticks every value that matches the search.'; ml.scrollTop = scroll;
 }
 function menuAll() { const key = MENU.key; if (!key || key === '__add') return; if (key === 'report') { S.qm.clear(); S.qd.clear(); } const set = S.sel[key] || (S.sel[key] = new Set()); (MENU.visible || []).forEach((j) => set.add(j)); if (!set.size) delete S.sel[key]; renderAll(); }
