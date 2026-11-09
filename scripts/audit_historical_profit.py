@@ -45,7 +45,7 @@ def inspect(root: Path, year: int) -> dict:
             # A report spanning calendar years must not be mistaken for
             # a report containing only the requested year's jobs.
             import pandas as pd
-            dates = pd.to_datetime(report.df.get("Job Date"), errors="coerce")
+            dates = pd.to_datetime(report.df["Job Date"], errors="coerce") if "Job Date" in report.df else pd.Series(pd.NaT, index=report.df.index)
             year_mask = dates.dt.year.eq(year)
             year_rows = report.df.loc[year_mask]
             amounts = {}
