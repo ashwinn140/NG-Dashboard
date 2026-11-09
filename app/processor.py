@@ -186,11 +186,16 @@ def standardise(reg: Register) -> list[dict]:
     cells = reg.df.map(_cell)
     cols = list(cells.columns)
     pick = {f: next((c for c in cands if c in cols), None) for f, cands in config.SOURCE_COLUMNS.items()}
+    volume_idx = cols.index("Volume") if "Volume" in cols else -1
+    next_col = cols[volume_idx + 1] if 0 <= volume_idx < len(cols) - 1 else None
+    volume_unit_col = next_col if next_col and re.fullmatch(r"Unit(?:\.\d+)?", next_col) else None
     port_code = re.compile(r"^\(([A-Za-z0-9]{5})\)")
     skip = set(reg.dup_cols)
     out_rows = []
     for rec in cells.to_dict("records"):
         extra = {k: v for k, v in rec.items() if v != ""}
+        # Preserve the repeated Unit header immediately following Volume in original source order.
+        extra["_volume_unit_source"] = rec.get(volume_unit_col, "") if volume_unit_col else "__NO_ADJACENT_UNIT__"
         row = {f: (rec[c] if c else "") for f, c in pick.items()}
         for f in config.NUMERIC_FIELDS:
             try:
