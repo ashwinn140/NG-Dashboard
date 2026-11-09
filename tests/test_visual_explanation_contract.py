@@ -34,6 +34,13 @@ class VisualExplanationContract(unittest.TestCase):
     def test_unverified_calculations_not_asserted(self):
         self.assertIn("Metric-specific formula not yet verified", APP)
 
+    def test_manual_finance_margin_has_explanation(self):
+        self.assertIn("businessMeaning('Margin', 'Profit divided by income", APP)
+
+    def test_profit_job_metrics_have_explicit_formulas(self):
+        self.assertIn("Profit = income minus booked expense", APP)
+        self.assertIn("Total profit divided by the number of selected jobs", APP)
+
     def test_no_demo_rows_generated(self):
         self.assertIn("const DEMO_KEEP = [0, 0.86, 0.72], demoSrc = [], demoK = []", APP)
 
