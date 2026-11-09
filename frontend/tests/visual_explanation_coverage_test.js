@@ -73,7 +73,7 @@ for(const [title,dimension] of [
 
 explanation('profit','p_overview','From income to profit','estimate, not booked cost');
 explanation('profit','p_overview','Income and expense by week','Job Date');
-explanation('profit','p_overview','How healthy are the jobs?','rounding');
+explanation('profit','p_overview','How healthy are the jobs?','margin bands');
 for(const [page,title] of [
  ['p_overview','From income to profit'],['p_overview','By company'],['p_overview','Income and expense by week'],
  ['p_overview','How healthy are the jobs?'],['p_branches','Profit by branch'],
