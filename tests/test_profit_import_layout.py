@@ -73,14 +73,28 @@ class ProfitLayoutTests(unittest.TestCase):
         with self.engine.begin() as c:
             row=dict(c.execute(select(profit_lines)).mappings().one());row.pop('id');row.update(key='legacy',income=999,extra={'Charge':'Freight'});c.execute(insert(profit_lines).values(**row))
         self.assertEqual(len(self.live()),1);self.assertEqual(self.live().income.sum(),100)
+    def test_optional_jpr_job_owner_header_is_canonicalized(self):
+        from openpyxl import load_workbook
+        path=self.workbook()
+        wb=load_workbook(path);ws=wb.active
+        col=ws.max_column+1
+        ws.cell(3,col).value='Job owner'
+        ws.cell(4,col).value='JPR source owner'
+        wb.save(path);wb.close()
+        rep=J.read_profit(path)
+        self.assertIn('Job Owner',rep.df.columns)
+        self.assertEqual(rep.df.loc[0,'Job Owner'],'JPR source owner')
+
     def test_source_attributes_override_register_and_old_preferences_are_safe(self):
         from scripts.test_daily_replacement import ReplacementTests
         f=ReplacementTests();f.setUp()
         try:
             reg=f.register();reg.df['Sales Person']='Stale register sales';f.load(reg)
-            rep=f.profit();rep.df.loc[0,'Job No.']='JOB-0';rep.df['Sales Person']='Source sales';rep.df['Job Owner']='Source owner'
+            rep=f.profit();rep.df.loc[0,'Job No.']='JOB-0';rep.df['Sales Person']='Source sales';rep.df['Job owner']='Source owner'
             f.load_profit(rep);ds=D.build_full(f.engine)
             self.assertEqual(ds['cols']['x_salesperson']['d'][ds['cols']['x_salesperson']['pc'][0]],'Source sales')
+            owner_code=ds['cols']['job_owner']['pc'][0]
+            self.assertEqual(ds['cols']['job_owner']['d'][owner_code],'Source owner')
             self.assertNotIn('p_charge',ds['cols']);self.assertNotIn('p_party',ds['cols'])
             self.assertTrue(all(x==-1 for x in ds['p']['td']))
             self.assertEqual(J.profit_coverage(f.engine,date(2026,11,8),2,1).query('year==2026').iloc[0]['lines'],3)
