@@ -41,6 +41,13 @@ class VisualExplanationContract(unittest.TestCase):
         self.assertIn("Profit = income minus booked expense", APP)
         self.assertIn("Total profit divided by the number of selected jobs", APP)
 
+    def test_all_known_manual_kpis_have_explanations(self):
+        for label in ('Top customer concentration', 'Customers only in current period',
+                      'Customers only in comparison period', 'Negative income rows',
+                      'Company-name matched jobs'):
+            with self.subTest(label=label):
+                self.assertIn("businessMeaning('" + label + "'", APP)
+
     def test_no_demo_rows_generated(self):
         self.assertIn("const DEMO_KEEP = [0, 0.86, 0.72], demoSrc = [], demoK = []", APP)
 
