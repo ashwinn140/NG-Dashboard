@@ -109,5 +109,29 @@ class MailerTests(unittest.TestCase):
             engine.dispose()
 
 
+    @patch("app.mailer.http.client.HTTPSConnection")
+    def test_resend_attachment_is_base64_encoded(self, transport):
+        self.configure()
+        transport.return_value.getresponse.return_value.status = 200
+        self.assertTrue(mailer.send("owner@example.com", "Report", "Attached",
+            attachments=[{"filename": "daily.xlsx", "content": b"workbook", "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}]))
+        payload = json.loads(transport.return_value.request.call_args.kwargs["body"])
+        self.assertEqual(payload["attachments"], [{"filename": "daily.xlsx", "content": "d29ya2Jvb2s="}])
+        self.assertEqual(mailer.OUTBOX[-1]["attachments"], [{"filename": "daily.xlsx", "size": 8}])
+
+    def test_attachment_size_and_filename_limits_fail_closed(self):
+        self.assertFalse(mailer.send("owner@example.com", "Report", "Body",
+            attachments=[{"filename": "../secrets.xlsx", "content": b"x"}]))
+        self.assertFalse(mailer.send("owner@example.com", "Report", "Body",
+            attachments=[{"filename": "huge.xlsx", "content": b"x" * (mailer.MAX_ATTACHMENT_BYTES + 1)}]))
+
+    @patch("app.mailer.smtplib.SMTP")
+    def test_smtp_attachment_is_attached_to_message(self, smtp):
+        os.environ.update(SMTP_HOST="smtp.example.com", SMTP_USER="owner@example.com", SMTP_PASSWORD="test-only-password")
+        self.assertTrue(mailer.send("user@example.com", "Report", "Body",
+            attachments=[{"filename": "daily.csv", "content": b"a,b\n1,2", "content_type": "text/csv"}]))
+        msg = smtp.return_value.__enter__.return_value.send_message.call_args.args[0]
+        self.assertTrue(any(part.get_filename() == "daily.csv" for part in msg.walk()))
+
 if __name__ == "__main__":
     unittest.main()
