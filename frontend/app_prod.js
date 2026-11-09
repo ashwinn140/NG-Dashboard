@@ -436,20 +436,28 @@ function pageCustomers() {
     }).catch(error=>{status.textContent=error.message;status.className='bad';});
   }
   const sel = S.sel[key] || new Set(), hasPrev = R.np > 0; const rows = []; for (let j = 0; j < sz; j++) if (cnt[j] > 0 || sel.has(j)) rows.push({j, cnt: cnt[j], air: air[j], sea: sea[j], share: totC ? cnt[j] / totC : 0, delta: hasPrev ? cnt[j] - pc[j] : 0, last: last[j], v: vol[j]});
-  const exportCust = async () => { const list = rows.slice().sort((a, b) => b.cnt - a.cnt), n = list.length + 1;
+  const exportCust = async () => {
+    const list = rows.slice().sort((a,b)=>b.cnt-a.cnt);
     try {
       const historyRows = [[HDR('Customer'),HDR('Company'),HDR('Job No.'),HDR('Job Date'),HDR('LOB'),HDR('Job Owner'),HDR('Owner status')]];
       for (let offset=0; offset<list.length; offset+=100) {
         const batch=list.slice(offset,offset+100);
         const histories=await loadRecentJobs(batch.map(r=>({customer:COLS.customer.d[r.j],companies:historyCompanies(r.j),lobs:historyLobs()})));
-        histories.forEach((history,index)=>{
+        histories.forEach(history=>{
           const jobs=history.jobs||[];
-          if(!jobs.length)historyRows.push([history.customer,'','','','','Owner unavailable','No JPR history returned']);
+          if (!jobs.length) historyRows.push([history.customer,'','','','','Owner unavailable','No JPR history returned']);
           else jobs.forEach(job=>historyRows.push([history.customer,job.company,job.job_no,job.job_date,job.lob,job.job_owner,job.owner_status]));
         });
       }
-      downloadXlsx('customers_' + fIso(dDate(MAXDATE)) + '.xlsx', [
-        {name:'Customers',freeze:true,filter:true,cols:[42,12,18,12,18,18,16],rows:[['Customer','Shipments','Air chargeable weight (t)','Sea TEUs','Share of shipments','Change vs comparison (shipments)','Last shipment'].map(HDR)].concat(list.map((r,i)=>[COLS.customer.d[r.j],{v:r.cnt,s:3},r.air?{v:+r.air.toFixed(3),s:4}:'',r.sea?{v:Math.round(r.sea),s:3}:'',{f:'B'+(i+2)+'/SUM(B$2:B
+      const customerRows=[['Customer','Shipments','Air chargeable weight (t)','Sea TEUs','Share of shipments','Change vs comparison (shipments)','Last shipment'].map(HDR)];
+      list.forEach(r=>customerRows.push([COLS.customer.d[r.j],{v:r.cnt,s:3},r.air?{v:+r.air.toFixed(3),s:4}:'',r.sea?{v:Math.round(r.sea),s:3}:'',{v:r.share,s:2},hasPrev?{v:r.delta,s:3}:'',r.last>0?{v:serial(r.last),s:5}:'']));
+      downloadXlsx('customers_'+fIso(dDate(MAXDATE))+'.xlsx',[
+        {name:'Customers',freeze:true,filter:true,cols:[42,12,18,12,18,18,16],rows:customerRows},
+        {name:'Last 5 Jobs',freeze:true,filter:true,cols:[38,12,22,16,28,30,20],rows:historyRows},
+        settingsSheet([[HDR('Range'),fDay(R.w.from)+' to '+fDay(R.w.to)],[HDR('History basis'),'Job Date'],[HDR('History source'),'Current Job Profit Analysis Report'],[HDR('History scope'),'Last five distinct jobs per customer within permitted company and LOB scope. Owner values are JPR source values only.']])
+      ]);
+    } catch(error) { alert('Customer export was not completed: '+error.message); }
+  };
   const tbody = h('tbody'), note = h('p', {class: 'note'});
   const cols = [{k: 'name', t: 'Customer'}, {k: 'cnt', t: 'Shipments', num: true}, {k: 'air', t: 'Air weight (t)', num: true}, {k: 'sea', t: 'Sea TEUs', num: true}, {k: 'share', t: 'Share', num: true}, {k: 'delta', t: 'Change vs previous', num: true}, {k: 'last', t: 'Last shipment', num: true}, {k:'history',t:'Last 5 jobs',sort:false}];
   const thead = h('thead'); const draw = () => {
