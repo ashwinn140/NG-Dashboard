@@ -251,10 +251,29 @@ function businessMeaning(label, note, metricExplanation) {
     reportingWindow ? h('p', {class: 'meta'}, 'Dashboard date selection: ' + fRange({from:reportingWindow.from,to:reportingWindow.to}) + (hasDashboardComparison ? '; dashboard comparison: ' + fRange({from:reportingWindow.pfrom,to:reportingWindow.pto}) : '; dashboard comparison: off') + '. Date basis: ' + dateBasis + '. Company, line-of-business and other selected filters apply only where supported by this visual. This is dashboard context, not certification of a visual-specific date or comparison calculation.') : null,
     note ? h('p', {class:'meta'}, 'Visual note: ' + note) : null);
 }
+function traceExplanation(trace,title) {
+ if(!trace)return null;
+ const m=trace.metric,k=trace.dimension;
+ const ops={ 'ops.shipments':'shipment records','ops.air_weight':'air chargeable weight (tonnes)','ops.teu':'ocean TEUs' };
+ const fin={ 'profit.gp':'gross profit','profit.income':'income','profit.expense':'expense' };
+ if(ops[m]){
+  const measure=ops[m],dim=k&&COLS[k]?COLS[k].l.toLowerCase():null;
+  const grouping=dim?'Groups selected shipment-register rows by '+dim+' and sums '+measure+'.':'Uses the selected shipment-register rows represented by this visual.';
+  const caveat=m==='ops.shipments'?'Counts eligible shipment-register records.':m==='ops.air_weight'?'Sums Chargeable Wt for air export and import records, expressed in tonnes.':'Sums recorded TEUs for ocean export and import records.';
+  return ['Shows '+measure+' for the visual and active filters.',caveat+' '+grouping+' The drawer lists the exact contributing source rows for the selected reporting scope.'];
+ }
+ if(fin[m]){
+  const measure=fin[m],dim=k&&COLS[k]?COLS[k].l.toLowerCase():null;
+  const formula=m==='profit.gp'?'Sums Income less Expense (INR) across eligible Job Profit Analysis rows.':m==='profit.income'?'Sums Income (INR) across eligible Job Profit Analysis rows.':'Sums Expense (INR) across eligible Job Profit Analysis rows.';
+  return ['Shows '+measure+' for the visual and active filters.',formula+(dim?' Groups the eligible rows by '+dim+'.':'')+' The drawer lists the exact contributing job-summary rows.'];
+ }
+ return null;
+}
 function card(title, note, body, cls, trace) {
-  const action = trace ? h('button', {type: 'button', class: 'mt-info', style: 'margin-top:0;white-space:nowrap', 'data-trace-metric': trace.metric, 'data-trace-dimension': trace.dimension || '', title: 'Open calculation and contributing records for ' + title, 'aria-label': 'Open calculation and contributing records for ' + title, onclick: (e) => { e.preventDefault(); e.stopPropagation(); const q = window.NG?.traceVisual?.(trace.metric, trace.dimension, title); if (q) window.MetricTrace?.openWithRequest(q); }}, 'Calculation & records') : null;
+  const explanation=traceExplanation(trace,title);
+  const action = explanation ? h('button', {type: 'button', class: 'mt-info', style: 'margin-top:0;white-space:nowrap', 'data-trace-metric': trace.metric, 'data-trace-dimension': trace.dimension || '', title: 'Open calculation and contributing records for ' + title, 'aria-label': 'Open calculation and contributing records for ' + title, onclick: (e) => { e.preventDefault(); e.stopPropagation(); const q = window.NG?.traceVisual?.(trace.metric, trace.dimension, title); if (q) window.MetricTrace?.openWithRequest(q); }}, 'Calculation & records') : null;
   const heading = action ? h('div', {style: 'display:flex;align-items:center;justify-content:space-between;gap:.5rem;min-width:0;flex-wrap:wrap'}, h('h2', {class: 'h'}, title), action) : h('h2', {class: 'h'}, title);
-  return h('article', {class: 'card ' + (cls || '')}, heading, note ? h('p', {class: 'note'}, note) : null, body, businessMeaning(title, note));
+  return h('article', {class: 'card ' + (cls || '')}, heading, note ? h('p', {class: 'note'}, note) : null, body, businessMeaning(title, note, explanation));
 }
 function opsVisualMetric() { return R.useVol ? (R.air ? 'ops.air_weight' : 'ops.teu') : 'ops.shipments'; }
 function profitRankMetric() { return S.rank === 'income' ? 'profit.income' : S.rank === 'expense' ? 'profit.expense' : 'profit.gp'; }
