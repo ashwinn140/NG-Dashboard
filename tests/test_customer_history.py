@@ -10,13 +10,14 @@ class CustomerHistoryTests(unittest.TestCase):
         rows = [
             {"company": "NG", "customer": "Acme", "job_no": f"J-{n}",
              "job_date": date(2026, 1, n), "lob": "FFWD AIR EXP",
-             "extra": {"Job Owner": f"Owner {n}"}}
+             "extra": {"Job Owner": "Repeat Owner"}}
             for n in range(1, 8)
         ]
         result = build_recent_jobs(rows, lobs=["AE"])
         self.assertEqual(len(result), 5)
         self.assertEqual([row["job_no"] for row in result], ["J-7", "J-6", "J-5", "J-4", "J-3"])
-        self.assertEqual(result[0]["job_owner"], "Owner 7")
+        self.assertEqual(result[0]["job_owner"], "Repeat Owner")
+        self.assertEqual([row["job_owner"] for row in result], ["Repeat Owner"] * 5)
 
     def test_same_job_number_in_different_lob_or_company_is_distinct(self):
         rows = [
