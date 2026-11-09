@@ -359,6 +359,86 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
     def api_dataset(user: dict = Depends(me)):
         return Response(store.dataset_for(user), media_type="application/json", headers={"Content-Encoding": "gzip", "Cache-Control": "private, no-store"})
 
+    @app.post("/api/customers/recent-jobs")
+    async def customer_recent_jobs(request: Request, user: dict = Depends(unsafe)):
+        """Return the latest five distinct JPR jobs for visible Operations customer rows.
+
+        Owner/job identity only; no income, expense or profit values. Company
+        and LOB scope are checked again on the server for every request.
+        """
+        from .customer_history import build_recent_jobs
+        raw = await request.body()
+        if len(raw) > 1_000_000: raise HTTPException(413, "Selection too large.")
+        try:
+            body = json.loads(raw)
+            if not isinstance(body, dict) or not isinstance(body.get("customers"), list):
+                raise ValueError("A customer selection is required.")
+            requests = body["customers"]
+            if len(requests) > 500: raise ValueError("Please export customer history in smaller batches.")
+            allowed_companies = set(user["companies"] or ["NG", "NCS"])
+            allowed_lobs = set(user["lobs"]) if user["lobs"] else None
+            normalized = []
+            all_companies, all_names = set(), set()
+            for item in requests:
+                if not isinstance(item, dict): raise ValueError("Invalid customer selection.")
+                name = " ".join(str(item.get("customer") or "").split())
+                companies = item.get("companies") or sorted(allowed_companies)
+                requested_lobs = item.get("lobs")
+                lobs = set(requested_lobs or (allowed_lobs or []))
+                if not name or len(name) > 300: raise ValueError("Invalid customer name.")
+                if not isinstance(companies, list) or not companies or not set(companies).issubset(allowed_companies):
+                    raise PermissionError("The selected company is outside your access scope.")
+                if not isinstance(requested_lobs or [], list) or (allowed_lobs is not None and not lobs.issubset(allowed_lobs)):
+                    raise PermissionError("The selected line of business is outside your access scope.")
+                normalized.append((name, set(companies), lobs))
+                all_companies.update(companies)
+                all_names.add(name.strip().casefold())
+            if not normalized:
+                return {"histories": []}
+            with engine.connect() as conn:
+                # A caller may request only customers already present in the
+                # current operational register within their authorized scope.
+                visible_report_types = sorted(set.intersection(*[set(lobs) for _, _, lobs in normalized]) if normalized and all(lobs for _, _, lobs in normalized) else {"AE", "AI", "OE", "OI"})
+                visible_rows = conn.execute(select(
+                    shipments.c.company, shipments.c.customer
+                ).where(
+                    shipments.c.company.in_(sorted(all_companies)),
+                    shipments.c.report_type.in_(visible_report_types),
+                    shipments.c.to_import.is_(None),
+                    func.lower(func.trim(shipments.c.customer)).in_(sorted(all_names))
+                )).all()
+                visible = {
+                    (company, " ".join(str(customer or "").split()).casefold())
+                    for company, customer in visible_rows
+                }
+                for name, companies, _ in normalized:
+                    if any((company, name.casefold()) not in visible for company in companies):
+                        raise PermissionError("The customer is outside your visible operational scope for one or more selected companies.")
+                source_rows = conn.execute(select(
+                    profit_lines.c.id, profit_lines.c.company, profit_lines.c.job_no,
+                    profit_lines.c.job_date, profit_lines.c.lob, profit_lines.c.customer,
+                    profit_lines.c.extra
+                ).where(
+                    profit_lines.c.company.in_(sorted(all_companies)),
+                    func.lower(func.trim(profit_lines.c.customer)).in_(sorted(all_names)),
+                    *J.current_jobs()
+                ).order_by(profit_lines.c.job_date.desc(), profit_lines.c.id.desc())).mappings().all()
+            by_customer = {}
+            for row in source_rows:
+                key = " ".join(str(row["customer"] or "").split()).casefold()
+                by_customer.setdefault(key, []).append(dict(row))
+            histories = []
+            for name, companies, lobs in normalized:
+                key = name.strip().casefold()
+                rows = [row for row in by_customer.get(key, []) if row["company"] in companies]
+                jobs = build_recent_jobs(rows, lobs=lobs, limit=5)
+                histories.append({"customer": name, "jobs": jobs, "job_count_returned": len(jobs)})
+            return {"histories": histories, "basis": "Job Date", "source": "Current Job Profit Analysis Report"}
+        except PermissionError as e:
+            raise HTTPException(403, str(e))
+        except (ValueError, TypeError, KeyError) as e:
+            raise HTTPException(400, str(e))
+
     @app.get("/api/prefs")
     def prefs_get(user: dict = Depends(me)):
         with engine.connect() as c: rows = c.execute(select(prefs.c.name, prefs.c.value).where(prefs.c.user_id == user["id"])).all()
