@@ -48,7 +48,7 @@ JPR = "Job Profit Analysis Report (Basis: Job Date)"
 JOB_COLUMNS = ("Job No.", "Job Date", "LOB")
 DEFINITIONS = {
     "profit.income": MetricDefinition(
-        "profit.income", "Income", "Total income recorded for eligible JPR jobs.",
+        "profit.income", "Income", "Total income recorded in eligible JPR rows; this alone does not verify invoicing.",
         "Understand income recognized in the selected period.", JPR,
         ("Income (INR)",) + JOB_COLUMNS, "Job Date",
         "Sum of Income (INR) for eligible job rows.", "SUM; amounts in INR",
@@ -69,7 +69,7 @@ DEFINITIONS = {
     "profit.jobs": MetricDefinition(
         "profit.jobs", "Jobs", "Distinct eligible jobs represented in the JPR.",
         "Measure job coverage without counting duplicate records as separate jobs.", JPR,
-        JOB_COLUMNS, "Job Date", "Count distinct normalized JPR job identities.",
+        JOB_COLUMNS, "Job Date", "Count distinct job identifiers in the dashboard's filtered profit dataset; verify composite identity against the source.",
         "COUNT DISTINCT", "Only eligible JPR rows. Source rejects duplicate Job No. / Job Date / LOB within an import.",
         "Verify cross-company grouping and historical job identity against current dataset join before audit sign-off."),
     "profit.billing_pending_proxy": MetricDefinition(
@@ -77,7 +77,7 @@ DEFINITIONS = {
         "Jobs whose JPR expense is positive while income is zero or negative.",
         "Identify jobs needing investigation of income recognition or billing.", JPR,
         ("Income (INR)", "Expense (INR)") + JOB_COLUMNS, "Job Date",
-        "For each job, if Expense (INR) > 0 and Income (INR) <= 0, classify as status 2; count qualifying jobs.",
+        "For each dashboard job, if aggregated expense > 0 and aggregated income <= 0, classify as status 2; count qualifying jobs.",
         "COUNT DISTINCT jobs", "Current dashboard status precedence applies: cost-not-booked first, then this category.",
         "This is the existing frontend proxy labelled 'Billing pending'; it does NOT prove that an invoice has not been raised.",
         "business_validation_required"),
