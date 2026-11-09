@@ -57,6 +57,16 @@ for(const [label,metric] of opsKpis){
  assert.equal(b.dataset.traceMetric,metric);
  b.click();assert.equal(openedEvidence.metric,metric,'KPI evidence uses its registered metric: '+label);
 }
+for(const [page,title] of [['o_agents','Agent variation report'],['o_sales','Sales performance report']]){
+ n.S.page=page;n.renderAll();
+ const c=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()==='Agents');
+ assert.ok(c,'Operations report table exists: '+title);
+ const b=c.querySelector('.mt-info');assert.ok(b,'Operations report exposes Calculation & records: '+title);
+ b.click();const {starts,asOf}=n.agentRows(),m=n.mask({dates:'none'}),expected=[];
+ for(let i=0;i<n.N;i++)if(m[i]&&D.date[i]>=starts[0]&&D.date[i]<=asOf)expected.push(i);
+ assert.deepEqual(openedEvidence.indices,expected,'agent/sales evidence matches exact rolling 12-month Shipment Date scope: '+title);
+ assert.equal(openedEvidence.context.date_basis,'Shipment Date');
+}
 
 // Targeted acceptance: verified operations comparison charts expose source-backed
 // Calculation & records for their exact current and comparison period rows.
