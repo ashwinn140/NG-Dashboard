@@ -484,39 +484,6 @@ function pageCustomers() {
     card('Customer by month', 'Top ' + S.def.heatN + ' customers by ' + (R.useVol ? 'volume' : 'shipments') + '. Click a cell to focus that customer and month.', heat, 'full', {metric: opsVisualMetric(), dimension: 'customer'}),
     card('Growing accounts', 'Biggest increase in shipments against the ' + cmpLabel() + '.', moverList(gain, 1)),
     card('Declining accounts', 'Biggest fall in shipments against the ' + cmpLabel() + '.', moverList(lose, -1))));
-}+n+')',s:2},hasPrev?{v:r.delta,s:3}:'',r.last>0?{v:serial(r.last),s:5}:'']))},
-        {name:'Last 5 Jobs',freeze:true,filter:true,cols:[38,12,22,16,28,30,20],rows:historyRows},
-        settingsSheet([[HDR('Range'),fDay(R.w.from)+' to '+fDay(R.w.to)],[HDR('History basis'),'Job Date'],[HDR('History source'),'Current Job Profit Analysis Report'],[HDR('History scope'),'Last five distinct jobs per customer within permitted company and LOB scope. Owner values are JPR source values only.']])
-      ]);
-    } catch(error) { alert('Customer export was not completed: '+error.message); }
-  };
-  const tbody = h('tbody'), note = h('p', {class: 'note'});
-  const cols = [{k: 'name', t: 'Customer'}, {k: 'cnt', t: 'Shipments', num: true}, {k: 'air', t: 'Air weight (t)', num: true}, {k: 'sea', t: 'Sea TEUs', num: true}, {k: 'share', t: 'Share', num: true}, {k: 'delta', t: 'Change vs previous', num: true}, {k: 'last', t: 'Last shipment', num: true}];
-  const thead = h('thead'); const draw = () => {
-    const s = S.cust, f = s.sort === 'name' ? (a, b) => COLS.customer.d[a.j].localeCompare(COLS.customer.d[b.j]) : (a, b) => a[s.sort] - b[s.sort]; rows.sort((a, b) => f(a, b) * s.dir);
-    thead.replaceChildren(sortHead(cols, s, draw)); const shown = rows.slice(0, S.def.tableRows);
-    tbody.replaceChildren(...shown.map((r) => h('tr', {class: 'click' + (sel.has(r.j) ? ' on' : ''), onclick: () => toggle(key, r.j)}, h('td', null, COLS.customer.d[r.j]), h('td', {class: 'n'}, fInt(r.cnt)), h('td', {class: 'n'}, r.air ? f1(r.air) : '–'), h('td', {class: 'n'}, r.sea ? fInt(Math.round(r.sea)) : '–'),
-      h('td', {class: 'n'}, fS(r.share)), h('td', {class: 'n ' + (r.delta > 0 ? 'ok' : r.delta < 0 ? 'bad' : '')}, hasPrev ? (r.delta > 0 ? '+' : r.delta < 0 ? '−' : '') + fInt(Math.abs(r.delta)) : '–'), h('td', {class: 'n'}, r.last > 0 ? fDay(r.last) : '–'))));
-    note.textContent = 'Showing ' + shown.length + ' of ' + fInt(rows.length) + ' customers. Click a header to sort, a row to filter. ' + (hasPrev ? 'Change = shipments minus the ' + cmpLabel() + '.' : 'No earlier period exists before this date range, so there is no change to show.'); };
-  draw();
-  // heatmap
-  const topIds = rows.slice().sort((a, b) => b.v - a.v).slice(0, S.def.heatN).map((r) => r.j), months = d3.utcMonth.range(d3.utcMonth.floor(dDate(R.w.from)), dDate(R.w.to + 1)).map((d) => Math.round(+d / DMS)), mi = new Map(months.map((s, i) => [s, i]));
-  const hm = new Map(topIds.map((j) => [j, new Float64Array(months.length)])); let hmax = 0;
-  for (let i = 0; i < N; i++) if (M2[i]) { const a = hm.get(c[i]); if (a) { const b = mi.get(mStart[i]); if (b !== undefined) { a[b] += vi(i); if (a[b] > hmax) hmax = a[b]; } } }
-  const heat = h('div', {class: 'scroll'}, h('table', {class: 'tbl heat'}, h('thead', null, h('tr', null, h('th', null, 'Customer'), months.map((s) => h('th', {class: 'n'}, d3.utcFormat('%b %y')(dDate(s)))))),
-    h('tbody', null, topIds.map((j) => h('tr', null, h('td', {class: 'lab2'}, h('button', {type: 'button', class: 'link', onclick: () => toggle(key, j)}, COLS.customer.d[j])),
-      [...hm.get(j)].map((v, bi) => h('td', {class: 'n hc', title: COLS.customer.d[j] + ' · ' + d3.utcFormat('%b %Y')(dDate(months[bi])) + ': ' + fm(v), style: v ? 'background:rgba(76,120,168,' + (0.12 + 0.75 * v / hmax) + ');color:' + (v / hmax > 0.55 ? '#fff' : 'inherit') : '', onclick: () => { S.sel.customer = new Set([j]); S.rel = null; S.from = Math.max(months[bi], MINDATE); S.to = Math.min(Math.round(+d3.utcMonth.offset(dDate(months[bi]), 1) / DMS) - 1, MAXDATE); renderAll(); }}, v ? (R.useVol ? (R.air ? f1(v) : fInt(Math.round(v))) : fInt(v)) : '')))))));
-  // A customer with shipments before and none now is the biggest possible decline, but has no row above
-  // (rows are customers with shipments now), so add them here for the movers lists only.
-  const lost = []; if (hasPrev) for (let j = 0; j < sz; j++) if (!(cnt[j] > 0 || sel.has(j)) && pc[j] > 0) lost.push({j, cnt: 0, delta: -pc[j]});
-  const mov = hasPrev ? rows.filter((r) => r.delta !== 0).concat(lost) : [], gain = mov.filter((r) => r.delta > 0).sort((a, b) => b.delta - a.delta).slice(0, S.def.topN), lose = mov.filter((r) => r.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, S.def.topN);
-  const moverList = (arr, sign) => arr.length ? h('div', {class: 'rank'}, arr.map((r) => h('button', {type: 'button', class: 'row', onclick: () => toggle(key, r.j)}, h('span', {class: 'lab', title: COLS.customer.d[r.j]}, COLS.customer.d[r.j]), h('span', {class: 'track'}, h('span', {class: 'fill', style: 'width:' + Math.min(100, Math.abs(r.delta) / Math.abs(arr[0].delta) * 100) + '%;background:var(--' + (sign > 0 ? 'ok' : 'bad') + ')'})), h('span', {class: 'val'}, (sign > 0 ? '+' : '−') + fInt(Math.abs(r.delta)) + ' shipments')))) : (hasPrev ? emptyNote() : h('p', {class: 'empty'}, 'No earlier period to compare with. Choose a shorter date range, for example the last 30 days.'));
-  return h('div', null, h('div', {class: 'grid'},
-    card('Customers', null, h('div', null, h('div', {class: 'frow'}, dlButton('Download Excel', exportCust)), note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody))), 'full', {metric: 'ops.shipments', dimension: 'customer'}),
-    card('Customer by month', 'Top ' + S.def.heatN + ' customers by ' + (R.useVol ? 'volume' : 'shipments') + '. Click a cell to focus that customer and month.', heat, 'full', {metric: opsVisualMetric(), dimension: 'customer'}),
-    card('Growing accounts', 'Biggest increase in shipments against the ' + cmpLabel() + '.', moverList(gain, 1)),
-    card('Declining accounts', 'Biggest fall in shipments against the ' + cmpLabel() + '.', moverList(lose, -1))));
-}
 function pageLanes() {
   const a = laneAgg(); a.rows.sort((x, y) => y.cnt - x.cnt); const shown = a.rows.slice(0, S.def.tableRows);
   const exportLanes = () => { const list = a.rows.slice().sort((x, y) => y.cnt - x.cnt);
