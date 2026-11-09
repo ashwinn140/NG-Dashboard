@@ -77,9 +77,13 @@ def _report_definition(user: dict, payload: dict) -> dict:
     for template in (subject, message):
         # Reject unknown or malformed replacement fields when the schedule is saved.
         try:
-            keys = {field for _, field, _, _ in Formatter().parse(template) if field}
+            parsed = list(Formatter().parse(template))
         except ValueError as exc:
             raise ScheduleValidationError("Email subject or message has invalid template syntax.") from exc
+        keys = {field for _, field, _, _ in parsed if field}
+        if any(field and (field not in ALLOWED_TEMPLATE_KEYS or spec or conversion)
+               for _, field, spec, conversion in parsed):
+            raise ScheduleValidationError("Use only simple, allowlisted email template placeholders.")
         if not keys.issubset(ALLOWED_TEMPLATE_KEYS):
             raise ScheduleValidationError("Email templates may use only: " + ", ".join(sorted(ALLOWED_TEMPLATE_KEYS)))
     normalized["email_subject"] = subject
@@ -207,6 +211,8 @@ def list_runs(engine, owner_id: int, schedule_id: int, limit: int = 50) -> list[
 
 def queue_manual_run(engine, user: dict, schedule_id: int) -> dict:
     schedule = get_schedule(engine, user["id"], schedule_id)
+    if schedule["status"] == "disabled":
+        raise KeyError("Schedule not found or deactivated.")
     now = _now()
     definition = schedule["definition"]
     key = f"manual:{schedule_id}:{now.isoformat(timespec='microseconds')}:{definition['report_version']}"
@@ -403,6 +409,10 @@ class SchedulerWorker:
             self._finish(run_id, status="failed", error_code="schedule_missing",
                          error_message="Schedule was removed before the run started.")
             return
+        if schedule["status"] == "disabled":
+            self._finish(run_id, status="cancelled", error_code="schedule_disabled",
+                         error_message="Schedule was deactivated before the run started.")
+            return
         owner = _definition_user(self.engine, schedule["owner_id"])
         if not owner:
             self._finish(run_id, status="failed", error_code="owner_inactive",
@@ -436,6 +446,17 @@ class SchedulerWorker:
                                      error_code="freshness_delay_expired",
                                      error_message="Freshness delay window expired; the report was not sent.")
                     return
+            # Re-check deactivation immediately before submitting the email. A
+            # run already generating must not send after the owner deactivates it.
+            with self.engine.connect() as conn:
+                current_status = conn.execute(select(report_schedules.c.status).where(
+                    report_schedules.c.id == schedule["id"]
+                )).scalar_one_or_none()
+            if current_status == "disabled":
+                self._finish(run_id, status="cancelled", freshness=freshness,
+                             error_code="schedule_disabled",
+                             error_message="Schedule was deactivated before email submission.")
+                return
             owner_email = owner["email"].strip().lower()
             context = prepared["template_context"]
             subject = prepared["definition"]["email_subject"].format_map(context)[:180]
