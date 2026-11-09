@@ -806,7 +806,7 @@ function pageCustomers() {
       const lastOwners = new Map();
       for (let offset=0; offset<list.length; offset+=100) {
         const batch=list.slice(offset,offset+100);
-        const histories=await loadRecentJobs(batch.map(r=>({customer:COLS.customer.d[r.j],companies:historyCompanies(r.j),lobs:historyLobs()})));
+        const histories=await loadRecentJobs(batch.map(r=>({customer:COLS.customer.d[r.j],companies:historyCompanies(r.j),lobs:historyLobs(),last_shipment_date:r.last>0?fIso(dDate(r.last)):''})));
         histories.forEach(history=>{
           const jobs=history.jobs||[];
           lastOwners.set(String(history.customer||'').trim().toLowerCase(),history.last_shipment_job_owner||'Owner unavailable');
@@ -817,7 +817,7 @@ function pageCustomers() {
       const customerRows=[['Customer','Shipments','Air chargeable weight (t)','Sea TEUs','Share of shipments','Change vs comparison (shipments)','Last shipment','Last shipment Job Owner'].map(HDR)];
       list.forEach(r=>customerRows.push([COLS.customer.d[r.j],{v:r.cnt,s:3},r.air?{v:+r.air.toFixed(3),s:4}:'',r.sea?{v:Math.round(r.sea),s:3}:'',{v:r.share,s:2},hasPrev?{v:r.delta,s:3}:'',r.last>0?{v:serial(r.last),s:5}:'',lastOwners.get(COLS.customer.d[r.j].trim().toLowerCase())||'Owner unavailable']));
       downloadXlsx('customers_'+fIso(dDate(MAXDATE))+'.xlsx',[
-        {name:'Customers',freeze:true,filter:true,cols:[42,12,18,12,18,18,16],rows:customerRows},
+        {name:'Customers',freeze:true,filter:true,cols:[42,12,18,12,18,18,16,30],rows:customerRows},
         {name:'Last 5 Jobs',freeze:true,filter:true,cols:[38,12,22,16,28,30,20],rows:historyRows},
         settingsSheet([[HDR('Range'),fDay(R.w.from)+' to '+fDay(R.w.to)],[HDR('History basis'),'Job Date'],[HDR('History source'),'Current Job Profit Analysis Report'],[HDR('History scope'),'Last five distinct jobs per customer within permitted company and LOB scope. Owner values are JPR source values only.']])
       ]);
@@ -835,7 +835,7 @@ function pageCustomers() {
   // Resolve the owner against the exact latest Shipment Date shown in this table.
   // The backend only returns an owner for a unique, source-backed JPR match.
   (async()=>{
-    const visible=rows.slice().sort((a,b)=>b.cnt-a.cnt).slice(0,S.def.tableRows).filter(r=>r.last>0);
+    const visible=rows.slice(0,S.def.tableRows).filter(r=>r.last>0);
     for(let offset=0;offset<visible.length;offset+=100){
       const batch=visible.slice(offset,offset+100);
       try{
