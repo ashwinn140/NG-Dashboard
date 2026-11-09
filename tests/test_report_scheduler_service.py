@@ -119,8 +119,8 @@ class SchedulerServiceTests(unittest.TestCase):
         with patch.object(service, "prepare_workbook", return_value=prepared) as prepare, patch.object(mailer, "send", return_value=True) as send:
             self.assertTrue(worker.process_one())
         send.assert_called_once()
-        sent = send.call_args.kwargs
-        self.assertEqual(sent["to"], "owner@example.com")
+        sent = send.call_args
+        self.assertEqual(sent.args[0], "owner@example.com")
         self.assertEqual(sent["attachments"][0]["filename"], "shipment_register.xlsx")
         self.assertEqual(sent["attachments"][0]["content"], b"test-xlsx")
         history = service.list_runs(self.engine, self.user["id"], schedule["id"])
