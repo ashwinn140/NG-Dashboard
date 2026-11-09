@@ -41,6 +41,17 @@ jobs:
           node frontend/tests/help_guide_test.js
           node frontend/tests/visual_trace_test.js
           node frontend/tests/visual_explanation_coverage_test.js
+      - name: Check scheduled report page JavaScript
+        run: |
+          python - <<'PY'
+          import pathlib, re
+          html = pathlib.Path("app/web/report_scheduler.html").read_text()
+          scripts = re.findall(r"<script>(.*?)</script>", html, re.S)
+          if not scripts:
+              raise SystemExit("No inline JavaScript was found in report_scheduler.html")
+          pathlib.Path("/tmp/report-scheduler-inline.js").write_text(chr(10).join(scripts))
+          PY
+          node --check /tmp/report-scheduler-inline.js
       - name: Synthetic runtime visual inventory and coverage
         run: |
           python scripts/audit_visual_contract.py

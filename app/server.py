@@ -8,7 +8,8 @@ import pandas as pd
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import select, func, insert, delete, update
-from . import auth, admin_ops as ops, dataset as DS, mailer, master as MST, processor as P, profit as J, metric_definitions as MD, metric_execution as MX
+from sqlalchemy.exc import IntegrityError
+from . import auth, admin_ops as ops, dataset as DS, mailer, master as MST, processor as P, profit as J, metric_definitions as MD, metric_execution as MX, report_scheduler as RS, report_scheduler_service as RSS
 from .db import get_engine, imports, uploads, users, prefs, admin_log, shipments, profit_lines, org_master
 
 log = logging.getLogger("app")
@@ -37,6 +38,10 @@ class Store:
         if start_worker:
             self.thread = threading.Thread(target=self._supervise_worker, daemon=True, name="importer"); self.thread.start()
         self.wake.set()
+        self.scheduler_worker = None
+        if start_worker and str(os.environ.get("REPORT_SCHEDULER_ENABLED", "false")).strip().lower() in ("1", "true", "yes", "on"):
+            self.scheduler_worker = RSS.SchedulerWorker(engine, self)
+            self.scheduler_worker.start()
 
     # ---- dataset
     def dataset_for(self, user: dict) -> bytes:
@@ -363,6 +368,112 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
     @app.get("/api/dataset")
     def api_dataset(user: dict = Depends(me)):
         return Response(store.dataset_for(user), media_type="application/json", headers={"Content-Encoding": "gzip", "Cache-Control": "private, no-store"})
+
+    # ------------------------------------------------------------------ scheduled email reports
+    @app.get("/reports/scheduled", response_class=HTMLResponse)
+    def scheduled_reports_page(user: dict = Depends(me)):
+        return page("report_scheduler.html")
+
+    @app.get("/api/report-schedules/catalog")
+    def report_schedule_catalog(user: dict = Depends(me)):
+        catalog = []
+        for report_id, report in RS.REPORT_CATALOG.items():
+            if report.get("permission") == "finance" and not user["finance"]:
+                continue
+            catalog.append({
+                "id": report_id, "title": report["title"], "permission": report["permission"],
+                "date_basis": report["date_basis"], "filters": list(report["filters"]),
+                "detail_columns": list(report["columns"]),
+                "summary_columns": list(report["summary_columns"]),
+                "summary_only": report_id == "customer_performance",
+            })
+        return {"reports": catalog, "companies": user["companies"] or ["NG", "NCS"],
+                "lobs": user["lobs"] or ["AE", "AI", "OE", "OI"],
+                "finance": bool(user["finance"]), "worker_enabled": RSS._worker_enabled()}
+
+    @app.get("/api/report-schedules")
+    def report_schedule_list(user: dict = Depends(me)):
+        return {"schedules": RSS.list_schedules(engine, user["id"]),
+                "worker_enabled": RSS._worker_enabled()}
+
+    @app.post("/api/report-schedules")
+    async def report_schedule_create(request: Request, user: dict = Depends(unsafe)):
+        try:
+            body = await request.json()
+            return RSS.create_schedule(engine, user, body)
+        except PermissionError as exc:
+            raise HTTPException(403, str(exc))
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(400, str(exc))
+
+    @app.patch("/api/report-schedules/{schedule_id}")
+    async def report_schedule_update(schedule_id: int, request: Request, user: dict = Depends(unsafe)):
+        try:
+            return RSS.update_schedule(engine, user, schedule_id, await request.json())
+        except KeyError as exc:
+            raise HTTPException(404, str(exc))
+        except PermissionError as exc:
+            raise HTTPException(403, str(exc))
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(400, str(exc))
+
+    @app.delete("/api/report-schedules/{schedule_id}")
+    def report_schedule_delete(schedule_id: int, user: dict = Depends(unsafe)):
+        try:
+            return RSS.delete_schedule(engine, user, schedule_id)
+        except KeyError as exc:
+            raise HTTPException(404, str(exc))
+
+    @app.get("/api/report-schedules/{schedule_id}/runs")
+    def report_schedule_runs(schedule_id: int, user: dict = Depends(me)):
+        try:
+            return {"runs": RSS.list_runs(engine, user["id"], schedule_id)}
+        except KeyError as exc:
+            raise HTTPException(404, str(exc))
+
+    @app.post("/api/report-schedules/{schedule_id}/run-now")
+    def report_schedule_run_now(schedule_id: int, user: dict = Depends(unsafe)):
+        try:
+            return RSS.queue_manual_run(engine, user, schedule_id)
+        except KeyError as exc:
+            raise HTTPException(404, str(exc))
+        except IntegrityError:
+            raise HTTPException(409, "A report run is already queued for this schedule.")
+
+    @app.post("/api/report-schedules/preview")
+    async def report_schedule_preview(request: Request, user: dict = Depends(unsafe)):
+        try:
+            prepared = RSS.preview_workbook(engine, store, user, await request.json())
+            workbook = prepared["workbook"]
+            filename = workbook["filename"].replace('"', "")
+            return Response(
+                workbook["content"], media_type=RSS.XLSX_MIME,
+                headers={"Content-Disposition": f'attachment; filename="{filename}"',
+                         "Cache-Control": "private, no-store"},
+            )
+        except PermissionError as exc:
+            raise HTTPException(403, str(exc))
+        except (ValueError, TypeError, KeyError) as exc:
+            raise HTTPException(400, str(exc))
+
+    @app.post("/api/report-schedules/{schedule_id}/preview")
+    def report_schedule_saved_preview(schedule_id: int, user: dict = Depends(unsafe)):
+        try:
+            schedule = RSS.get_schedule(engine, user["id"], schedule_id)
+            prepared = RSS.prepare_workbook(engine, store, user, schedule["definition"])
+            workbook = prepared["workbook"]
+            filename = workbook["filename"].replace('"', "")
+            return Response(
+                workbook["content"], media_type=RSS.XLSX_MIME,
+                headers={"Content-Disposition": f'attachment; filename="{filename}"',
+                         "Cache-Control": "private, no-store"},
+            )
+        except KeyError as exc:
+            raise HTTPException(404, str(exc))
+        except PermissionError as exc:
+            raise HTTPException(403, str(exc))
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(400, str(exc))
 
     @app.post("/api/customers/recent-jobs")
     async def customer_recent_jobs(request: Request, user: dict = Depends(unsafe)):
