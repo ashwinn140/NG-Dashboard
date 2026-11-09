@@ -4,7 +4,7 @@ import pathlib
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-from app.phase2_coverage import report_field_coverage, job_history_field_coverage
+from app.phase2_coverage import report_field_coverage, job_history_field_coverage, job_history_data_quality
 
 
 class CoverageTests(unittest.TestCase):
@@ -80,6 +80,77 @@ class CoverageTests(unittest.TestCase):
         self.assertIn("Header presence does not prove job-to-register matching", ui)
         self.assertIn("Matched register fallback", ui)
 
+
+
+class JobHistoryDataQualityTests(unittest.TestCase):
+    def test_unique_composite_match_supplies_register_owner(self):
+        from datetime import date
+        result = job_history_data_quality(
+            [{"company": "NG", "report_type": "AE", "shipment_no": "J-1",
+              "shipment_date": date(2026, 11, 8), "job_owner": "Owner A"}],
+            [{"company": "NG", "job_no": "J-1", "job_date": date(2026, 11, 8),
+              "lob": "FFWD AIR EXP", "extra": {}}])
+        row = result[0]
+        self.assertEqual(row["matched_register_jobs"], 1)
+        self.assertEqual(row["owner_from_register"], 1)
+        self.assertEqual(row["job_owner_populated"], 1)
+        self.assertEqual(row["job_owner_coverage_pct"], 100.0)
+        self.assertEqual(row["status"], "ready")
+
+    def test_jpr_owner_field_has_priority_even_when_explicitly_blank(self):
+        from datetime import date
+        register = [{"company": "NG", "report_type": "AE", "shipment_no": "J-1",
+                     "shipment_date": date(2026, 11, 8), "job_owner": "Register Owner"}]
+        jobs = [
+            {"company": "NG", "job_no": "J-1", "job_date": date(2026, 11, 8),
+             "lob": "FFWD AIR EXP", "extra": {"Job Owner": "JPR Owner"}},
+            {"company": "NG", "job_no": "J-2", "job_date": date(2026, 11, 9),
+             "lob": "FFWD AIR EXP", "extra": {"Job Owner": ""}},
+        ]
+        row = job_history_data_quality(register, jobs)[0]
+        self.assertEqual(row["owner_from_jpr"], 1)
+        self.assertEqual(row["owner_from_register"], 0)
+        self.assertEqual(row["jpr_owner_explicitly_blank"], 1)
+        self.assertEqual(row["job_owner_missing"], 1)
+
+    def test_ambiguous_number_fallback_is_not_guessed(self):
+        from datetime import date
+        register = [
+            {"company": "NG", "report_type": "AE", "shipment_no": "REUSED",
+             "shipment_date": date(2026, 1, 1), "job_owner": "Owner A"},
+            {"company": "NG", "report_type": "AE", "shipment_no": "REUSED",
+             "shipment_date": date(2026, 1, 2), "job_owner": "Owner B"},
+        ]
+        jobs = [{"company": "NG", "job_no": "REUSED", "job_date": date(2026, 1, 3),
+                 "lob": "FFWD AIR EXP", "extra": {}}]
+        row = job_history_data_quality(register, jobs)[0]
+        self.assertEqual(row["ambiguous_register_matches"], 1)
+        self.assertEqual(row["job_owner_populated"], 0)
+        self.assertEqual(row["job_owner_missing"], 1)
+
+    def test_wrong_lob_register_is_not_used_as_owner_fallback(self):
+        from datetime import date
+        register = [{"company": "NG", "report_type": "AE", "shipment_no": "J-1",
+                     "shipment_date": date(2026, 11, 8), "job_owner": "Air Owner"}]
+        jobs = [{"company": "NG", "job_no": "J-1", "job_date": date(2026, 11, 8),
+                 "lob": "FFWD SEA EXP", "extra": {}}]
+        row = job_history_data_quality(register, jobs)[0]
+        self.assertEqual(row["matched_register_jobs"], 0)
+        self.assertEqual(row["unmatched_register_jobs"], 1)
+        self.assertEqual(row["job_owner_missing"], 1)
+
+    def test_duplicate_jpr_identity_is_flagged_and_output_contains_no_names(self):
+        from datetime import date
+        job = {"company": "NG", "job_no": "J-1", "job_date": date(2026, 11, 8),
+               "lob": "FFWD AIR EXP", "customer": "Sensitive Customer",
+               "extra": {"Job Owner": "Sensitive Owner"}}
+        result = job_history_data_quality([], [job, dict(job)])
+        row = result[0]
+        self.assertEqual(row["job_count"], 1)
+        self.assertEqual(row["duplicate_job_identities"], 1)
+        self.assertEqual(row["job_owner_missing"], 1)
+        self.assertNotIn("Sensitive Customer", repr(result))
+        self.assertNotIn("Sensitive Owner", repr(result))
 
 if __name__ == "__main__":
     unittest.main()
