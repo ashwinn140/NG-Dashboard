@@ -497,8 +497,8 @@ function pageCustomers() {
           else jobs.forEach(job=>historyRows.push([history.customer,job.company,job.job_no,job.job_date,job.lob,job.job_owner,job.owner_status]));
         });
       }
-      const customerRows=[['Customer','Shipments','Air chargeable weight (t)','Sea TEUs','Share of shipments','Change vs comparison (shipments)','Last shipment'].map(HDR)];
-      list.forEach(r=>customerRows.push([COLS.customer.d[r.j],{v:r.cnt,s:3},r.air?{v:+r.air.toFixed(3),s:4}:'',r.sea?{v:Math.round(r.sea),s:3}:'',{v:r.share,s:2},hasPrev?{v:r.delta,s:3}:'',r.last>0?{v:serial(r.last),s:5}:'']));
+      const customerRows=[['Customer','Shipments','Air chargeable weight (t)','Sea TEUs','Share of shipments','Change vs comparison (shipments)','Last shipment','Last job owner'].map(HDR)];
+      list.forEach(r=>customerRows.push([COLS.customer.d[r.j],{v:r.cnt,s:3},r.air?{v:+r.air.toFixed(3),s:4}:'',r.sea?{v:Math.round(r.sea),s:3}:'',{v:r.share,s:2},hasPrev?{v:r.delta,s:3}:'',r.last>0?{v:serial(r.last),s:5}:'', 'See Last 5 Jobs sheet for source-backed owner history']));
       downloadXlsx('customers_'+fIso(dDate(MAXDATE))+'.xlsx',[
         {name:'Customers',freeze:true,filter:true,cols:[42,12,18,12,18,18,16],rows:customerRows},
         {name:'Last 5 Jobs',freeze:true,filter:true,cols:[38,12,22,16,28,30,20],rows:historyRows},
@@ -507,14 +507,35 @@ function pageCustomers() {
     } catch(error) { alert('Customer export was not completed: '+error.message); }
   };
   const tbody = h('tbody'), note = h('p', {class: 'note'});
-  const cols = [{k: 'name', t: 'Customer'}, {k: 'cnt', t: 'Shipments', num: true}, {k: 'air', t: 'Air weight (t)', num: true}, {k: 'sea', t: 'Sea TEUs', num: true}, {k: 'share', t: 'Share', num: true}, {k: 'delta', t: 'Change vs previous', num: true}, {k: 'last', t: 'Last shipment', num: true}, {k:'history',t:'Last 5 jobs',sort:false}];
+  const cols = [{k: 'name', t: 'Customer'}, {k: 'cnt', t: 'Shipments', num: true}, {k: 'air', t: 'Air weight (t)', num: true}, {k: 'sea', t: 'Sea TEUs', num: true}, {k: 'share', t: 'Share', num: true}, {k: 'delta', t: 'Change vs previous', num: true}, {k: 'last', t: 'Last shipment', num: true}, {k: 'jobOwner', t: 'Last job owner', sort:false}, {k:'history',t:'Last 5 jobs',sort:false}];
   const thead = h('thead'); const draw = () => {
     const s = S.cust, f = s.sort === 'name' ? (a, b) => COLS.customer.d[a.j].localeCompare(COLS.customer.d[b.j]) : (a, b) => a[s.sort] - b[s.sort]; rows.sort((a, b) => f(a, b) * s.dir);
     thead.replaceChildren(sortHead(cols, s, draw)); const shown = rows.slice(0, S.def.tableRows);
     tbody.replaceChildren(...shown.map((r) => h('tr', {class: 'click' + (sel.has(r.j) ? ' on' : ''), onclick: () => toggle(key, r.j)}, h('td', null, COLS.customer.d[r.j]), h('td', {class: 'n'}, fInt(r.cnt)), h('td', {class: 'n'}, r.air ? f1(r.air) : '–'), h('td', {class: 'n'}, r.sea ? fInt(Math.round(r.sea)) : '–'),
-      h('td', {class: 'n'}, fS(r.share)), h('td', {class: 'n ' + (r.delta > 0 ? 'ok' : r.delta < 0 ? 'bad' : '')}, hasPrev ? (r.delta > 0 ? '+' : r.delta < 0 ? '−' : '') + fInt(Math.abs(r.delta)) : '–'), h('td', {class: 'n'}, r.last > 0 ? fDay(r.last) : '–'), h('td', null, h('button',{type:'button',class:'link',onclick:event=>{event.stopPropagation();showRecentJobs(COLS.customer.d[r.j],historyCompanies(r.j));}},'View jobs')))));
+      h('td', {class: 'n'}, fS(r.share)), h('td', {class: 'n ' + (r.delta > 0 ? 'ok' : r.delta < 0 ? 'bad' : '')}, hasPrev ? (r.delta > 0 ? '+' : r.delta < 0 ? '−' : '') + fInt(Math.abs(r.delta)) : '–'), h('td', {class: 'n'}, r.last > 0 ? fDay(r.last) : '–'), h('td', null, r.jobOwner || 'Loading…'), h('td', null, h('button',{type:'button',class:'link',onclick:event=>{event.stopPropagation();showRecentJobs(COLS.customer.d[r.j],historyCompanies(r.j));}},'View jobs')))));
     note.textContent = 'Showing ' + shown.length + ' of ' + fInt(rows.length) + ' customers. Click a row to filter; use View jobs to inspect the last five distinct JPR jobs. Job history uses Job Date and is independent of the dashboard date range. ' + (hasPrev ? 'Change = shipments minus the ' + cmpLabel() + '.' : 'No earlier period exists before this date range, so there is no change to show.'); };
   draw();
+  // Populate the latest Job Owner from the same JPR-backed recent-job endpoint used by View jobs.
+  // Fetch only displayed customers in bounded batches; never substitute salesperson/register owner.
+  const ownerShown = rows.slice().sort((a,b)=>b.cnt-a.cnt).slice(0,S.def.tableRows);
+  (async () => {
+    try {
+      for (let offset=0; offset<ownerShown.length; offset+=50) {
+        const batch=ownerShown.slice(offset,offset+50);
+        const histories=await loadRecentJobs(batch.map(r=>({customer:COLS.customer.d[r.j],companies:historyCompanies(r.j),lobs:historyLobs()})));
+        histories.forEach(history=>{
+          const row=batch.find(r=>COLS.customer.d[r.j]===history.customer);
+          const latest=(history.jobs||[])[0];
+          if(row) row.jobOwner=latest ? (latest.job_owner || 'Owner unavailable') : 'No JPR job';
+        });
+      }
+      draw();
+    } catch(error) {
+      ownerShown.forEach(r=>{r.jobOwner='Unavailable';});
+      draw();
+      note.textContent += ' Last job owner could not be loaded: '+error.message;
+    }
+  })();
   // heatmap
   const topIds = rows.slice().sort((a, b) => b.v - a.v).slice(0, S.def.heatN).map((r) => r.j), months = d3.utcMonth.range(d3.utcMonth.floor(dDate(R.w.from)), dDate(R.w.to + 1)).map((d) => Math.round(+d / DMS)), mi = new Map(months.map((s, i) => [s, i]));
   const hm = new Map(topIds.map((j) => [j, new Float64Array(months.length)])); let hmax = 0;
