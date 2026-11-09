@@ -58,10 +58,10 @@ def build_recent_jobs(rows, lobs=None, limit=5):
         if item is None:
             grouped[identity] = {
                 "company": company, "job_no": job_no, "job_date": job_date,
-                "lob": lob, "customer": customer, "owners": set([owner] if owner else []),
+                "lob": lob, "customer": customer, "owners": {owner or None},
             }
         else:
-            item["owners"].add(owner if owner else None)
+            item["owners"].add(owner or None)
 
     result = []
     for item in grouped.values():

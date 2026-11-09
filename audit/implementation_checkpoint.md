@@ -222,3 +222,31 @@
 1. Authenticated browser verification on the live dashboard: open Operations → Customers, use View jobs, inspect the last five jobs for representative NG/NCS customers, and verify the Last 5 Jobs Excel worksheet. Automated frontend tests and deployment are green, but no authenticated live browser session was available during this continuation.
 2. Continue cross-LOB inactivity / lost-customer analysis only after validating canonical customer identity and authorized history coverage. Keep selected-LOB inactivity distinct from customer-wide inactivity.
 3. Continue the outstanding two original ERP workbook row-level reconciliations, variance/date audit and finance ingestion audit.
+
+
+## Continuation checkpoint — 9 November 2026, 20:55 IST
+
+### Verified current production baseline
+- Repository: `ashwinn140/NG-Dashboard`, production branch `main`.
+- Production commit: `49a470e5462bdfcced10adf00974e81d91fd15c6`.
+- Railway deployment: `1a3a3433-21b8-45c5-8126-9d57fe73b1e8`, SUCCESS; production service online, 1/1 replica, zero active warnings/criticals, zero recent failures, no pending work.
+- Production domain: `ng-dashboard-production.up.railway.app`; Postgres and the NG-Dashboard persistent volume remain attached.
+- GitHub Actions/Railway deployment status for the production commit reports success. Latest runtime logs show application startup and successful HTTP 200 responses for the dashboard, /api/me, preferences, metric definitions and dataset.
+- No authenticated browser session is available in this continuation. Do not claim browser interaction or screenshot verification.
+- No production data, database schema or Railway configuration was changed.
+
+### PR #27 — defensive correction in review
+- Branch: `fix/customer-history-owner-consistency-2026-11-09`.
+- PR: https://github.com/ashwinn140/NG-Dashboard/pull/27
+- Finding: for duplicate JPR rows sharing company + LOB + Job No. + Job Date, one blank Job Owner plus one populated Job Owner could be treated as available or conflicting depending on source-row order.
+- Change: normalize missing owner to an explicit `None` member in the owner set, so blank + populated is always conflicting and displays `Owner unavailable`; add regression coverage for both row orders.
+- Scope limited to `app/customer_history.py` and `tests/test_customer_history.py`. No schema, financial, permission, source-data or production changes.
+- PR opened; CI status had not yet appeared at checkpoint time. Do not merge or deploy until CI passes and the diff is reviewed.
+
+### Additional audit notes / next work
+1. The customer-history endpoint currently checks customer visibility against current shipment rows, then returns JPR history. It is CSRF-protected and checks company/LOB authorization; continue review of customer identity/name-collision behavior before building company-wide lost-customer logic.
+2. Customer identity in the dataset is currently normalized customer name, not a proven stable ERP customer code. Do not infer identity merges or company-wide inactivity from similar names.
+3. Cross-LOB inactivity/lost-customer intelligence remains pending. Existing Customer 360 activity is selected-scope only; any company-wide claim must require complete coverage of every relevant authorized LOB.
+4. Original charge-wise source reconciliation remains partial: NG current FY2026 and NCS FY2025 were independently row-reconciled (187,805 lines, zero unmatched); NG FY2025 and NCS current FY2026 originals remain uncertified at row level. Searchable Library did not surface those remaining source workbooks.
+5. Continue variance/date-basis, ingestion completeness, metric-definition coverage, and Report Scheduler/HTML Help work only with validated source and security evidence. Never activate real recurring report sends until authorization, recipient and delivery tests pass.
+6. Re-check the last-five-jobs modal and Excel worksheet in an authenticated browser when a user session becomes available.

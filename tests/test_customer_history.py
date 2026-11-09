@@ -53,6 +53,17 @@ class CustomerHistoryTests(unittest.TestCase):
         self.assertEqual(result[0]["job_owner"], "Owner unavailable")
         self.assertEqual(result[0]["owner_status"], "conflicting")
 
+    def test_blank_and_populated_duplicate_owners_are_order_independent_conflicts(self):
+        base = {"company": "NG", "customer": "Acme", "job_no": "J-1",
+                "job_date": date(2026, 1, 1), "lob": "FFWD AIR EXP"}
+        blank = dict(base, extra={"Job Owner": ""})
+        populated = dict(base, extra={"Job Owner": "Owner A"})
+        for rows in ([blank, populated], [populated, blank]):
+            with self.subTest(rows=rows):
+                result = build_recent_jobs(rows)
+                self.assertEqual(result[0]["job_owner"], "Owner unavailable")
+                self.assertEqual(result[0]["owner_status"], "conflicting")
+
     def test_road_and_general_jobs_are_included_for_unrestricted_scope(self):
         rows = [
             {"company": "NG", "customer": "Acme", "job_no": "R-1",
