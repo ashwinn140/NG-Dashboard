@@ -153,6 +153,24 @@ class CustomerHistoryTests(unittest.TestCase):
         self.assertEqual(result["acme"]["last_shipment_date"], "2026-11-07")
         self.assertEqual(result["acme"]["last_shipment_numbers"], ["SHIP-07"])
 
+    def test_last_shipment_owner_respects_date_displayed_by_customer_table(self):
+        shipments = [
+            {"company": "NG", "report_type": "AE", "shipment_no": "SHIP-OLD",
+             "shipment_date": date(2026, 11, 6), "customer": "Acme"},
+            {"company": "NG", "report_type": "AE", "shipment_no": "SHIP-CURRENT",
+             "shipment_date": date(2026, 11, 7), "customer": "Acme"},
+        ]
+        jpr = [
+            {"company": "NG", "job_no": "SHIP-OLD", "job_date": date(2026, 11, 6),
+             "lob": "FFWD AIR EXP", "extra": {"Job Owner": "Old Owner"}},
+            {"company": "NG", "job_no": "SHIP-CURRENT", "job_date": date(2026, 11, 7),
+             "lob": "FFWD AIR EXP", "extra": {"Job Owner": "Displayed Date Owner"}},
+        ]
+        result = build_last_shipment_owners(
+            shipments, jpr, lobs=["AE"], target_date="2026-11-07")
+        self.assertEqual(result["acme"]["last_shipment_job_owner"], "Displayed Date Owner")
+        self.assertEqual(result["acme"]["last_shipment_date"], "2026-11-07")
+
     def test_last_shipment_owner_uses_unique_job_number_fallback_when_dates_differ(self):
         shipments = [{"company": "NG", "report_type": "AE", "shipment_no": "SHIP-1",
                       "shipment_date": date(2026, 11, 7), "customer": "Acme"}]
