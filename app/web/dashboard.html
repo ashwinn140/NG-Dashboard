@@ -833,6 +833,7 @@ function pageCustomers() {
     note.textContent = 'Showing ' + shown.length + ' of ' + fInt(rows.length) + ' customers. Click a row to filter; use View jobs to inspect the last five distinct JPR jobs. Job history uses Job Date and is independent of the dashboard date range. ' + (hasPrev ? 'Change = shipments minus the ' + cmpLabel() + '.' : 'No earlier period exists before this date range, so there is no change to show.'); };
   draw();
   // Resolve the owner against the exact latest Shipment Date shown in this table.
+  // Syntax-checked owner lookup; batch results are matched to their source customer.
   // The backend only returns an owner for a unique, source-backed JPR match.
   (async()=>{
     const visible=rows.slice(0,S.def.tableRows).filter(r=>r.last>0);
