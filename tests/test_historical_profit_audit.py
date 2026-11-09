@@ -26,6 +26,15 @@ class HistoricalProfitAuditTests(unittest.TestCase):
             result = inspect(Path(directory), 2024)
         self.assertEqual(result["files_inspected"], 0)
 
+    @patch("scripts.audit_historical_profit.profit_layout", return_value="charge_detail")
+    def test_legacy_charge_report_is_explicitly_flagged(self, _):
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "legacy.xlsx").write_bytes(b"legacy")
+            result = inspect(Path(directory), 2024)
+        self.assertEqual(result["files_inspected"], 1)
+        self.assertEqual(result["eligible"], 0)
+        self.assertEqual(result["files"][0]["layout"], "charge_detail")
+
     def test_hash_is_stable(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "source.xlsx"
@@ -34,7 +43,7 @@ class HistoricalProfitAuditTests(unittest.TestCase):
 
     @patch("scripts.audit_historical_profit.validate_profit", return_value=[])
     @patch("scripts.audit_historical_profit.read_profit")
-    @patch("scripts.audit_historical_profit.is_profit_report", return_value=True)
+    @patch("scripts.audit_historical_profit.profit_layout", return_value="job_summary")
     def test_cross_year_report_splits_requested_year_totals(self, _, reader, __):
         reader.return_value = SimpleNamespace(
             company="NG", basis="Job Date",
@@ -56,7 +65,7 @@ class HistoricalProfitAuditTests(unittest.TestCase):
         self.assertEqual(row["totals_in_requested_year"]["Income (INR)"], 250)
         self.assertTrue(row["requires_period_split"])
 
-    @patch("scripts.audit_historical_profit.is_profit_report", return_value=False)
+    @patch("scripts.audit_historical_profit.profit_layout", return_value=None)
     def test_unrelated_workbook_is_not_reported(self, _):
         with tempfile.TemporaryDirectory() as directory:
             (Path(directory) / "unrelated.xlsx").write_bytes(b"unrelated")
