@@ -1,0 +1,37 @@
+name: NG dashboard audit branch checks
+on:
+  push:
+    branches:
+      - audit/source-to-visual-2026-11-09
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Check JavaScript syntax
+        run: node --check frontend/app_prod.js
+      - name: Run read-only visual inventory
+        run: python scripts/audit_visual_contract.py
+      - name: Run Python regression tests
+        run: python -m unittest discover -s tests -v
+      - name: Build production dashboard
+        run: sh frontend/build.sh
+      - name: Ensure generated dashboard exists
+        run: test -s app/web/dashboard.html
+      - name: Upload built dashboard and audit inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: ng-dashboard-audit-build
+          path: |
+            app/web/dashboard.html
+            audit/visual_contract_inventory.json
+

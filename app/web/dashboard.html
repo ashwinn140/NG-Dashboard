@@ -469,8 +469,57 @@ function rankedKey(key) {
 }
 const CI = {customer: 0, branch: 1, carrier: 3, origin: 2, destination: 4, x_tradelanename: 5, x_dischargecountry: 6, shipper: 0, consignee: 1};
 window.CHART_COLORS = ['#4c78a8', '#f58518', '#54a24b', '#b279a2', '#e45756', '#72b7b2', '#eeca3b', '#9d755d'];
-function card(title, note, body, cls) { return h('article', {class: 'card ' + (cls || '')}, h('h2', {class: 'h'}, title), note ? h('p', {class: 'note'}, note) : null, body); }
-function kpi(label, value, delta, note, tone, previousValue) {
+// Explanations are attached to the shared renderers, not to individual pages,
+// so newly added cards and KPIs also receive the reporting context.
+// These descriptions are tied to the actual job-summary and shipment aggregates.
+// Unmapped visuals must not be assigned a formula merely because a title contains
+// words such as 'income', 'cost', 'growth' or 'shipment'.
+const VERIFIED_METRIC_EXPLANATIONS = Object.freeze({
+  'income': ['Shows income booked against the selected jobs.', 'Adds the Income amounts in the selected Job Profit Analysis job-summary rows.'],
+  'expense': ['Shows costs booked against the selected jobs.', 'Adds the Expense amounts in the selected Job Profit Analysis job-summary rows.'],
+  'profit': ['Shows booked profit across the selected jobs.', 'Adds job profit, calculated as each job\'s Income less Expense.'],
+  'actual profit': ['Shows booked profit across the selected jobs.', 'Adds job profit, calculated as each job\'s Income less Expense.'],
+  'gross profit': ['Shows the difference between recorded income and recorded costs.', 'Adds recorded Income and subtracts recorded Expense for the selected jobs.'],
+  'margin': ['Shows the share of recorded income retained as profit.', 'Divides selected job-summary Profit by Income and multiplies by 100; unavailable when Income is zero or negative.'],
+  'jobs': ['Shows how many distinct jobs contribute to the metric.', 'Counts distinct jobs by company, line of business, job number and job date after the active job-date and other filters.'],
+  'profit per job': ['Shows average booked profit per selected job.', 'Divides selected total job-summary Profit by the selected job count, where the count is non-zero.'],
+  'shipments': ['Shows the number of shipment-register records in scope.', 'Counts selected shipment-register rows after the active shipment-date and other filters.'],
+  'air chargeable weight (tonnes)': ['Shows total chargeable airfreight weight for the selected shipments.', 'Adds chargeable weight from selected air shipment-register records, in tonnes.'],
+  'sea teus': ['Shows total container volume in twenty-foot-equivalent units.', 'Adds TEUs from selected ocean shipment-register records; the displayed total is rounded to a whole TEU.'],
+  'jobs with cost booked': ['Shows what share of selected jobs have booked costs.', 'Divides jobs with booked expenses by all selected jobs, multiplied by 100; unavailable if no jobs are selected.'],
+  'profit after expected costs': ['Shows an estimated profit after allowing for costs not yet booked.', 'Subtracts estimated missing costs from selected booked profit. For selected jobs with positive income and zero expense, multiplies income by the expense-to-income ratio of all authorized jobs with positive income and expense in the same line of business; uses the overall authorized ratio if no line-of-business benchmark exists, or zero if no benchmark exists. The benchmark spans the authorized dataset, including dates outside the selection. This is an estimate, not actual booked profit.'],
+  'shipments invoiced': ['Shows the proportion of selected shipments with an invoice.', 'Divides selected shipments identified as invoiced by all selected shipments, multiplied by 100.'],
+  'jobs matched to the register': ['Shows the share of selected jobs linked to shipment-register entries.', 'Divides jobs matched to a shipment-register record by jobs considered for matching, multiplied by 100; customs-clearance and road jobs may have no register entry.'],
+  'customers making 80% of profit': ['Shows how concentrated positive customer profit is among the leading customers.', 'Counts the highest-profit customers required to reach 80% of the selected positive customer profit.'],
+  'loss-making customers': ['Shows how many customers generated negative booked profit.', 'Counts customer groups with total selected job-summary Profit below zero.'],
+  'air: profit per tonne': ['Shows booked profit earned per chargeable tonne on matched air jobs.', 'Divides profit on matched air jobs by their combined chargeable tonnes, where total tonnes are positive.'],
+  'sea: profit per teu': ['Shows booked profit earned per TEU on matched ocean jobs.', 'Divides profit on matched ocean jobs by their combined recorded TEUs, where total TEUs are positive.'],
+  'days from shipment to first invoice': ['Shows the average delay between shipment date and first invoice.', 'Adds elapsed days from shipment date to first invoice for eligible invoiced shipments, then divides by their count.'],
+  'days from ops lock to first invoice': ['Shows the average delay between operational closure and first invoice.', 'Adds elapsed days from operations lock to first invoice where both dates are recorded, then divides by eligible shipment count; negative values indicate earlier invoicing.'],
+  'average sell rate': ['Shows the weight-adjusted selling rate for eligible air exports.', 'Divides total eligible air-export selling value by total eligible chargeable weight.'],
+  'average buy rate': ['Shows the weight-adjusted buying rate for eligible air exports.', 'Divides total eligible air-export buying cost by total eligible chargeable weight.'],
+  'freight margin per kg': ['Shows estimated freight spread per kilogram on eligible air exports.', 'Divides eligible air-export selling value less buying cost by total eligible chargeable weight.'],
+  'estimated freight margin': ['Shows estimated air-export freight profit from usable rates.', 'Subtracts eligible air-export buy-rate cost from sell-rate value, with each rate weighted by chargeable weight.'],
+  'selling below buy': ['Shows how many eligible air-export shipments are priced below buying cost.', 'Counts eligible air-export shipments whose calculated selling value is less than calculated buying cost.']
+});
+function businessMeaning(label, note, metricExplanation) {
+  const name = String(label || '').trim();
+  const key = name.toLowerCase();
+  const verified = metricExplanation || VERIFIED_METRIC_EXPLANATIONS[key];
+  const meaning = verified ? verified[0] : 'Shows ' + name.toLowerCase() + ' for the selected reporting scope.';
+  const calculation = verified ? verified[1] : 'Calculation not yet verified against this visual\'s implemented data aggregation. Do not rely on a title-based formula.';
+  const reportingWindow = R && R.w ? R.w : null;
+  const hasDashboardComparison = Boolean(S.compare && reportingWindow && reportingWindow.pfrom != null && reportingWindow.pto != null);
+  const dateBasis = S.group === 'profit' ? 'Job Profit Analysis job dates' : S.group === 'summary' || S.group === 'mine' ? 'Shipment-register dates for operational metrics and job dates for profit metrics' : 'Shipment-register dates for operational metrics; individual finance visuals may use job dates';
+  return h('details', {class: 'business-explanation', style: 'margin-top:.55rem;font-size:.78rem'},
+    h('summary', {style: 'cursor:pointer'}, 'Business meaning & calculation'),
+    h('p', null, h('strong', null, 'What this means: '), meaning),
+    h('p', null, h('strong', null, 'How it is calculated: '), calculation),
+    reportingWindow ? h('p', {class: 'meta'}, 'Dashboard date selection: ' + fRange({from:reportingWindow.from,to:reportingWindow.to}) + (hasDashboardComparison ? '; dashboard comparison: ' + fRange({from:reportingWindow.pfrom,to:reportingWindow.pto}) : '; dashboard comparison: off') + '. Date basis: ' + dateBasis + '. Company, line-of-business and other selected filters apply only where supported by this visual. This is dashboard context, not certification of a visual-specific date or comparison calculation.') : null,
+    note ? h('p', {class:'meta'}, 'Visual note: ' + note) : null);
+}
+function card(title, note, body, cls) { return h('article', {class: 'card ' + (cls || '')}, h('h2', {class: 'h'}, title), note ? h('p', {class: 'note'}, note) : null, body, businessMeaning(title, note)); }
+function kpi(label, value, delta, note, tone, previousValue, metricExplanation) {
   // Promoted ERP records are the reporting source of truth. A zero prior
   // value is a valid baseline, but a percentage cannot be calculated from it.
   const hasComparison = Boolean(S.compare);
@@ -485,7 +534,8 @@ function kpi(label, value, delta, note, tone, previousValue) {
     hasComparison && (delta != null || hasPrevious)
       ? h('div', {class: 'delta ' + (delta != null && delta >= 0 ? 'ok' : delta != null ? 'bad' : '')}, comparison)
       : null,
-    note ? h('div', {class: 'kn'}, note) : null);
+    note ? h('div', {class: 'kn'}, note) : null,
+    businessMeaning(label, note, metricExplanation));
 }
 function activeCust(m) { const c = COLS.customer.c, a = new Uint32Array(COLS.customer.d.length); for (let i = 0; i < N; i++) if (m[i]) a[c[i]]++; let n = 0; for (let j = 0; j < a.length; j++) if (a[j] > 0 && a[j] >= S.def.activeMin) n++; return n; }
 function sumWhere(m, f) { let s = 0; for (let i = 0; i < N; i++) if (m[i]) s += f(i); return s; }
@@ -541,11 +591,11 @@ function pageOverview() {
   const sumAir = (m) => sumWhere(m, (i) => (mode[i] ? 0 : chg[i])), sumSea = (m) => sumWhere(m, (i) => (mode[i] ? teus[i] : 0));
   if (R.air) kp.push(kpi('Air chargeable weight (tonnes)', f1(sumAir(R.M)), S.compare ? pctChange(sumAir(R.M), sumAir(R.P)) : null, 'Air reports only', '', f1(sumAir(R.P))));
   if (R.sea) kp.push(kpi('Sea TEUs', fInt(Math.round(sumSea(R.M))), S.compare ? pctChange(sumSea(R.M), sumSea(R.P)) : null, 'TEUs recorded in ocean registers', '', fInt(Math.round(sumSea(R.P)))));
-  kp.push(kpi('Active customers', fInt(activeCust(R.M)), S.compare ? pctChange(activeCust(R.M), activeCust(R.P)) : null, 'At least ' + S.def.activeMin + ' shipment' + (S.def.activeMin > 1 ? 's' : '') + ' in range', '', fInt(activeCust(R.P))));
+  kp.push(kpi('Active customers', fInt(activeCust(R.M)), S.compare ? pctChange(activeCust(R.M), activeCust(R.P)) : null, 'At least ' + S.def.activeMin + ' shipment' + (S.def.activeMin > 1 ? 's' : '') + ' in range', '', fInt(activeCust(R.P)), ['Shows customers meeting the configured activity threshold.', 'Counts distinct customers with at least ' + S.def.activeMin + ' selected shipment records in the current reporting period.']));
   const t1 = top10(R.M, R.useVol), t0 = top10(R.P, R.useVol);
   kp.push(h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'Top ' + S.def.topN + ' customers’ share'), h('div', {class: 'kv'}, t1 == null ? '—' : fP0(t1)),
     t1 != null && t0 != null && S.compare ? h('div', {class: 'delta flat'}, (t1 >= t0 ? '+' : '−') + f1(Math.abs(t1 - t0) * 100) + ' pts vs ' + cmpLabel()) : null,
-    h('div', {class: 'kn'}, 'Share of ' + (R.useVol ? 'volume' : 'shipments') + '; higher means more concentrated')));
+    h('div', {class: 'kn'}, 'Share of ' + (R.useVol ? 'volume' : 'shipments') + '; higher means more concentrated'), businessMeaning('Top customer concentration', 'Top N customers divided by total selected shipments or volume')));
   const lanes = laneList();
   return h('div', null, h('div', {class: 'kpis'}, kp),
     h('div', {class: 'grid'},
@@ -954,11 +1004,11 @@ function pageCompare() {
   // KPI cards
   const cu = scanDim(m, 'customer', pr, () => 1); let aC = 0, aP = 0, nw = 0, ls = 0;
   for (let j = 0; j < cu.sz; j++) { const a = cu.curC[j] >= S.def.activeMin && cu.curC[j] > 0, b = cu.prevC[j] >= S.def.activeMin && cu.prevC[j] > 0; if (a) aC++; if (b) aP++; if (a && cu.prevC[j] === 0) nw++; if (b && cu.curC[j] === 0) ls++; }
-  const vk = (label, cur, prev, f, note) => { const d = cur - prev, p = pctOf(cur, prev); return h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, label), h('div', {class: 'kv'}, f(cur)), h('div', {class: 'kn'}, 'Previous ' + f(prev)), h('div', {class: 'delta ' + (d > 0 ? 'ok' : d < 0 ? 'bad' : 'flat')}, sgn(d) + f(Math.abs(d)) + ' (' + fPctS(p) + ')'), note ? h('div', {class: 'kn'}, note) : null); };
+  const vk = (label, cur, prev, f, note) => { const d = cur - prev, p = pctOf(cur, prev); return h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, label), h('div', {class: 'kv'}, f(cur)), h('div', {class: 'kn'}, 'Previous ' + f(prev)), h('div', {class: 'delta ' + (d > 0 ? 'ok' : d < 0 ? 'bad' : 'flat')}, sgn(d) + f(Math.abs(d)) + ' (' + fPctS(p) + ')'), note ? h('div', {class: 'kn'}, note) : null, businessMeaning(label, note)); };
   const kp = [vk('Shipments', tot.nC, tot.nP, fInt)];
   if (tot.hasAir) kp.push(vk('Air chargeable weight (tonnes)', tot.airC, tot.airP, f1));
   if (tot.hasSea) kp.push(vk('Sea TEUs', tot.seaC, tot.seaP, (x) => fInt(Math.round(x)), 'Recorded ocean TEUs'));
-  kp.push(vk('Active customers', aC, aP, fInt), h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'Customers only in current period'), h('div', {class: 'kv'}, fInt(nw)), h('div', {class: 'kn'}, 'Meets activity minimum now; no previous-period shipments. Not necessarily a new customer.')), h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'Customers only in comparison period'), h('div', {class: 'kv'}, fInt(ls)), h('div', {class: 'kn'}, 'Meets activity minimum before; no current-period shipments. Not confirmed lost business.')));
+  kp.push(vk('Active customers', aC, aP, fInt), h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'Customers only in current period'), h('div', {class: 'kv'}, fInt(nw)), h('div', {class: 'kn'}, 'Meets activity minimum now; no previous-period shipments. Not necessarily a new customer.'), businessMeaning('Customers only in current period', 'Customers meeting activity threshold now and absent in the comparison period')), h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'Customers only in comparison period'), h('div', {class: 'kv'}, fInt(ls)), h('div', {class: 'kn'}, 'Meets activity minimum before; no current-period shipments. Not confirmed lost business.'), businessMeaning('Customers only in comparison period', 'Customers meeting the comparison activity threshold but absent from current-period shipments')));
   root.append(h('div', {class: 'kpis'}, kp));
 
   // charts
@@ -1112,7 +1162,7 @@ function ppOverview() {
   const stat = groupByP('jobstatus', maskP({skip: 'jobstatus'})), st = (n) => stat.find((r) => r.label === n) || {jobs: 0, inc: 0, exp: 0, profit: 0};
   const ptsDelta = t.margin != null && tp.margin != null && on ? (t.margin >= tp.margin ? '+' : '−') + ((Math.abs(t.margin - tp.margin)) * 100).toFixed(1) + ' pts vs ' + cmpLabel() : null;
   const kp = [kpi('Income', money(t.inc), dd(t.inc, tp.inc), 'Income recorded in Job Profit Analysis Report', '', money(tp.inc)), kpi('Expense', money(t.exp), dd(t.exp, tp.exp), 'Costs booked so far', '', money(tp.exp)), kpi('Profit', money(t.profit), dd(t.profit, tp.profit), 'Income minus expense', t.profit < 0 ? 'bad' : '', money(tp.profit)),
-    h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'Margin'), h('div', {class: 'kv'}, fMargin(t.margin)), ptsDelta ? h('div', {class: 'delta flat'}, ptsDelta) : null, h('div', {class: 'kn'}, 'Profit as a share of income')),
+    h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'Margin'), h('div', {class: 'kv'}, fMargin(t.margin)), ptsDelta ? h('div', {class: 'delta flat'}, ptsDelta) : null, h('div', {class: 'kn'}, 'Profit as a share of income'), businessMeaning('Margin', 'Profit divided by income for the selected job summaries')),
     kpi('Jobs', fInt(t.jobs), dd(t.jobs, tp.jobs), 'With at least one line', '', fInt(tp.jobs)), kpi('Profit per job', t.jobs ? money(t.profit / t.jobs) : '–', null, 'Average over these jobs'),
     kpi('Jobs with cost booked', t.jobs ? fP0(cov) : '–', null, t.booked + ' of ' + t.jobs + ' jobs', cov * 100 < S.def.costCoverage ? 'warn' : ''),
     kpi('Profit after expected costs', money(t.profit - ex.est), null, 'Estimate: unbooked jobs get the cost ratio of booked jobs', 'warn')];
@@ -1210,8 +1260,8 @@ function ppQuality() {
   const lobTbl = h('div', {class: 'scroll'}, h('table', {class: 'tbl'}, h('thead', null, h('tr', null, ['Line of business', 'Jobs without cost', 'Their income', 'Cost ratio on booked jobs', 'Expected cost'].map((x, k) => h('th', {class: k ? 'n' : ''}, x)))), h('tbody', null, ex.rows.map((r) => h('tr', null, h('td', null, r.lob), h('td', {class: 'n'}, fInt(r.jobs)), h('td', {class: 'n'}, money(r.inc)), h('td', {class: 'n'}, fP0(r.ratio)), h('td', {class: 'n'}, money(r.est)))), h('tr', {class: 'totrow'}, h('td', null, 'Total'), h('td', {class: 'n'}, fInt(ex.jobs)), h('td', {class: 'n'}, money(ex.inc)), h('td', {class: 'n'}, fP0(ex.overall)), h('td', {class: 'n'}, money(ex.est))))));
   return h('div', null, h('p', {class: 'meta'}, 'Profit is only as good as the costs booked. Click a card to filter every page to those jobs. The job rules (and the low-margin limit) are set under Definitions.'),
     h('div', {class: 'kpis'}, cardS('Cost not booked', 1, (r) => money(r.inc) + ' of income with no cost yet', 'warn'), cardS('Costs booked, no income recorded', 2, (r) => money(r.exp) + ' of cost with no income yet', 'warn'), cardS('Loss-making', 3, (r) => money(r.profit) + ' in total', 'bad'), cardS('Low margin', 4, (r) => 'Below ' + S.def.lowMargin + '% margin, ' + money(r.profit) + ' profit'),
-      h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'Negative income rows'), h('div', {class: 'kv'}, fInt(neg.length) + ' lines'), h('div', {class: 'kn'}, 'Income lines below zero: ' + money(d3.sum(neg, (i) => pinc[i])))),
-      h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'Company-name matched jobs'), h('div', {class: 'kv'}, ic ? fInt(ic.jobs) + ' jobs' : '0 jobs'), h('div', {class: 'kn'}, ic ? 'Income ' + money(ic.inc) + ', expense ' + money(ic.exp) + '. Name-based flag; group totals do not eliminate intercompany entries.' : 'None in this selection'))),
+      h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'Negative income rows'), h('div', {class: 'kv'}, fInt(neg.length) + ' lines'), h('div', {class: 'kn'}, 'Income lines below zero: ' + money(d3.sum(neg, (i) => pinc[i]))), businessMeaning('Negative income rows', 'Count of selected finance rows with negative recorded income')),
+      h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'Company-name matched jobs'), h('div', {class: 'kv'}, ic ? fInt(ic.jobs) + ' jobs' : '0 jobs'), h('div', {class: 'kn'}, ic ? 'Income ' + money(ic.inc) + ', expense ' + money(ic.exp) + '. Name-based flag; group totals do not eliminate intercompany entries.' : 'None in this selection'), businessMeaning('Company-name matched jobs', 'Job count flagged by company-name matching; not an intercompany elimination'))),
     h('div', {class: 'grid', style: 'margin-top:.9rem'}, card('Expected costs on jobs with none booked', 'Each job without a cost gets the cost ratio of booked jobs in the same line of business. An estimate, to show how far the margin may fall.', lobTbl, 'full'),
       costGapCard(), card('Biggest losses', 'Jobs with the lowest profit. Click to filter.', list(jobs.filter((e) => e.profit < 0).sort((a, b) => a.profit - b.profit), 'loss', (e) => e.profit)), card('Biggest jobs with no cost booked', 'Largest income first. Click to filter.', list(jobs.filter((e) => COLS.jobstatus.pc[e.i0] === 1).sort((a, b) => b.inc - a.inc), 'income', (e) => e.inc))));
 }
@@ -1242,9 +1292,9 @@ function ppCompare() {
   const meas = c.measure, mv = (a, b) => (meas === 'income' ? a : meas === 'expense' ? b : a - b), mLabel = meas === 'income' ? 'Income' : meas === 'expense' ? 'Expense' : 'Profit';
   root.append(h('div', {class: 'card', style: 'margin-bottom:.9rem'}, h('p', {class: 'take', style: 'margin:0 0 .3rem'}, pr.title + '.'), h('p', {class: 'meta', style: 'margin:0'}, 'Current: ' + (pr.curName ? pr.curName + ', ' : '') + fRange(pr.cur) + ' (' + nDays(pr.cur) + ' days)   |   Previous: ' + (pr.prevName ? pr.prevName + ', ' : '') + fRange(pr.prev) + ' (' + nDays(pr.prev) + ' days)' + (nDays(pr.cur) !== nDays(pr.prev) ? '   |   The two periods have a different number of days.' : '')),
     pj.size === 0 ? h('p', {class: 'meta', style: 'margin:.4rem 0 0;color:var(--warn)'}, 'There is no data in the comparison period. The reports loaded so far cover ' + fDay(MINDATE) + ' to ' + fDay(MAXDATE) + '. No activity is present in the uploaded comparison-period records. Upload earlier reports if needed.') : null));
-  const vk = (label, cur, prev, f) => { const d = cur - prev, p = pctOf(cur, prev); return h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, label), h('div', {class: 'kv'}, f(cur)), h('div', {class: 'kn'}, 'Previous ' + f(prev)), h('div', {class: 'delta ' + (d > 0 ? 'ok' : d < 0 ? 'bad' : 'flat')}, sgn(d) + f(Math.abs(d)) + ' (' + fPctS(p) + ')')); };
+  const vk = (label, cur, prev, f) => { const d = cur - prev, p = pctOf(cur, prev); return h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, label), h('div', {class: 'kv'}, f(cur)), h('div', {class: 'kn'}, 'Previous ' + f(prev)), h('div', {class: 'delta ' + (d > 0 ? 'ok' : d < 0 ? 'bad' : 'flat')}, sgn(d) + f(Math.abs(d)) + ' (' + fPctS(p) + ')'), businessMeaning(label, 'Current versus previous reporting period')); };
   const mC = marginOf(ci, ce), mP = marginOf(pi, pe), mpts = mC != null && mP != null ? (mC - mP) * 100 : null;
-  root.append(h('div', {class: 'kpis'}, vk('Income', ci, pi, money), vk('Expense', ce, pe, money), vk('Profit', ci - ce, pi - pe, money), h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'Margin'), h('div', {class: 'kv'}, fMargin(mC)), h('div', {class: 'kn'}, 'Previous ' + fMargin(mP)), mpts == null ? null : h('div', {class: 'delta ' + (mpts > 0 ? 'ok' : mpts < 0 ? 'bad' : 'flat')}, sgn(mpts) + Math.abs(mpts).toFixed(1) + ' pts')), vk('Jobs', cj.size, pj.size, fInt)));
+  root.append(h('div', {class: 'kpis'}, vk('Income', ci, pi, money), vk('Expense', ce, pe, money), vk('Profit', ci - ce, pi - pe, money), h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'Margin'), h('div', {class: 'kv'}, fMargin(mC)), h('div', {class: 'kn'}, 'Previous ' + fMargin(mP)), mpts == null ? null : h('div', {class: 'delta ' + (mpts > 0 ? 'ok' : mpts < 0 ? 'bad' : 'flat')}, sgn(mpts) + Math.abs(mpts).toFixed(1) + ' pts'), businessMeaning('Margin', 'Current and previous period profit divided by income')), vk('Jobs', cj.size, pj.size, fInt)));
   const bk = bucketInfo(pr), bc = new Float64Array(bk.n), bp = new Float64Array(bk.n);
   for (let i = 0; i < NN; i++) { if (!m[i]) continue; const d = pdate[i], v = meas === 'income' ? pinc[i] : meas === 'expense' ? pexp[i] : pinc[i] - pexp[i]; if (d >= pr.cur.from && d <= pr.cur.to) { const b = bucketIdx(pr.unit, bk.sc, d); if (b >= 0 && b < bk.n) bc[b] += v; } if (d >= pr.prev.from && d <= pr.prev.to) { const b = bucketIdx(pr.unit, bk.sp, d); if (b >= 0 && b < bk.n) bp[b] += v; } }
   const barBox = h('div', {class: 'trend'}), info = {f: money};
@@ -1360,9 +1410,9 @@ function sOwner() {
   const M = mask(), P = mask({dates: 'prev'}), pm = maskP(), on = S.compare, dd = (a, b) => (on ? pctChange(a, b) : null), o = opsFacts(M), op = opsFacts(P), mo = opsFacts(mask({dates: 'none'})), t = R.t, tp = R.tp;
   const ex = pExpectedByLob(pm), cov = t.jobs ? t.booked / t.jobs : 1, stat = groupByP('jobstatus', maskP({skip: 'jobstatus'})), st = (n) => stat.find((r) => r.label === n) || {jobs: 0, inc: 0, exp: 0, profit: 0};
   const ptsDelta = t.margin != null && tp.margin != null && on ? (t.margin >= tp.margin ? '+' : '−') + (Math.abs(t.margin - tp.margin) * 100).toFixed(1) + ' pts vs ' + cmpLabel() : null;
-  const opsK = [kpi('Shipments', fInt(o.n), dd(o.n, op.n), 'By shipment date', '', fInt(op.n)), kpi('Air chargeable weight', f1(o.air) + ' t', dd(o.air, op.air), 'Air shipments', '', f1(op.air) + ' t'), kpi('Sea TEUs', fInt(Math.round(o.sea)), dd(o.sea, op.sea), 'Recorded ocean TEUs', '', fInt(Math.round(op.sea))), kpi('Active customers', fInt(o.cust), dd(o.cust, op.cust), 'With a shipment in range', '', fInt(op.cust)),
+  const opsK = [kpi('Shipments', fInt(o.n), dd(o.n, op.n), 'By shipment date', '', fInt(op.n)), kpi('Air chargeable weight', f1(o.air) + ' t', dd(o.air, op.air), 'Air shipments', '', f1(op.air) + ' t'), kpi('Sea TEUs', fInt(Math.round(o.sea)), dd(o.sea, op.sea), 'Recorded ocean TEUs', '', fInt(Math.round(op.sea))), kpi('Active customers', fInt(o.cust), dd(o.cust, op.cust), 'With a shipment in range', '', fInt(op.cust), ['Shows customers with at least one selected shipment.', 'Counts distinct customers represented by one or more shipment-register rows in the selected reporting period.']),
     kpi('Financials still open', fInt(mo.openFin), null, fInt(mo.old) + ' older than ' + S.def.oldDays + ' days (ignores the date range)', mo.old ? 'warn' : ''), kpi('Days from ops lock to financial lock', mo.lag == null ? '–' : mo.lag.toFixed(1), null, 'Average, where both are recorded')];
-  const accK = [kpi('Income', money(t.inc), dd(t.inc, tp.inc), 'By job date', '', money(tp.inc)), kpi('Profit', money(t.profit), dd(t.profit, tp.profit), 'Income minus booked cost', t.profit < 0 ? 'bad' : '', money(tp.profit)), h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'Margin'), h('div', {class: 'kv'}, fMargin(t.margin)), ptsDelta ? h('div', {class: 'delta flat'}, ptsDelta) : null, h('div', {class: 'kn'}, 'Profit over income')),
+  const accK = [kpi('Income', money(t.inc), dd(t.inc, tp.inc), 'By job date', '', money(tp.inc)), kpi('Profit', money(t.profit), dd(t.profit, tp.profit), 'Income minus booked cost', t.profit < 0 ? 'bad' : '', money(tp.profit)), h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'Margin'), h('div', {class: 'kv'}, fMargin(t.margin)), ptsDelta ? h('div', {class: 'delta flat'}, ptsDelta) : null, h('div', {class: 'kn'}, 'Profit over income'), businessMeaning('Margin', 'Profit divided by income for selected jobs')),
     kpi('Jobs', fInt(t.jobs), dd(t.jobs, tp.jobs), 'In the profit report', '', fInt(tp.jobs)), kpi('Jobs with cost booked', t.jobs ? fP0(cov) : '–', null, t.booked + ' of ' + t.jobs, cov * 100 < S.def.costCoverage ? 'warn' : ''), kpi('Profit after expected costs', money(t.profit - ex.est), null, 'Estimate for jobs with no cost yet', 'warn')];
   // what needs attention
   const al = [], money0 = money, un = S.def.unassignedNames.split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
@@ -1937,6 +1987,7 @@ function metricTraceSelection(metric,label) {
 }
 window.NG = {visualMetricPayload,traceVariance:metricTraceVariance,periods,win,pctOf,pctChange,traceCategory:metricTraceCategory,exportVisibleVisuals,traceSelection:metricTraceSelection,agentRows, runVisual, visGet, visSave, defCfg, VTEMPLATES, rateOK, rmargin, saveView, applyView, viewsGet, goto, setGroup, opsFacts, maskP, groupByP, totalsP, pbyJob, pExpectedByLob, money, NP, NPA, NJ, pinc, pexp, pjob, psidx, pjInc, pjExp, D, S, DEFAULTS, renderDefs, COLS, D, mask, compute, renderAll, toggle, csvOf, openMenu, menuAll, menuClear, get R() { return R; }, N, MAXDATE, MINDATE};
 })();
+
 </script>
 <script>
 (function () {
