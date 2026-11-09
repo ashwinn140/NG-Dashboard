@@ -173,12 +173,21 @@ def update_schedule(engine, user: dict, schedule_id: int, payload: dict) -> dict
         ).values(**values))
         if result.rowcount != 1:
             raise KeyError("Schedule not found.")
-        if status == "disabled":
-            conn.execute(update(report_runs).where(
+        if status in ("paused", "disabled"):
+            pending = [
                 report_runs.c.schedule_id == schedule_id,
                 report_runs.c.status.in_(("queued", "retry_wait")),
-            ).values(status="cancelled", finished_at=now, error_code="schedule_disabled",
-                     error_message="Schedule was deactivated."))
+            ]
+            if status == "paused":
+                # Pause only cancels recurring ticks; an explicitly requested
+                # Run now (manual:...) remains an intentional one-off.
+                pending.append(report_runs.c.idempotency_key.not_like("manual:%"))
+            conn.execute(update(report_runs).where(*pending).values(
+                status="cancelled", finished_at=now,
+                error_code="schedule_paused" if status == "paused" else "schedule_disabled",
+                error_message="Recurring run cancelled because the schedule was paused."
+                    if status == "paused" else "Schedule was deactivated.",
+            ))
     action = "report_schedule_" + (status or "updated")
     _audit(engine, user["email"], action, f"Schedule {schedule_id}")
     return get_schedule(engine, user["id"], schedule_id)
@@ -409,9 +418,12 @@ class SchedulerWorker:
             self._finish(run_id, status="failed", error_code="schedule_missing",
                          error_message="Schedule was removed before the run started.")
             return
-        if schedule["status"] == "disabled":
-            self._finish(run_id, status="cancelled", error_code="schedule_disabled",
-                         error_message="Schedule was deactivated before the run started.")
+        if schedule["status"] == "disabled" or (
+            schedule["status"] == "paused" and not run["idempotency_key"].startswith("manual:")
+        ):
+            code = "schedule_disabled" if schedule["status"] == "disabled" else "schedule_paused"
+            self._finish(run_id, status="cancelled", error_code=code,
+                         error_message="Recurring run cannot start because its schedule is no longer active.")
             return
         owner = _definition_user(self.engine, schedule["owner_id"])
         if not owner:
@@ -452,10 +464,13 @@ class SchedulerWorker:
                 current_status = conn.execute(select(report_schedules.c.status).where(
                     report_schedules.c.id == schedule["id"]
                 )).scalar_one_or_none()
-            if current_status == "disabled":
+            if current_status == "disabled" or (
+                current_status == "paused" and not run["idempotency_key"].startswith("manual:")
+            ):
+                code = "schedule_disabled" if current_status == "disabled" else "schedule_paused"
                 self._finish(run_id, status="cancelled", freshness=freshness,
-                             error_code="schedule_disabled",
-                             error_message="Schedule was deactivated before email submission.")
+                             error_code=code,
+                             error_message="Recurring run cancelled before email submission because its schedule is no longer active.")
                 return
             owner_email = owner["email"].strip().lower()
             context = prepared["template_context"]
