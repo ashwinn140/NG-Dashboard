@@ -251,7 +251,13 @@ function businessMeaning(label, note, metricExplanation) {
     reportingWindow ? h('p', {class: 'meta'}, 'Dashboard date selection: ' + fRange({from:reportingWindow.from,to:reportingWindow.to}) + (hasDashboardComparison ? '; dashboard comparison: ' + fRange({from:reportingWindow.pfrom,to:reportingWindow.pto}) : '; dashboard comparison: off') + '. Date basis: ' + dateBasis + '. Company, line-of-business and other selected filters apply only where supported by this visual. This is dashboard context, not certification of a visual-specific date or comparison calculation.') : null,
     note ? h('p', {class:'meta'}, 'Visual note: ' + note) : null);
 }
-function card(title, note, body, cls) { return h('article', {class: 'card ' + (cls || '')}, h('h2', {class: 'h'}, title), note ? h('p', {class: 'note'}, note) : null, body, businessMeaning(title, note)); }
+function card(title, note, body, cls, trace) {
+  const action = trace ? h('button', {type: 'button', class: 'mt-info', style: 'margin-top:0;white-space:nowrap', title: 'Open calculation and contributing records for ' + title, 'aria-label': 'Open calculation and contributing records for ' + title, onclick: (e) => { e.preventDefault(); e.stopPropagation(); const q = window.NG?.traceVisual?.(trace.metric, trace.dimension, title); if (q) window.MetricTrace?.openWithRequest(q); }}, 'Calculation & records') : null;
+  const heading = action ? h('div', {style: 'display:flex;align-items:center;justify-content:space-between;gap:.5rem;min-width:0'}, h('h2', {class: 'h'}, title), action) : h('h2', {class: 'h'}, title);
+  return h('article', {class: 'card ' + (cls || '')}, heading, note ? h('p', {class: 'note'}, note) : null, body, businessMeaning(title, note));
+}
+function opsVisualMetric() { return R.useVol ? (R.air ? 'ops.air_weight' : 'ops.teu') : 'ops.shipments'; }
+function profitRankMetric() { return S.rank === 'income' ? 'profit.income' : S.rank === 'expense' ? 'profit.expense' : 'profit.gp'; }
 function kpi(label, value, delta, note, tone, previousValue, metricExplanation) {
   // Promoted ERP records are the reporting source of truth. A zero prior
   // value is a valid baseline, but a percentage cannot be calculated from it.
@@ -332,12 +338,12 @@ function pageOverview() {
   const lanes = laneList();
   return h('div', null, h('div', {class: 'kpis'}, kp),
     h('div', {class: 'grid'},
-      card('Trend', (R.useVol ? (R.air ? 'Chargeable weight (tonnes)' : 'TEUs') : 'Shipments') + ' per ' + grainOf(R.w) + ', stacked by report. Click a bar to zoom the date range; click a legend item to filter.', trendChart(), 'full'),
-      card('Top ' + S.def.topN + ' customers', 'Click a customer to filter everything; click again to remove.', rankedKey('customer')),
-      card('Top ' + S.def.topN + ' branches', 'Click a branch to filter everything.', rankedKey('branch')),
-      card('Top ' + S.def.topN + ' lanes', 'Origin port to destination port. Click a lane to filter both ports.', lanes),
-      card('Top ' + S.def.topN + ' airlines and shipping lines', 'Carrier on each shipment.', rankedKey('carrier')),
-      card('Shipment mix', 'Share of shipments. Click an item to filter.', h('div', null, mixBlock('report', 'Report'), mixBlock('nomination', 'Nomination'), mixBlock('consol', 'Consol type'), mixBlock('cargo', 'Cargo type')))));
+      card('Trend', (R.useVol ? (R.air ? 'Chargeable weight (tonnes)' : 'TEUs') : 'Shipments') + ' per ' + grainOf(R.w) + ', stacked by report. Click a bar to zoom the date range; click a legend item to filter.', trendChart(), 'full', {metric: opsVisualMetric(), dimension: null}),
+      card('Top ' + S.def.topN + ' customers', 'Click a customer to filter everything; click again to remove.', rankedKey('customer'), null, {metric: opsVisualMetric(), dimension: 'customer'}),
+      card('Top ' + S.def.topN + ' branches', 'Click a branch to filter everything.', rankedKey('branch'), null, {metric: opsVisualMetric(), dimension: 'branch'}),
+      card('Top ' + S.def.topN + ' lanes', 'Origin port to destination port. Click a lane to filter both ports.', lanes, null, {metric: opsVisualMetric(), dimension: null}),
+      card('Top ' + S.def.topN + ' airlines and shipping lines', 'Carrier on each shipment.', rankedKey('carrier'), null, {metric: opsVisualMetric(), dimension: 'carrier'}),
+      card('Shipment mix', 'Share of shipments. Click an item to filter.', h('div', null, mixBlock('report', 'Report'), mixBlock('nomination', 'Nomination'), mixBlock('consol', 'Consol type'), mixBlock('cargo', 'Cargo type')), null, {metric: 'ops.shipments', dimension: null})));
 }
 function laneAgg() {
   const m = mask(), o = COLS.origin.c, d = COLS.destination.c, c = COLS.carrier.c, map = new Map(), DEST_N = Math.max(1, COLS.destination.d.length); let tot = 0;
@@ -385,7 +391,7 @@ function pageCustomers() {
   const moverList = (arr, sign) => arr.length ? h('div', {class: 'rank'}, arr.map((r) => h('button', {type: 'button', class: 'row', onclick: () => toggle(key, r.j)}, h('span', {class: 'lab', title: COLS.customer.d[r.j]}, COLS.customer.d[r.j]), h('span', {class: 'track'}, h('span', {class: 'fill', style: 'width:' + Math.min(100, Math.abs(r.delta) / Math.abs(arr[0].delta) * 100) + '%;background:var(--' + (sign > 0 ? 'ok' : 'bad') + ')'})), h('span', {class: 'val'}, (sign > 0 ? '+' : '−') + fInt(Math.abs(r.delta)) + ' shipments')))) : (hasPrev ? emptyNote() : h('p', {class: 'empty'}, 'No earlier period to compare with. Choose a shorter date range, for example the last 30 days.'));
   return h('div', null, h('div', {class: 'grid'},
     card('Customers', null, h('div', null, h('div', {class: 'frow'}, dlButton('Download Excel', exportCust)), note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody))), 'full'),
-    card('Customer by month', 'Top ' + S.def.heatN + ' customers by ' + (R.useVol ? 'volume' : 'shipments') + '. Click a cell to focus that customer and month.', heat, 'full'),
+    card('Customer by month', 'Top ' + S.def.heatN + ' customers by ' + (R.useVol ? 'volume' : 'shipments') + '. Click a cell to focus that customer and month.', heat, 'full', {metric: opsVisualMetric(), dimension: 'customer'}),
     card('Growing accounts', 'Biggest increase in shipments against the ' + cmpLabel() + '.', moverList(gain, 1)),
     card('Declining accounts', 'Biggest fall in shipments against the ' + cmpLabel() + '.', moverList(lose, -1))));
 }
@@ -396,9 +402,9 @@ function pageLanes() {
   const tbl = h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, h('thead', null, h('tr', null, h('th', null, 'Lane'), h('th', {class: 'n'}, 'Shipments'), h('th', {class: 'n'}, 'Air weight (t)'), h('th', {class: 'n'}, 'Sea TEUs'), h('th', {class: 'n'}, 'Carriers'))),
     h('tbody', null, shown.map((e) => h('tr', {class: 'click' + (laneSelected(e) ? ' on' : ''), onclick: () => laneClick(e)}, h('td', null, COLS.origin.d[e.o] + ' → ' + COLS.destination.d[e.d]), h('td', {class: 'n'}, fInt(e.cnt)), h('td', {class: 'n'}, e.air ? f1(e.air) : '–'), h('td', {class: 'n'}, e.sea ? fInt(Math.round(e.sea)) : '–'), h('td', {class: 'n'}, fInt(e.car.size)))))));
   return h('div', {class: 'grid'}, card('Lanes', 'Top ' + shown.length + ' of ' + fInt(a.rows.length) + ' lanes by shipments. Click a row to filter both ports.', h('div', null, h('div', {class: 'frow'}, dlButton('Download Excel', exportLanes)), tbl), 'full'),
-    card('Top ' + S.def.topN + ' origin ports', null, rankedKey('origin')), card('Top ' + S.def.topN + ' destination ports', null, rankedKey('destination')),
-    card('Top ' + S.def.topN + ' airlines and shipping lines', null, rankedKey('carrier')), card('Top ' + S.def.topN + ' trade lanes', 'From the ERP’s Trade Lane Name column.', rankedKey('x_tradelanename')),
-    card('Top ' + S.def.topN + ' destination countries', null, rankedKey('x_dischargecountry')), card('Top ' + S.def.topN + ' origin agents', null, rankedKey('x_originagent')));
+    card('Top ' + S.def.topN + ' origin ports', null, rankedKey('origin'), null, {metric: opsVisualMetric(), dimension: 'origin'}), card('Top ' + S.def.topN + ' destination ports', null, rankedKey('destination'), null, {metric: opsVisualMetric(), dimension: 'destination'}),
+    card('Top ' + S.def.topN + ' airlines and shipping lines', null, rankedKey('carrier'), null, {metric: opsVisualMetric(), dimension: 'carrier'}), card('Top ' + S.def.topN + ' trade lanes', 'From the ERP’s Trade Lane Name column.', rankedKey('x_tradelanename'), null, {metric: opsVisualMetric(), dimension: 'x_tradelanename'}),
+    card('Top ' + S.def.topN + ' destination countries', null, rankedKey('x_dischargecountry'), null, {metric: opsVisualMetric(), dimension: 'x_dischargecountry'}), card('Top ' + S.def.topN + ' origin agents', null, rankedKey('x_originagent'), null, {metric: opsVisualMetric(), dimension: 'x_originagent'}));
 }
 function pageOps() {
   const M = mask({dates: 'none'}), st = COLS.stage.c, open = [];
@@ -917,8 +923,8 @@ function ppOverview() {
   return h('div', null, banner, h('div', {class: 'kpis'}, kp), h('div', {class: 'grid'},
     card('From income to profit', 'The pale bars are an estimate of costs still to be booked.', bridge), card('By company', 'Click a company to filter everything.', compTbl),
     card('Income and expense by week', 'By ' + 'job date' + '. Click a week to zoom in.', weekChart(R.M), 'full'),
-    card('Top ' + S.def.topN + ' branches', 'Ranked by ' + S.rank + '. Click to filter.', pkeyRank('branch', {color: '#4c78a8'})), card('Top ' + S.def.topN + ' lines of business', 'Click to filter.', pkeyRank('p_lob', {color: '#54a24b'})),
-    card('Top ' + S.def.topN + ' customers', 'Click to filter.', pkeyRank('customer', {color: '#b279a2'})), card('Top ' + S.def.topN + ' sales people', 'Profit by the ERP Sales Person. Job report values take priority; a unique register match is a fallback for omitted columns. Click to filter.', pkeyRank('x_salesperson', {color: '#72b7b2'})), card('Top ' + S.def.topN + ' trade lanes', 'From the register. Click to filter.', pkeyRank('x_tradelanename', {color: '#e45756'})), card('How healthy are the jobs?', 'Jobs by margin band. Click a band to filter.', bands)));
+    card('Top ' + S.def.topN + ' branches', 'Ranked by ' + S.rank + '. Click to filter.', pkeyRank('branch', {color: '#4c78a8'}), null, {metric: profitRankMetric(), dimension: 'branch'}), card('Top ' + S.def.topN + ' lines of business', 'Click to filter.', pkeyRank('p_lob', {color: '#54a24b'}), null, {metric: profitRankMetric(), dimension: 'p_lob'}),
+    card('Top ' + S.def.topN + ' customers', 'Click to filter.', pkeyRank('customer', {color: '#b279a2'}), null, {metric: profitRankMetric(), dimension: 'customer'}), card('Top ' + S.def.topN + ' sales people', 'Profit by the ERP Sales Person. Job report values take priority; a unique register match is a fallback for omitted columns. Click to filter.', pkeyRank('x_salesperson', {color: '#72b7b2'}), null, {metric: profitRankMetric(), dimension: 'x_salesperson'}), card('Top ' + S.def.topN + ' trade lanes', 'From the register. Click to filter.', pkeyRank('x_tradelanename', {color: '#e45756'}), null, {metric: profitRankMetric(), dimension: 'x_tradelanename'}), card('How healthy are the jobs?', 'Jobs by margin band. Click a band to filter.', bands)));
 }
 function ppBranches() {
   const m = maskP({skip: ['company', 'branch']}), NB = COLS.branch.d.length, rows = groupByP((i) => pco[i] * NB + COLS.branch.pc[i], m, 2 * NB, (g) => COLS.branch.d[g % NB]).map((r) => Object.assign(r, {co: Math.floor(r.g / NB), br: r.g % NB}));
@@ -974,8 +980,8 @@ function ppCustomers() {
     svg.append('text').attr('class', 'tick').attr('x', W / 2).attr('y', H - 2).attr('text-anchor', 'middle').text('Income'); svg.append('text').attr('class', 'tick').attr('transform', 'rotate(-90)').attr('x', -H / 2).attr('y', 11).attr('text-anchor', 'middle').text('Margin');
     pts.forEach((r) => svg.append('circle').attr('cx', x(r.inc)).attr('cy', y(r.margin)).attr('r', rad(Math.abs(r.profit))).attr('fill', r.profit < 0 ? '#c2362b' : '#4c78a8').attr('opacity', sel.size && !sel.has(r.g) ? 0.25 : 0.65).style('cursor', 'pointer').on('click', () => {toggle('customer',r.g);}).append('title').text(r.label + ': income ' + money(r.inc) + ', profit ' + money(r.profit) + ', margin ' + fMargin(r.margin))); }
   return h('div', null, h('div', {class: 'kpis'}, kpi('Customers', fInt(rows.length), null, 'With at least one line'), kpi('Customers making 80% of profit', fInt(n80), null, 'Of those with a positive profit'), kpi('Biggest customer', top1 ? fS(top1.profit / (tot || 1)) : '–', null, top1 ? top1.label : ''), kpi('Loss-making customers', fInt(rows.filter((r) => r.profit < 0).length), null, 'Profit below zero in this selection', 'bad')),
-    h('div', {class: 'grid', style: 'margin-top:.9rem'}, card('Customers', null, h('div', null, h('div', {class: 'frow'}, dlButton('Download Excel', exportC)), note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody))), 'full'),
-      card('Income against margin', 'Each bubble is a customer (largest 60 by income); size is profit, red is a loss. Customers high on the right and low on the chart earn little on big volumes. Click to filter.', sc, 'full')));
+    h('div', {class: 'grid', style: 'margin-top:.9rem'}, card('Customers', null, h('div', null, h('div', {class: 'frow'}, dlButton('Download Excel', exportC)), note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody))), 'full', {metric: 'profit.gp', dimension: 'customer'}),
+      card('Income against margin', 'Each bubble is a customer (largest 60 by income); size is profit, red is a loss. Customers high on the right and low on the chart earn little on big volumes. Click to filter.', sc, 'full', {metric: 'profit.gp', dimension: 'customer'})));
 }
 function ppJobs() {
   const jobs = pbyJob(R.M), st = S.jobs, q = h('input', {type: 'search', class: 'q', placeholder: 'Search job, customer, branch…', 'aria-label': 'Search jobs', value: st.q}), note = h('p', {class: 'note'}), thead = h('thead'), tbody = h('tbody'), sels = S.sel.jobstatus || new Set();
@@ -988,7 +994,7 @@ function ppJobs() {
   q.addEventListener('input', () => { st.q = q.value; draw(); }); draw();
   const exportJ = () => downloadXlsx('jobs_' + fIso(dDate(MAXDATE)) + '.xlsx', [{name: 'Jobs', freeze: true, filter: true, cols: [24, 18, 16, 16, 44, 16, 16, 16, 12, 8, 18], rows: [['Company', 'Branch', 'Line', 'Job', 'Customer', 'Income', 'Expense', 'Profit', 'Margin', 'Lines', 'Status'].map(HDR)].concat(last.map((e, i) => { const x = i + 2; return [COMP[e.company], e.branch, e.lob, e.job, e.customer, {v: +e.inc.toFixed(2), s: 3}, {v: +e.exp.toFixed(2), s: 3}, {f: 'F' + x + '-G' + x, s: 3}, {f: 'IF(F' + x + '<=0,"",H' + x + '/F' + x + ')', s: 2}, {v: e.lines, s: 3}, COLS.jobstatus.d[e.status]]; }))}, settingsSheet()]);
   const fb = (g, t) => h('button', {type: 'button', class: 'btn' + (g === 'all' ? (sels.size === 0 ? ' on' : '') : sels.size === 1 && sels.has(g) ? ' on' : ''), onclick: () => { if (g === 'all') delete S.sel.jobstatus; else S.sel.jobstatus = new Set([g]); renderAll(); }}, t);
-  return h('div', {class: 'grid'}, card('Jobs', 'One row per job in the current selection. Profit is income minus the costs booked so far.', h('div', null, h('div', {class: 'frow'}, q, h('div', {class: 'segs'}, fb('all', 'All jobs'), fb(3, 'Loss-making'), fb(1, 'Cost not booked'), fb(2, 'Costs booked, no income recorded'), fb(4, 'Low margin')), dlButton('Download Excel', exportJ)), note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody))), 'full'));
+  return h('div', {class: 'grid'}, card('Jobs', 'One row per job in the current selection. Profit is income minus the costs booked so far.', h('div', null, h('div', {class: 'frow'}, q, h('div', {class: 'segs'}, fb('all', 'All jobs'), fb(3, 'Loss-making'), fb(1, 'Cost not booked'), fb(2, 'Costs booked, no income recorded'), fb(4, 'Low margin')), dlButton('Download Excel', exportJ)), note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody))), 'full', {metric: 'profit.gp', dimension: null}));
 }
 function ppQuality() {
   const m = maskP({skip: 'jobstatus'}), stat = groupByP('jobstatus', m), g = (n) => stat.find((r) => r.label === n) || {jobs: 0, inc: 0, exp: 0, profit: 0}, total = totalsP(m), jobs = pbyJob(m), ex = pExpectedByLob(m);
@@ -1101,7 +1107,7 @@ function ppExplorer() {
     downloadXlsx('profitability_by_' + d.l.toLowerCase().replace(/[^a-z]+/g, '_') + '_' + fIso(dDate(MAXDATE)) + '.xlsx', [{name: 'Profitability', freeze: true, filter: true, cols: [42, 16, 16, 16, 12, 10, 16, 14, 14, 14, 16], rows: [[d.l, 'Income', 'Expense', 'Profit', 'Margin', 'Jobs', 'Profit per job', 'Share of profit', 'Air tonnes', 'Air profit', 'Profit per air tonne', 'Sea TEUs', 'Sea profit', 'Profit per sea TEU'].map(HDR)]
       .concat(list.map((r, i) => { const x = i + 2; return [r.label, {v: +r.inc.toFixed(2), s: 3}, {v: +r.exp.toFixed(2), s: 3}, {f: 'B' + x + '-C' + x, s: 3}, {f: 'IF(B' + x + '<=0,"",D' + x + '/B' + x + ')', s: 2}, {v: r.jobs, s: 3}, {f: 'IF(F' + x + '=0,"",D' + x + '/F' + x + ')', s: 3}, {f: 'IF(SUM(D$2:D$' + n + ')=0,"",D' + x + '/SUM(D$2:D$' + n + '))', s: 2}, {v: +r.airT.toFixed(3), s: 4}, {v: +r.airP.toFixed(2), s: 3}, {f: 'IF(I' + x + '=0,"",J' + x + '/I' + x + ')', s: 3}, {v: Math.round(r.seaT), s: 3}, {v: +r.seaP.toFixed(2), s: 3}, {f: 'IF(L' + x + '=0,"",M' + x + '/L' + x + ')', s: 3}]; }))
       .concat([[HDR('Total'), {f: 'SUM(B2:B' + n + ')', s: 3}, {f: 'SUM(C2:C' + n + ')', s: 3}, {f: 'SUM(D2:D' + n + ')', s: 3}, {f: 'IF(B' + tr + '<=0,"",D' + tr + '/B' + tr + ')', s: 2}, {f: 'SUM(F2:F' + n + ')', s: 3}]])}, settingsSheet([[HDR('Rows by'), d.l]])]); };
-  root.append(h('div', {class: 'grid'}, card('Top ' + S.def.topN + ' by ' + S.rank, 'Ranked by ' + S.rank + '. Click a bar to filter everything.', prankList(rows, (r) => toggle(key, r.g), (r) => sel.has(r.g), {color: '#4c78a8'})),
+  root.append(h('div', {class: 'grid'}, card('Top ' + S.def.topN + ' by ' + S.rank, 'Ranked by ' + S.rank + '. Click a bar to filter everything.', prankList(rows, (r) => toggle(key, r.g), (r) => sel.has(r.g), {color: '#4c78a8'}), null, {metric: profitRankMetric(), dimension: key}),
     card('All rows', 'Profit per air tonne and per sea TEU use only jobs matched to the register: air by chargeable tonnes, sea by TEUs (full-container loads).', h('div', null, h('div', {class: 'frow'}, dlButton('Download Excel', exportE)), note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody))), 'full')));
   return root;
 }
@@ -1180,7 +1186,7 @@ function sOwner() {
   if (!FIN) cmpTbl.querySelectorAll('tr').forEach(row => Array.from(row.children).slice(4).forEach(cell => cell.remove()));
   return h('div', null, h('p', {class: 'meta'}, 'Operations and accounting together, for the filters above. Shipments are counted by shipment date and profit by job date, within the same date range.'),
     h('h2', {class: 'h', style: 'margin:.4rem 0'}, 'Operations'), h('div', {class: 'kpis'}, opsK), FIN ? h('h2', {class: 'h', style: 'margin:.9rem 0 .4rem'}, 'Accounting') : null, FIN ? h('div', {class: 'kpis'}, accK) : null,
-    h('div', {class: 'grid', style: 'margin-top:.9rem'}, sVariance(), alertsCard, card('The two companies', 'Click a company to filter everything.', cmpTbl), card('Shipments by month', 'Click a month to zoom in.', monthBars(M)), FIN ? card('Profit by week', 'Job date. Click a week to zoom in.', weekChart(pm)) : null,
+    h('div', {class: 'grid', style: 'margin-top:.9rem'}, sVariance(), alertsCard, card('The two companies', 'Click a company to filter everything.', cmpTbl, null, {metric: 'profit.gp', dimension: 'company'}), card('Shipments by month', 'Click a month to zoom in.', monthBars(M), null, {metric: 'ops.shipments', dimension: null}), FIN ? card('Profit by week', 'Job date. Click a week to zoom in.', weekChart(pm), null, {metric: 'profit.gp', dimension: null}) : null,
       FIN ? card('Top ' + S.def.topN + ' customers by profit', 'Click to filter.', pkeyRank('customer', {color: '#b279a2'})) : null, FIN ? card('Top ' + S.def.topN + ' sales people by profit', 'Click to filter.', pkeyRank('x_salesperson', {color: '#72b7b2'})) : null, FIN ? card('Top ' + S.def.topN + ' branches by profit', 'Click to filter.', pkeyRank('branch', {color: '#4c78a8'})) : null));
 }
 function sScore() {
@@ -1727,6 +1733,18 @@ function metricTraceCategory(metric,key,code){
  if(fin){const t=totalsP(m);q.displayed_value=metric==='profit.income'?t.inc:metric==='profit.expense'?t.exp:t.profit;}else{const t=opsFacts(m);q.displayed_value=metric==='ops.air_weight'?t.air:metric==='ops.teu'?t.sea:t.n;}
  return q;
 }
+function metricTraceVisual(metric,key,label) {
+ if(key && S.sel[key] && S.sel[key].size===1)return metricTraceCategory(metric,key,[...S.sel[key]][0]);
+ const fin=metric.startsWith('profit.'),skip=key?{skip:key}:{};
+ const m=fin?maskP(skip):mask(skip),p=fin?maskP({...skip,dates:'prev'}):mask({...skip,dates:'prev'});
+ const q=metricTraceSelection(metric,label);
+ q.indices=Array.from(m).flatMap((v,i)=>v?[i]:[]);q.previous_indices=Array.from(p).flatMap((v,i)=>v?[i]:[]);
+ if(key&&q.context&&q.context.filters){q.context.filters={...q.context.filters};delete q.context.filters[key];}
+ q.context.visual_dimension=key?(COLS[key]?.l||key):null;
+ if(fin){const t=totalsP(m);q.displayed_value=metric==='profit.income'?t.inc:metric==='profit.expense'?t.exp:metric==='profit.jobs'?t.jobs:t.profit;}
+ else{const f=opsFacts(m);q.displayed_value=metric==='ops.air_weight'?f.air:metric==='ops.teu'?f.sea:f.n;}
+ return q;
+}
 function metricTraceSelection(metric,label) {
  const fin=metric.startsWith('profit.');let m=fin?maskP():mask(),p=fin?maskP({dates:'prev'}):mask({dates:'prev'});
  if((fin&&S.page==='p_compare')||(!fin&&S.page==='compare')){const pr=periods(S.cmp);if(pr.err)throw Error(pr.err);m=fin?maskP({dates:'none'}):mask({dates:'none'});p=fin?maskP({dates:'none'}):mask({dates:'none'});const dates=fin?pdate:date;for(let i=0;i<m.length;i++){if(dates[i]<pr.cur.from||dates[i]>pr.cur.to)m[i]=0;if(dates[i]<pr.prev.from||dates[i]>pr.prev.to)p[i]=0;}}
@@ -1750,6 +1768,6 @@ function metricTraceSelection(metric,label) {
  if(['profit.customers','profit.customers_80','profit.biggest_customer','profit.loss_customers'].includes(metric)){const rs=groupByP('customer',m).sort((a,b)=>b.profit-a.profit),total=d3.sum(rs,r=>r.profit),positive=d3.sum(rs.filter(r=>r.profit>0),r=>r.profit);let cum=0,num=0;rs.forEach(r=>{if(r.profit>0&&cum<.8*positive){cum+=r.profit;num++;}});values[metric]={'profit.customers':rs.length,'profit.customers_80':num,'profit.biggest_customer':rs.length?rs[0].profit/(total||1):null,'profit.loss_customers':rs.filter(r=>r.profit<0).length}[metric];}
  return {metric,dataset_built_at:D.built_at,displayed_value:values[metric],indices:Array.from(m).flatMap((v,i)=>v?[i]:[]),previous_indices:Array.from(p).flatMap((v,i)=>v?[i]:[]),context:{low_margin:S.def.lowMargin,top_n:S.def.topN,concentration_measure:R.useVol?(R.air?'air_weight_t':'teu'):'count',dimension_key:(EXP_DIMS[S.exp.dim]||EXP_DIMS[0]).k,rate_mode:S.def.rateMode,rate_max:S.def.rateMax,active_min:S.group==='summary'?1:S.def.activeMin,old_days:S.def.oldDays,unbilled_days:S.def.unbilledDays,age_as_of:OPS_MAX,period:(S.page==='p_compare'||S.page==='compare')?periods(S.cmp):win(),date_basis:fin?'Job Date':'Shipment Date',page:S.page,visual:label,filters:Object.fromEntries(Object.entries(S.sel).map(([k,v])=>[k,[...v].map(i=>COLS[k]?.d[i]??i)]))}};
 }
-window.NG = {visualMetricPayload,traceVariance:metricTraceVariance,periods,win,pctOf,pctChange,traceCategory:metricTraceCategory,exportVisibleVisuals,traceSelection:metricTraceSelection,agentRows, runVisual, visGet, visSave, defCfg, VTEMPLATES, rateOK, rmargin, saveView, applyView, viewsGet, goto, setGroup, opsFacts, laneAgg, maskP, groupByP, totalsP, pbyJob, pExpectedByLob, money, NP, NPA, NJ, pinc, pexp, pjob, psidx, pjInc, pjExp, D, S, DEFAULTS, renderDefs, COLS, D, mask, compute, renderAll, toggle, csvOf, openMenu, menuAll, menuClear, get R() { return R; }, N, MAXDATE, MINDATE};
+window.NG = {visualMetricPayload,traceVariance:metricTraceVariance,periods,win,pctOf,pctChange,traceCategory:metricTraceCategory,traceVisual:metricTraceVisual,exportVisibleVisuals,traceSelection:metricTraceSelection,agentRows, runVisual, visGet, visSave, defCfg, VTEMPLATES, rateOK, rmargin, saveView, applyView, viewsGet, goto, setGroup, opsFacts, laneAgg, maskP, groupByP, totalsP, pbyJob, pExpectedByLob, money, NP, NPA, NJ, pinc, pexp, pjob, psidx, pjInc, pjExp, D, S, DEFAULTS, renderDefs, COLS, D, mask, compute, renderAll, toggle, csvOf, openMenu, menuAll, menuClear, get R() { return R; }, N, MAXDATE, MINDATE};
 })();
 
