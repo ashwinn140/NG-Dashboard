@@ -26,8 +26,8 @@ jobs:
           python - <<'PY'
           import pathlib, re
           html = pathlib.Path("app/web/admin.html").read_text()
-          scripts = re.findall(r"<script(?:\\s[^>]*)?>(.*?)</script>", html, re.S)
+          scripts = re.findall(r"<script>(.*?)</script>", html, re.S)
           inline = [s for s in scripts if s.strip()]
-          pathlib.Path("/tmp/admin-inline.js").write_text("\\n".join(inline))
+          pathlib.Path("/tmp/admin-inline.js").write_text(chr(10).join(inline))
           PY
           node --check /tmp/admin-inline.js
