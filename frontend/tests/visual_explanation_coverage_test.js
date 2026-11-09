@@ -39,7 +39,7 @@ explanation('profit','p_status','Matched to the shipment register','unique match
 
 // Full Operations overview evidence coverage: ageing, owner worklist and KPI tiles.
 n.setGroup('ops');n.S.page='ops';n.S.sel={};n.renderAll();
-let openedEvidence=null;w.MetricTrace={openWithRequest:q=>{openedEvidence=q;}};
+let openedEvidence=null;w.MetricTrace={createRequest:(metric,label,patch={})=>({metric,indices:[],previous_indices:[],compare:false,context:{},...patch,context:{...(patch.context||{})}}),openWithRequest:q=>{openedEvidence=q;}};
 const openStage=n.COLS.stage.d.indexOf('Closed');
 const expectedOpen=Array.from(n.mask({dates:'none'})).flatMap((v,i)=>v&&n.COLS.stage.c[i]!==openStage?[i]:[]);
 for(const title of ['How long shipments have been open','Open shipments by job owner','Worklist']){
