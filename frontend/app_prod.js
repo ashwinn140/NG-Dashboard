@@ -399,10 +399,14 @@ function sortHead(cols, state, redraw) {
     c.sort === false ? c.t : h('button', {type: 'button', onclick: () => { state.dir = state.sort === c.k ? -state.dir : (c.num ? -1 : 1); state.sort = c.k; redraw(); }}, c.t + (state.sort === c.k ? (state.dir > 0 ? ' ▲' : ' ▼') : '')))));
 }
 function pageCustomers() {
-  const key = 'customer', M2 = mask({skip: key}), P2 = mask({skip: key, dates: 'prev'}), c = COLS.customer.c, sz = COLS.customer.d.length;
+  const key = 'customer', M2 = mask({skip: key}), P2 = mask({skip: key, dates: 'prev'}), MH = mask({skip: key, dates: 'none'}), c = COLS.customer.c, sz = COLS.customer.d.length;
   const cnt = new Float64Array(sz), pc = new Float64Array(sz), air = new Float64Array(sz), sea = new Float64Array(sz), last = new Int32Array(sz), vol = new Float64Array(sz); let totC = 0, totV = 0;
   const customerCompanies = new Map();
-  for (let i = 0; i < N; i++) { if (M2[i]) { const j = c[i]; cnt[j]++; totC++; const v = vi(i); vol[j] += v; totV += v; if (mode[i]) sea[j] += teus[i]; else air[j] += chg[i]; if (date[i] > last[j]) last[j] = date[i]; if (!customerCompanies.has(j)) customerCompanies.set(j, new Set()); customerCompanies.get(j).add(comp[i] === 0 ? 'NG' : 'NCS'); } if (P2[i]) pc[c[i]]++; }
+  for (let i = 0; i < N; i++) {
+    if (M2[i]) { const j = c[i]; cnt[j]++; totC++; const v = vi(i); vol[j] += v; totV += v; if (mode[i]) sea[j] += teus[i]; else air[j] += chg[i]; if (date[i] > last[j]) last[j] = date[i]; }
+    if (MH[i]) { const j = c[i]; if (!customerCompanies.has(j)) customerCompanies.set(j, new Set()); customerCompanies.get(j).add(comp[i] === 0 ? 'NG' : 'NCS'); }
+    if (P2[i]) pc[c[i]]++;
+  }
   const historyLobs = () => S.sel.report ? [...S.sel.report].map(i => ['AE','AI','OE','OI'][i]).filter(Boolean) : [];
   const historyCompanies = j => [...(customerCompanies.get(j) || new Set(D.reps.map(r => r[0])))].sort();
   async function loadRecentJobs(requests) {
