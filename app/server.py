@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Respon
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import select, func, insert, delete, update
 from . import auth, admin_ops as ops, dataset as DS, mailer, master as MST, processor as P, profit as J, metric_definitions as MD, metric_execution as MX
-from .db import get_engine, imports, uploads, users, prefs, admin_log, shipments, org_master
+from .db import get_engine, imports, uploads, users, prefs, admin_log, shipments, profit_lines, org_master
 
 log = logging.getLogger("app")
 WEB = Path(__file__).parent / "web"
@@ -554,15 +554,29 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
 
     @app.get("/api/admin/phase2/source-readiness")
     def phase2_source_readiness(user: dict = Depends(admin)):
-        """Read-only Phase 2 field availability. Existing imports and reports unchanged."""
-        from .phase2_coverage import report_field_coverage, job_history_field_coverage
+        """Read-only Phase 2 field and aggregate data-quality diagnostics."""
+        from .phase2_coverage import report_field_coverage, job_history_field_coverage, job_history_data_quality
         with engine.connect() as c:
             rows = c.execute(select(imports.c.id, imports.c.company,
                 imports.c.report_type, imports.c.columns).where(
                 imports.c.status == "promoted")).mappings().all()
-        return {"report_fields": report_field_coverage(rows),
-                "job_history_fields": job_history_field_coverage(rows),
-                "note": "Metadata only; field presence does not prove job-to-register matching or owner completeness. Validate actual ERP identifiers before enabling customer intelligence."}
+            register_rows = c.execute(select(
+                shipments.c.company, shipments.c.report_type, shipments.c.shipment_no,
+                shipments.c.shipment_date, shipments.c.job_owner
+            ).where(
+                shipments.c.to_import.is_(None),
+                shipments.c.report_type.in_(("AE", "AI", "OE", "OI"))
+            )).mappings().all()
+            job_rows = c.execute(select(
+                profit_lines.c.company, profit_lines.c.job_no, profit_lines.c.job_date,
+                profit_lines.c.lob, profit_lines.c.extra
+            ).where(*J.current_jobs())).mappings().all()
+        return {
+            "report_fields": report_field_coverage(rows),
+            "job_history_fields": job_history_field_coverage(rows),
+            "job_history_quality": job_history_data_quality(register_rows, job_rows),
+            "note": "Read-only header and aggregate quality checks. No job, customer or owner names are returned. Header presence and nonblank owner coverage do not prove customer identity or complete all-time history."
+        }
 
     @app.get("/phase2/intelligence", response_class=HTMLResponse)
     def phase2_intelligence_page(user: dict = Depends(me)):

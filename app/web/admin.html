@@ -159,7 +159,18 @@ const VIEW={
    const ownerSource=r.job_owner_source==='jpr_source_column'?'JPR source':r.job_owner_source==='matched_register_fallback'?'Matched register fallback':r.job_owner_source==='shipment_register'?'Shipment Register':'—';
    return [r.company,r.report_type,pill(r.status),yes(f.job_number),yes(f.job_date),yes(f.lob),yes(f.job_owner),yes(f.shipment_number),yes(f.shipment_date),ownerSource];
   });
+  const qualityRows=(readiness?.job_history_quality||[]).map(r=>[
+   r.company,r.lob,Number(r.job_count||0).toLocaleString(),
+   Number(r.matched_register_jobs||0).toLocaleString(),
+   Number(r.ambiguous_register_matches||0).toLocaleString(),
+   Number(r.unmatched_register_jobs||0).toLocaleString(),
+   Number(r.job_owner_populated||0).toLocaleString(),
+   Number(r.job_owner_missing||0).toLocaleString(),
+   r.job_owner_coverage_pct==null?'—':r.job_owner_coverage_pct+'%',
+   pill(r.status)
+  ]);
   w.append(h('div',{class:'card'},h('h2',null,'Job history source readiness'),h('p',{class:'note'},'Read-only header check for the last-five-jobs and Job Owner history work. JPR Job Owner is preferred; a uniquely matched shipment-register owner is the fallback. Header presence does not prove job-to-register matching or populated owner values.'),readinessError?h('p',{class:'warn'},readinessError):historyRows.length?table(['Company','Report','Status','Job No.','Job Date','LOB','Job Owner','Shipment No.','Shipment Date','Owner source'],historyRows):h('p',{class:'note'},'No promoted source reports are available yet.')));
+  w.append(h('div',{class:'card'},h('h2',null,'Job Owner data completeness'),h('p',{class:'note'},'Aggregated counts only; no job, customer or owner names are exposed. A JPR Job Owner field, including an explicit blank, takes priority. Otherwise the owner comes only from one unique company + job number + date + LOB register match. Ambiguous or unmatched jobs are never guessed. This is current loaded-snapshot coverage, not an all-time history certification.'),readinessError?h('p',{class:'warn'},readinessError):qualityRows.length?table(['Company','LOB','Distinct jobs','Register matched','Ambiguous','Unmatched','Owner populated','Owner missing','Owner coverage','Status'],qualityRows):h('p',{class:'note'},'No current job-history rows are available yet.')));
   return w},
  async imports(){const st=h('select',null,['','needs_review','failed','promoted','duplicate','stale','undone'].map(s=>h('option',{value:s},s||'All statuses')));const box=h('div');
   const load=async()=>{const rows=await api('/api/admin/imports?status='+st.value);box.replaceChildren(table(['#','Received','File','Company','Report','Rows','Status','Message','',''],rows.map(r=>[r.id,fd(r.report_time),r.file_name,r.company||'',r.report_type||'',r.row_count??'',pill(r.status),h('span',{class:'note'},(r.message||'').slice(0,160)),
