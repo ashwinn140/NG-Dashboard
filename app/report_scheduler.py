@@ -30,8 +30,7 @@ REPORT_CATALOG = {
             "branch", "agent", "salesperson", "job_owner", "origin",
             "destination", "status", "operations_locked_on",
             "financials_locked_on", "gross_weight_t", "chargeable_weight_t",
-            "teus", "volume_cbm", "shipments", "air_shipments", "ocean_shipments",
-            "air_chargeable_weight_t", "ocean_teus", "lob_count", "last_shipment_date",
+            "teus", "volume_cbm",
         ),
         "summary_columns": (
             "company", "customer", "shipments", "air_shipments", "ocean_shipments",
@@ -59,7 +58,7 @@ REPORT_CATALOG = {
         "columns": (
             "company", "lob", "job_no", "job_date", "customer", "branch",
             "mode", "direction", "service", "income", "expense", "profit",
-            "margin", "jobs",
+            "margin",
         ),
         "summary_columns": (
             "company", "lob", "customer", "branch", "jobs", "income", "expense", "profit", "margin",
