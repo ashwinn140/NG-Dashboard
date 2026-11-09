@@ -16,7 +16,7 @@ jobs:
         with:
           node-version: '20'
       - name: Install Python dependencies
-        run: python -m pip install -r requirements.txt
+        run: python -m pip install -r requirements-dev.txt
       - name: Check JavaScript syntax
         run: node --check frontend/app_prod.js
       - name: Run read-only visual inventory
@@ -34,3 +34,4 @@ jobs:
           path: |
             app/web/dashboard.html
             audit/visual_contract_inventory.json
+

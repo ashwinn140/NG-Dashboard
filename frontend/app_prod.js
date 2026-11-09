@@ -164,14 +164,14 @@ const VERIFIED_METRIC_EXPLANATIONS = Object.freeze({
   'profit': ['Shows booked profit across the selected jobs.', 'Adds job profit, calculated as each job\'s Income less Expense.'],
   'actual profit': ['Shows booked profit across the selected jobs.', 'Adds job profit, calculated as each job\'s Income less Expense.'],
   'gross profit': ['Shows the difference between recorded income and recorded costs.', 'Adds recorded Income and subtracts recorded Expense for the selected jobs.'],
-  'margin': ['Shows the share of recorded income retained as profit.', 'Divides selected job-summary Profit by Income and multiplies by 100; unavailable when Income is zero.'],
-  'jobs': ['Shows how many job-summary records contribute to the metric.', 'Counts selected job-summary records after the active job-date and other filters.'],
+  'margin': ['Shows the share of recorded income retained as profit.', 'Divides selected job-summary Profit by Income and multiplies by 100; unavailable when Income is zero or negative.'],
+  'jobs': ['Shows how many distinct jobs contribute to the metric.', 'Counts distinct jobs by company, line of business, job number and job date after the active job-date and other filters.'],
   'profit per job': ['Shows average booked profit per selected job.', 'Divides selected total job-summary Profit by the selected job count, where the count is non-zero.'],
   'shipments': ['Shows the number of shipment-register records in scope.', 'Counts selected shipment-register rows after the active shipment-date and other filters.'],
   'air chargeable weight (tonnes)': ['Shows total chargeable airfreight weight for the selected shipments.', 'Adds chargeable weight from selected air shipment-register records, in tonnes.'],
   'sea teus': ['Shows total container volume in twenty-foot-equivalent units.', 'Adds TEUs from selected ocean shipment-register records; the displayed total is rounded to a whole TEU.'],
   'jobs with cost booked': ['Shows what share of selected jobs have booked costs.', 'Divides jobs with booked expenses by all selected jobs, multiplied by 100; unavailable if no jobs are selected.'],
-  'profit after expected costs': ['Shows an estimated profit after allowing for costs not yet booked.', 'Subtracts estimated missing costs from currently booked profit. Missing costs are estimated using cost-to-income ratios from jobs with booked costs; this is an estimate, not actual booked profit.'],
+  'profit after expected costs': ['Shows an estimated profit after allowing for costs not yet booked.', 'Subtracts estimated missing costs from selected booked profit. For selected jobs with positive income and zero expense, multiplies income by the expense-to-income ratio of all authorized jobs with positive income and expense in the same line of business; uses the overall authorized ratio if no line-of-business benchmark exists, or zero if no benchmark exists. The benchmark spans the authorized dataset, including dates outside the selection. This is an estimate, not actual booked profit.'],
   'shipments invoiced': ['Shows the proportion of selected shipments with an invoice.', 'Divides selected shipments identified as invoiced by all selected shipments, multiplied by 100.'],
   'jobs matched to the register': ['Shows the share of selected jobs linked to shipment-register entries.', 'Divides jobs matched to a shipment-register record by jobs considered for matching, multiplied by 100; customs-clearance and road jobs may have no register entry.'],
   'customers making 80% of profit': ['Shows how concentrated positive customer profit is among the leading customers.', 'Counts the highest-profit customers required to reach 80% of the selected positive customer profit.'],
@@ -1671,3 +1671,4 @@ function metricTraceSelection(metric,label) {
 }
 window.NG = {visualMetricPayload,traceVariance:metricTraceVariance,periods,win,pctOf,pctChange,traceCategory:metricTraceCategory,exportVisibleVisuals,traceSelection:metricTraceSelection,agentRows, runVisual, visGet, visSave, defCfg, VTEMPLATES, rateOK, rmargin, saveView, applyView, viewsGet, goto, setGroup, opsFacts, maskP, groupByP, totalsP, pbyJob, pExpectedByLob, money, NP, NPA, NJ, pinc, pexp, pjob, psidx, pjInc, pjExp, D, S, DEFAULTS, renderDefs, COLS, D, mask, compute, renderAll, toggle, csvOf, openMenu, menuAll, menuClear, get R() { return R; }, N, MAXDATE, MINDATE};
 })();
+
