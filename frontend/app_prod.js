@@ -25,7 +25,7 @@ const VOL = new Float64Array(NA); for (let i = 0; i < NA; i++) VOL[i] = mode[i] 
 const mStart = new Int32Array(NA); { const cache = new Map(); for (let i = 0; i < NA; i++) { let v = cache.get(date[i]); if (v === undefined) { v = Math.round(+d3.utcMonth.floor(dDate(date[i])) / DMS); cache.set(date[i], v); } mStart[i] = v; } }
 const COLS = {company: {l: 'Company', d: COMP, c: comp}, report: {l: 'Report', d: REPN, c: rtype}};
 for (const k in D.cols) { const dc = D.cols[k], c = dc.c ? ext(Uint32Array, dc.c) : new Uint32Array(NA); if (dc.c) for (let t = 0; t < demoSrc.length; t++) c[N + t] = c[demoSrc[t]]; COLS[k] = {l: dc.l, d: dc.d, c, own: !!dc.c}; }
-// ---- job profit lines, joined to the shipment registers by job number (the "VLOOKUP"); they share the same dictionaries, so every filter applies to both
+// ---- job profit lines use the composite identity: company + LOB + Job No. + Job Date.
 const PD_ = D.p, NP = PD_.co.length, PSH = [7, 31, 365], pdemoSrc = [], pdemoK = [];
 const NPA = NP + pdemoSrc.length, pext = (T, a) => { const x = new T(NPA); x.set(a); return x; };
 const pco = pext(Uint8Array, PD_.co), prt = pext(Uint8Array, PD_.rt), pinc = pext(Float64Array, PD_.income), pexp = pext(Float64Array, PD_.expense), ptd = pext(Int32Array, PD_.td), pjd = pext(Int32Array, PD_.jd), psidx = pext(Int32Array, PD_.sidx);
