@@ -39,7 +39,7 @@ for(const title of ['Running total','Period by period']){
 }
 
 
-n.setGroup('summary');n.S.page='s_owner';n.renderAll();
+n.setGroup('summary');n.S.page='s_owner';n.S.compare=false;n.renderAll();
 for(const [title,dimension] of [
  ['Top '+n.S.def.topN+' customers by profit','customer'],
  ['Top '+n.S.def.topN+' sales people by profit','x_salesperson'],
@@ -51,7 +51,7 @@ for(const [title,dimension] of [
  assert.equal(b.dataset.traceMetric,'profit.gp');assert.equal(b.dataset.traceDimension,dimension);
  const q=n.traceVisual('profit.gp',dimension,title);
  assert.ok(q.indices.length>0,'current JPR evidence rows supplied: '+title);
- assert.ok(q.previous_indices.length>0,'comparison JPR evidence rows supplied: '+title);
+ assert.equal(q.previous_indices.length,0,'no comparison rows when comparison is off: '+title);
  assert.equal(q.context.date_basis,'Job Date');
  assert.equal(q.context.visual_dimension,n.COLS[dimension].l);
  assert.ok(Math.abs(q.displayed_value-n.R.t.profit)<0.005,'evidence total matches selected summary JPR profit: '+title);
