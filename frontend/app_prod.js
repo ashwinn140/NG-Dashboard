@@ -153,7 +153,39 @@ function rankedKey(key) {
 }
 const CI = {customer: 0, branch: 1, carrier: 3, origin: 2, destination: 4, x_tradelanename: 5, x_dischargecountry: 6, shipper: 0, consignee: 1};
 window.CHART_COLORS = ['#4c78a8', '#f58518', '#54a24b', '#b279a2', '#e45756', '#72b7b2', '#eeca3b', '#9d755d'];
-function card(title, note, body, cls) { return h('article', {class: 'card ' + (cls || '')}, h('h2', {class: 'h'}, title), note ? h('p', {class: 'note'}, note) : null, body); }
+// Explanations are attached to the shared renderers, not to individual pages,
+// so newly added cards and KPIs also receive the reporting context.
+function businessMeaning(label, note) {
+  const name = String(label || '').trim();
+  const lower = name.toLowerCase();
+  const formula = /gross profit|\\bgp\\b/.test(lower)
+    ? 'Gross profit = recorded income minus recorded expense for the selected jobs.'
+    : /margin %|margin rate|profit margin/.test(lower)
+    ? 'Margin percentage = gross profit divided by income, multiplied by 100, where income is non-zero.'
+    : /shipments|shipment count/.test(lower)
+    ? 'Count of shipment records meeting the selected date, company, LOB and other filters.'
+    : /teu/.test(lower)
+    ? 'Sum of TEUs for selected sea shipment records.'
+    : /chargeable weight/.test(lower)
+    ? 'Sum of chargeable weight for selected air shipment records.'
+    : /customer/.test(lower) && /active|distinct|unique/.test(lower)
+    ? 'Count of distinct customers meeting the current filters and the configured activity threshold.'
+    : /revenue|income|sales value/.test(lower)
+    ? 'Sum of recorded income for the selected job-profit lines.'
+    : /cost|expense/.test(lower)
+    ? 'Sum of recorded expenses for the selected job-profit lines.'
+    : /variance|change|growth|decline/.test(lower)
+    ? 'Difference between the selected current and comparison periods; percentage change uses the previous value as the denominator when non-zero.'
+    : '';
+  const meaning = 'Shows ' + name.toLowerCase() + ' for the selected reporting scope.';
+  const calculation = formula || (note ? 'Calculated from the source records using the measure and aggregation described above this visual.' : 'Uses the records matching the current filters; consult the visual labels for its unit and aggregation.');
+  return h('details', {class: 'business-explanation', style: 'margin-top:.55rem;font-size:.78rem'},
+    h('summary', {style: 'cursor:pointer'}, 'Business meaning & calculation'),
+    h('p', null, h('strong', null, 'What this means: '), meaning),
+    h('p', null, h('strong', null, 'How it is calculated: '), calculation),
+    h('p', {class: 'meta'}, 'Reporting dates: ' + fRange({from:R.w.from,to:R.w.to}) + (S.compare ? '; comparison: ' + fRange({from:R.w.pfrom,to:R.w.pto}) : '') + '. Filters apply.'));
+}
+function card(title, note, body, cls) { return h('article', {class: 'card ' + (cls || '')}, h('h2', {class: 'h'}, title), note ? h('p', {class: 'note'}, note) : null, body, businessMeaning(title, note)); }
 function kpi(label, value, delta, note, tone, previousValue) {
   // Promoted ERP records are the reporting source of truth. A zero prior
   // value is a valid baseline, but a percentage cannot be calculated from it.
@@ -169,7 +201,8 @@ function kpi(label, value, delta, note, tone, previousValue) {
     hasComparison && (delta != null || hasPrevious)
       ? h('div', {class: 'delta ' + (delta != null && delta >= 0 ? 'ok' : delta != null ? 'bad' : '')}, comparison)
       : null,
-    note ? h('div', {class: 'kn'}, note) : null);
+    note ? h('div', {class: 'kn'}, note) : null,
+    businessMeaning(label, note));
 }
 function activeCust(m) { const c = COLS.customer.c, a = new Uint32Array(COLS.customer.d.length); for (let i = 0; i < N; i++) if (m[i]) a[c[i]]++; let n = 0; for (let j = 0; j < a.length; j++) if (a[j] > 0 && a[j] >= S.def.activeMin) n++; return n; }
 function sumWhere(m, f) { let s = 0; for (let i = 0; i < N; i++) if (m[i]) s += f(i); return s; }
