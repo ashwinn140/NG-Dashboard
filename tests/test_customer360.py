@@ -20,7 +20,7 @@ class Customer360Tests(unittest.TestCase):
   f=self.f;app=create_app(f.engine,f.tmp.name+'/up')
   try:
    one,two=TestClient(app),TestClient(app)
-   self.assertEqual(one.get('/customer360').status_code,401)
+   self.assertEqual(one.get('/customer360',follow_redirects=False).status_code,303)
    for i,client in enumerate([one,two]):
     email=f'user{i}@example.test';auth.create_user(f.engine,email,'operations','User',companies=['NG'],lobs=['AE'],finance=False,password='Synthetic-pass123')
     self.assertEqual(client.post('/auth/login',json=dict(login=email,password='Synthetic-pass123')).status_code,200)

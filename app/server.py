@@ -292,7 +292,8 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
 
     # ------------------------------------------------------------------ the data and the user's own saved things
     @app.get("/customer360", response_class=HTMLResponse)
-    def customer360_page(user: dict = Depends(me)):
+    def customer360_page(request: Request):
+        if not auth.session_user(engine, request.cookies.get("ng_session")): return RedirectResponse("/login", 303)
         return page("customer360.html")
 
     @app.get("/api/dataset")
