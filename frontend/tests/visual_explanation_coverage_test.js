@@ -93,4 +93,21 @@ assertBand(100,0,'100% (no cost booked)');
 assertBand(0,100,'No income');
 n.pjInc[bandJob]=savedBandIncome;n.pjExp[bandJob]=savedBandExpense;n.renderAll();
 
+
+n.setGroup('ops');n.S.page='compare';n.S.measure='count';n.S.sel={};
+Object.assign(n.S.cmp,{unit:'month',against:'prev',basis:'full',custom:true,A:{from:evidenceDay('2026-10-01'),to:evidenceDay('2026-10-03')},B:{from:evidenceDay('2026-09-01'),to:evidenceDay('2026-09-03')},dim:'customer',show:'all'});
+n.renderAll();
+for(const title of ['Biggest increases by customer','Biggest decreases by customer','Variance by customer']){
+ const c=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()===title);
+ assert.ok(c,'Operations Compare customer visual exists: '+title);
+ const b=c.querySelector('.mt-info');assert.ok(b,'Calculation & records action exists: '+title);
+ assert.equal(b.dataset.traceMetric,'ops.shipments');assert.equal(b.dataset.traceDimension,'customer');
+ const q=n.traceVisual('ops.shipments','customer',title);
+ assert.ok(q.indices.length>0,'current Shipment Date evidence rows supplied: '+title);
+ assert.ok(q.previous_indices.length>0,'comparison Shipment Date evidence rows supplied: '+title);
+ assert.ok(q.indices.every(i=>D.date[i]>=evidenceDay('2026-10-01')&&D.date[i]<=evidenceDay('2026-10-03')),'current evidence follows Operations Compare current period: '+title);
+ assert.ok(q.previous_indices.every(i=>D.date[i]>=evidenceDay('2026-09-01')&&D.date[i]<=evidenceDay('2026-09-03')),'comparison evidence follows Operations Compare prior period: '+title);
+ assert.equal(q.context.date_basis,'Shipment Date');
+}
+
 assert.deepEqual(errors,[]);w.close();console.log('PASS verified visual explanations: summary, scorecard, agent reports, profitability, billing, variance and source-status pages.');})().catch(e=>{console.error(e);dom.window.close();process.exit(1)});
