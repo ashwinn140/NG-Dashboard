@@ -252,8 +252,8 @@ function businessMeaning(label, note, metricExplanation) {
     note ? h('p', {class:'meta'}, 'Visual note: ' + note) : null);
 }
 function card(title, note, body, cls, trace) {
-  const action = trace ? h('button', {type: 'button', class: 'mt-info', style: 'margin-top:0;white-space:nowrap', title: 'Open calculation and contributing records for ' + title, 'aria-label': 'Open calculation and contributing records for ' + title, onclick: (e) => { e.preventDefault(); e.stopPropagation(); const q = window.NG?.traceVisual?.(trace.metric, trace.dimension, title); if (q) window.MetricTrace?.openWithRequest(q); }}, 'Calculation & records') : null;
-  const heading = action ? h('div', {style: 'display:flex;align-items:center;justify-content:space-between;gap:.5rem;min-width:0'}, h('h2', {class: 'h'}, title), action) : h('h2', {class: 'h'}, title);
+  const action = trace ? h('button', {type: 'button', class: 'mt-info', style: 'margin-top:0;white-space:nowrap', 'data-trace-metric': trace.metric, 'data-trace-dimension': trace.dimension || '', title: 'Open calculation and contributing records for ' + title, 'aria-label': 'Open calculation and contributing records for ' + title, onclick: (e) => { e.preventDefault(); e.stopPropagation(); const q = window.NG?.traceVisual?.(trace.metric, trace.dimension, title); if (q) window.MetricTrace?.openWithRequest(q); }}, 'Calculation & records') : null;
+  const heading = action ? h('div', {style: 'display:flex;align-items:center;justify-content:space-between;gap:.5rem;min-width:0;flex-wrap:wrap'}, h('h2', {class: 'h'}, title), action) : h('h2', {class: 'h'}, title);
   return h('article', {class: 'card ' + (cls || '')}, heading, note ? h('p', {class: 'note'}, note) : null, body, businessMeaning(title, note));
 }
 function opsVisualMetric() { return R.useVol ? (R.air ? 'ops.air_weight' : 'ops.teu') : 'ops.shipments'; }
