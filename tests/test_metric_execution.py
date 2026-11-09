@@ -25,6 +25,8 @@ class MetricExecutionTests(unittest.TestCase):
   d=self.fixture();d['p']['expense']=[40,0]
   r=X.execute(d,dict(metric='profit.expected_adjusted',indices=[1],previous_indices=[0]),M)
   self.assertEqual(r['current']['value'],30);self.assertEqual(r['records'][0]['expected_cost'],20)
+  q=dict(metric='profit.expected_cost_only',indices=[1],previous_indices=[]);costs=X.execute(d,q,M)
+  self.assertEqual(costs['current']['value'],20);self.assertEqual(costs['records'][0]['expected_cost'],20)
   self.assertEqual(r['previous']['value'],60);self.assertEqual(len(r['benchmark_records']),1)
   self.assertIn('Benchmark Records',load_workbook(io.BytesIO(X.workbook(r))).sheetnames)
  def test_pending_lock_uses_actual_source_stage_label(self):
