@@ -74,6 +74,22 @@ for(const [title,dimension] of [
 explanation('profit','p_overview','From income to profit','estimate, not booked cost');
 explanation('profit','p_overview','Income and expense by week','Job Date');
 explanation('profit','p_overview','How healthy are the jobs?','rounding');
+for(const [page,title] of [
+ ['p_overview','From income to profit'],['p_overview','By company'],['p_overview','Income and expense by week'],
+ ['p_overview','How healthy are the jobs?'],['p_branches','Profit by branch'],
+ ['p_branches','New Globe against Neutral Consolidation'],['p_branches','Branch by line of business'],
+ ['p_customers','Customers'],['p_customers','Income against margin'],['p_jobs','Jobs'],
+ ['p_explorer','All rows'],['p_explorer','Top '+n.S.def.topN+' by '+n.S.rank],['p_compare','Period by period: profit'],
+ ['p_compare','Biggest increases by branch'],['p_compare','Biggest decreases by branch'],['p_compare','Variance by branch']
+]){
+ n.setGroup('profit');n.S.page=page;n.renderAll();
+ const c=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()===title);
+ assert.ok(c,'finance visual exists: '+page+'/'+title);
+ assert.ok(c.querySelector('.mt-info'),'finance visual exposes Calculation & records: '+page+'/'+title);
+}
+n.setGroup('summary');n.S.page='s_score';n.renderAll();
+const scorecard=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()==='All rows');
+assert.ok(scorecard?.querySelector('.mt-info'),'finance scorecard exposes Calculation & records');
 explanation('profit','p_compare','Period by period: profit','page-specific Profit Compare controls');
 explanation('profit','p_compare','Biggest increases by branch','current and comparison Job Date periods');
 explanation('profit','p_compare','Biggest decreases by branch','current and comparison Job Date periods');
