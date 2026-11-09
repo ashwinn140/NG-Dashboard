@@ -371,7 +371,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         Owner/job identity only; no income, expense or profit values. Company
         and LOB scope are checked again on the server for every request.
         """
-        from .customer_history import build_recent_jobs
+        from .customer_history import build_recent_jobs, build_last_shipment_owners
         raw = await request.body()
         if len(raw) > 1_000_000: raise HTTPException(413, "Selection too large.")
         try:
@@ -390,12 +390,16 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                 companies = item.get("companies") or sorted(allowed_companies)
                 requested_lobs = item.get("lobs")
                 lobs = set(requested_lobs or (allowed_lobs or []))
+                last_shipment_date = str(item.get("last_shipment_date") or "").strip()[:10]
+                if last_shipment_date:
+                    try: date.fromisoformat(last_shipment_date)
+                    except ValueError: raise ValueError("Invalid last shipment date.")
                 if not name or len(name) > 300: raise ValueError("Invalid customer name.")
                 if not isinstance(companies, list) or not companies or not set(companies).issubset(allowed_companies):
                     raise PermissionError("The selected company is outside your access scope.")
                 if not isinstance(requested_lobs or [], list) or (allowed_lobs is not None and not lobs.issubset(allowed_lobs)):
                     raise PermissionError("The selected line of business is outside your access scope.")
-                normalized.append((name, set(companies), lobs))
+                normalized.append((name, set(companies), lobs, last_shipment_date))
                 all_companies.update(companies)
                 all_names.add(name.strip().casefold())
             if not normalized:
@@ -403,7 +407,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             with engine.connect() as conn:
                 # A caller may request only customers already present in the
                 # current operational register within their authorized scope.
-                visible_report_types = sorted(set.intersection(*[set(lobs) for _, _, lobs in normalized]) if normalized and all(lobs for _, _, lobs in normalized) else {"AE", "AI", "OE", "OI"})
+                visible_report_types = sorted(set.intersection(*[set(lobs) for _, _, lobs, _ in normalized]) if normalized and all(lobs for _, _, lobs, _ in normalized) else {"AE", "AI", "OE", "OI"})
                 visible_rows = conn.execute(select(
                     shipments.c.company, shipments.c.customer
                 ).where(
@@ -416,9 +420,18 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                     (company, " ".join(str(customer or "").split()).casefold())
                     for company, customer in visible_rows
                 }
-                for name, companies, _ in normalized:
+                for name, companies, _, _ in normalized:
                     if any((company, name.casefold()) not in visible for company in companies):
                         raise PermissionError("The customer is outside your visible operational scope for one or more selected companies.")
+                shipment_rows = conn.execute(select(
+                    shipments.c.company, shipments.c.report_type, shipments.c.shipment_no,
+                    shipments.c.shipment_date, shipments.c.customer
+                ).where(
+                    shipments.c.company.in_(sorted(all_companies)),
+                    shipments.c.report_type.in_(visible_report_types),
+                    shipments.c.to_import.is_(None),
+                    func.lower(func.trim(shipments.c.customer)).in_(sorted(all_names))
+                ).order_by(shipments.c.shipment_date.desc(), shipments.c.id.desc())).mappings().all()
                 source_rows = conn.execute(select(
                     profit_lines.c.id, profit_lines.c.company, profit_lines.c.job_no,
                     profit_lines.c.job_date, profit_lines.c.lob, profit_lines.c.customer,
@@ -432,12 +445,26 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             for row in source_rows:
                 key = " ".join(str(row["customer"] or "").split()).casefold()
                 by_customer.setdefault(key, []).append(dict(row))
+            shipments_by_customer = {}
+            for row in shipment_rows:
+                key = " ".join(str(row["customer"] or "").split()).casefold()
+                shipments_by_customer.setdefault(key, []).append(dict(row))
             histories = []
-            for name, companies, lobs in normalized:
+            for name, companies, lobs, last_shipment_date in normalized:
                 key = name.strip().casefold()
                 rows = [row for row in by_customer.get(key, []) if row["company"] in companies]
+                visible_shipments = [row for row in shipments_by_customer.get(key, []) if row["company"] in companies]
                 jobs = build_recent_jobs(rows, lobs=lobs, limit=5)
-                histories.append({"customer": name, "jobs": jobs, "job_count_returned": len(jobs)})
+                last_owner = build_last_shipment_owners(visible_shipments, rows, lobs=lobs, target_date=last_shipment_date).get(key)
+                histories.append({
+                    "customer": name,
+                    "jobs": jobs,
+                    "job_count_returned": len(jobs),
+                    "last_shipment_job_owner": last_owner["last_shipment_job_owner"] if last_owner else "No shipment record",
+                    "last_shipment_owner_status": last_owner["last_shipment_owner_status"] if last_owner else "no_shipment",
+                    "last_shipment_date": last_owner["last_shipment_date"] if last_owner else None,
+                    "last_shipment_numbers": last_owner["last_shipment_numbers"] if last_owner else [],
+                })
             return {"histories": histories, "basis": "Job Date", "source": "Current Job Profit Analysis Report"}
         except PermissionError as e:
             raise HTTPException(403, str(e))

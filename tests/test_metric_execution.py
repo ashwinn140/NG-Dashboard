@@ -55,6 +55,32 @@ class MetricExecutionTests(unittest.TestCase):
  def test_malformed_context_and_nonfinite_expected_values_are_rejected(self):
   for extra in [dict(context=[]),dict(displayed_value=float('inf')),dict(context={'age_as_of':float('inf')}),dict(displayed_value='wrong')]:
    with self.assertRaises(ValueError):X.execute(self.fixture(),dict(metric='ops.shipments',indices=[0],**extra),M)
+ def test_operational_evidence_includes_only_unique_matched_jpr_job_lineage(self):
+  d=self.fixture()
+  d['cols']['p_job']={'d':['JPR-1','JPR-2'],'pc':[0,1]}
+  d['cols']['p_lob']={'d':['FFWD AIR EXP','FFWD AIR IMP'],'pc':[0,1]}
+  d['cols']['job_owner']={'d':['Owner A','Owner B'],'pc':[0,1]}
+  d['p']['sidx']=[0,1]
+  d['ops']=[19990,19991]
+  d['invN']=[0,0]
+  r=X.execute(d,dict(metric='ops.locked_no_invoice',indices=[0]),M)
+  self.assertEqual(r['current']['value'],1)
+  row=r['records'][0]
+  self.assertEqual(row['shipment_no'],'S1')
+  self.assertEqual(row['matched_jpr_job_count'],1)
+  self.assertEqual(row['matched_jpr_job_numbers'],'JPR-1')
+  self.assertEqual(row['matched_jpr_job_dates'],'2024-10-04')
+  self.assertEqual(row['matched_jpr_job_lobs'],'FFWD AIR EXP')
+  self.assertEqual(row['matched_jpr_job_owners'],'Owner A')
+  self.assertEqual(row['jpr_match_status'],'matched')
+  wb=load_workbook(io.BytesIO(X.workbook(r)))
+  headers=[c.value for c in wb['Contributing Records'][1]]
+  self.assertIn('matched_jpr_job_numbers',headers)
+  d['user']['finance']=False
+  r=X.execute(d,dict(metric='ops.locked_no_invoice',indices=[0]),M)
+  self.assertEqual(r['records'][0]['jpr_match_status'],'not available in finance scope')
+  self.assertEqual(r['records'][0]['matched_jpr_job_count'],0)
+  self.assertEqual(r['records'][0]['matched_jpr_job_numbers'],'')
  def test_ops_does_not_include_money(self):
   r=X.execute(self.fixture(),dict(metric='ops.shipments',indices=[0,1]),M);self.assertEqual(r['current']['value'],2);self.assertNotIn('income',r['records'][0])
 if __name__=='__main__':unittest.main()

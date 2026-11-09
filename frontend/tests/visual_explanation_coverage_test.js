@@ -14,6 +14,19 @@ explanation('profit','p_explorer','Profitability by customer','simple JPR');
 explanation('profit','p_customers','Income against margin','square root');
 explanation('profit','p_billing','Locked but not invoiced, by age','operations-lock date');
 explanation('profit','p_billing','Where billing is slow','operations-locked');
+n.setGroup('profit');n.S.page='p_billing';n.renderAll();
+const billingCard=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()==='Where billing is slow');
+assert.ok(billingCard,'billing bottleneck table exists');
+assert.equal(billingCard.querySelector('.mt-info')?.dataset.traceMetric,'ops.locked_no_invoice','billing card exposes source-backed evidence');
+assert.ok([...billingCard.querySelectorAll('tbody button')].some(b=>b.textContent.trim()==='Locked'),'dimension rows expose all locked shipment records');
+assert.ok([...billingCard.querySelectorAll('tbody button')].some(b=>b.textContent.trim()==='Unbilled'),'dimension rows expose the unbilled subset');
+const ageCard=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()==='Locked but not invoiced, by age');
+assert.ok(ageCard&&[...ageCard.querySelectorAll('button')].filter(b=>b.textContent.trim()==='View records').length===5,'all five ageing buckets expose contributing records');
+assert.ok([...w.document.querySelectorAll('#page .kpis .mt-info')].length>=5,'billing KPIs expose their own calculation and records');
+const billingMonth=[...w.document.querySelectorAll('#page svg[aria-label="Shipments and invoices by month"] rect[style*="cursor"]')];
+assert.ok(billingMonth.length>0,'monthly shipment/invoice bars are individually drillable');
+const billingVariance=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()==='Variance: shipments invoiced');
+assert.ok(billingVariance&&[...billingVariance.querySelectorAll('tbody button')].some(b=>b.textContent.trim()==='View records'),'invoice variance rows expose current and comparison records');
 explanation('profit','p_billing','Shipments against invoices, by month','different date fields');
 explanation('profit','p_billing','Variance: shipments invoiced','first invoice date');
 explanation('profit','p_compare','Variance: change in value and percentage','absolute comparison value');
@@ -60,7 +73,35 @@ for(const [title,dimension] of [
 
 explanation('profit','p_overview','From income to profit','estimate, not booked cost');
 explanation('profit','p_overview','Income and expense by week','Job Date');
-explanation('profit','p_overview','How healthy are the jobs?','rounding');
+explanation('profit','p_overview','How healthy are the jobs?','margin bands');
+for(const [page,title] of [
+ ['p_overview','From income to profit'],['p_overview','By company'],['p_overview','Income and expense by week'],
+ ['p_overview','How healthy are the jobs?'],['p_branches','Profit by branch'],
+ ['p_branches','New Globe against Neutral Consolidation'],['p_branches','Branch by line of business'],
+ ['p_customers','Customers'],['p_customers','Income against margin'],['p_jobs','Jobs'],
+ ['p_explorer','All rows'],['p_explorer','Top '+n.S.def.topN+' by '+n.S.rank],['p_compare','Period by period: profit'],
+ ['p_compare','Biggest increases by branch'],['p_compare','Biggest decreases by branch'],['p_compare','Variance by branch']
+]){
+ n.setGroup('profit');n.S.page=page;n.renderAll();
+ const c=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()===title);
+ assert.ok(c,'finance visual exists: '+page+'/'+title);
+ assert.ok(c.querySelector('.mt-info'),'finance visual exposes Calculation & records: '+page+'/'+title);
+}
+n.setGroup('summary');n.S.page='s_score';n.renderAll();
+const scorecard=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()==='All rows');
+assert.ok(scorecard?.querySelector('.mt-info'),'finance scorecard exposes Calculation & records');
+n.setGroup('profit');n.S.page='p_quality';n.renderAll();
+for(const title of ['Expected costs on jobs with none booked','Who needs to book costs','Biggest losses','Biggest jobs with no cost booked']){
+ const c=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()===title);
+ assert.ok(c?.querySelector('.mt-info'),'finance quality visual exposes Calculation & records: '+title);
+}
+assert.ok(w.document.querySelectorAll('#page .card.kpi .mt-info').length>=6,'all finance quality KPI tiles expose calculation and records');
+n.setGroup('profit');n.S.page='p_rates';n.renderAll();
+assert.ok(w.document.querySelectorAll('#page .card.kpi .mt-info').length>=7,'all rate-analysis KPI tiles expose calculation and records');
+for(const title of ['Estimated freight margin by month','Margin per kg by month','Variance: estimated freight margin','Selling below buy','Estimated against actual']){
+ const c=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()===title);
+ assert.ok(c?.querySelector('.mt-info'),'rate-analysis visual exposes Calculation & records: '+title);
+}
 explanation('profit','p_compare','Period by period: profit','page-specific Profit Compare controls');
 explanation('profit','p_compare','Biggest increases by branch','current and comparison Job Date periods');
 explanation('profit','p_compare','Biggest decreases by branch','current and comparison Job Date periods');
