@@ -2,7 +2,7 @@ const{JSDOM,VirtualConsole}=require('jsdom'),fs=require('fs'),assert=require('no
 const D=JSON.parse(fs.readFileSync('/tmp/ng-fixture-admin.json','utf8')),vc=new VirtualConsole(),errors=[];
 vc.on('jsdomError',e=>{if(!/navigation|CSS stylesheet/.test(e.message))errors.push(e.message)});
 const dom=new JSDOM(fs.readFileSync('app/web/dashboard.html','utf8'),{url:'http://visual-explanations.test',runScripts:'dangerously',pretendToBeVisual:true,virtualConsole:vc,beforeParse(w){w.matchMedia=()=>({matches:false,addEventListener(){}});w.scrollTo=()=>{};w.SVGElement.prototype.getComputedTextLength=()=>20;w.fetch=async u=>({ok:true,status:200,json:async()=>u==='/api/me'?{name:'Test',csrf:'test',role:'admin'}:u==='/api/dataset'?D:{}})}});
-(async()=>{const w=dom.window;for(let i=0;i<100&&!w.NG;i++)await new Promise(r=>setTimeout(r,20));const n=w.NG;assert.ok(n);
+(async()=>{const w=dom.window;for(let i=0;i<100&&!w.NG;i++)await new Promise(r=>setTimeout(r,20));const n=w.NG;assert.ok(n);w.eval(fs.readFileSync('app/web/metric_trace.js','utf8'));
 const explanation=(group,page,title,phrase)=>{n.setGroup(group);n.S.page=page;n.renderAll();const c=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()===title);assert.ok(c,'visual exists: '+group+'/'+page+'/'+title);const d=c.querySelector('.business-explanation');assert.ok(d,'visual has explanation: '+title);assert.ok(!d.textContent.includes('Calculation not yet verified'),'visual calculation verified: '+title);assert.ok(d.textContent.toLowerCase().includes(phrase.toLowerCase()),'explanation states source/formula: '+title);};
 explanation('summary','s_owner','What needs your attention','independent checks');
 explanation('summary','s_owner','Top '+n.S.def.topN+' customers by profit','simple JPR');
@@ -26,12 +26,50 @@ assert.ok([...w.document.querySelectorAll('#page .kpis .mt-info')].length>=5,'bi
 const billingMonth=[...w.document.querySelectorAll('#page svg[aria-label="Shipments and invoices by month"] rect[style*="cursor"]')];
 assert.ok(billingMonth.length>0,'monthly shipment/invoice bars are individually drillable');
 const billingVariance=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()==='Variance: shipments invoiced');
-assert.ok(billingVariance&&[...billingVariance.querySelectorAll('tbody button')].some(b=>b.textContent.trim()==='View records'),'invoice variance rows expose current and comparison records');
+assert.ok(billingVariance,'invoice variance visual exists');
+const invoiceVarianceRows=[...billingVariance.querySelectorAll('tbody tr')];
+assert.ok(invoiceVarianceRows.length===0||invoiceVarianceRows.every(row=>[...row.querySelectorAll('button')].some(b=>b.textContent.trim()==='View records')),'every populated invoice variance row exposes current and comparison records');
+assert.ok(billingVariance?.querySelector('.mt-info'),'invoice variance visual exposes a header-level Calculation & records action');
+assert.equal(billingVariance.querySelector('.mt-info')?.dataset.traceMetric,'ops.invoiced_count','invoice variance evidence uses first-invoice-date records');
 explanation('profit','p_billing','Shipments against invoices, by month','different date fields');
 explanation('profit','p_billing','Variance: shipments invoiced','first invoice date');
 explanation('profit','p_compare','Variance: change in value and percentage','absolute comparison value');
 explanation('profit','p_status','Profit data status','simple Job Profit Analysis Report');
 explanation('profit','p_status','Matched to the shipment register','unique match');
+
+// Full Operations overview evidence coverage: ageing, owner worklist and KPI tiles.
+n.setGroup('ops');n.S.page='ops';n.S.sel={};n.renderAll();
+let openedEvidence=null;w.MetricTrace={createRequest:(metric,label,patch={})=>({metric,indices:[],previous_indices:[],compare:false,context:{},...patch,context:{...(patch.context||{})}}),openWithRequest:q=>{openedEvidence=q;}};
+const openStage=n.COLS.stage.d.indexOf('Closed');
+const expectedOpen=Array.from(n.mask({dates:'none'})).flatMap((v,i)=>v&&n.COLS.stage.c[i]!==openStage?[i]:[]);
+for(const title of ['How long shipments have been open','Open shipments by job owner','Worklist']){
+ const c=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()===title);
+ assert.ok(c,'Operations overview visual exists: '+title);
+ const b=c.querySelector('.mt-info');assert.ok(b,'Operations visual exposes Calculation & records: '+title);
+ assert.equal(b.dataset.traceMetric,'ops.shipments');
+ b.click();assert.ok(openedEvidence,'Operations action opens evidence: '+title);
+ assert.ok(openedEvidence.indices.length>0&&openedEvidence.indices.every(i=>expectedOpen.includes(i)),'Operations evidence contains only non-closed shipment records: '+title);
+ assert.equal(openedEvidence.previous_indices.length,0,'no comparison rows for open worklist: '+title);
+}
+const opsKpis=[['Waiting for operations lock','ops.waiting_lock'],['Operations locked, financials open','ops.financials_open'],['Open more than '+n.S.def.oldDays+' days','ops.old_open'],['Oldest open shipment (days)','ops.oldest_open'],['Days from ops lock to financial lock','ops.lock_lag']];
+for(const [label,metric] of opsKpis){
+ const k=[...w.document.querySelectorAll('#page .card.kpi')].find(x=>x.querySelector('.kl')?.textContent.trim()===label);
+ assert.ok(k,'Operations KPI exists: '+label);
+ const b=k.querySelector('.mt-info');assert.ok(b,'Operations KPI exposes Calculation & records: '+label);
+ assert.equal(b.dataset.traceMetric,metric);
+ b.click();assert.equal(openedEvidence.metric,metric,'KPI evidence uses its registered metric: '+label);
+}
+for(const [page,title] of [['o_agents','Agent variation report'],['o_sales','Sales performance report']]){
+ n.S.page=page;n.renderAll();
+ const c=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()==='Agents');
+ assert.ok(c,'Operations report table exists: '+title);
+ const b=c.querySelector('.mt-info');assert.ok(b,'Operations report exposes Calculation & records: '+title);
+ b.click();const {starts,asOf}=n.agentRows(),m=n.mask({dates:'none'}),expected=[];
+ for(let i=0;i<n.N;i++)if(m[i]&&D.date[i]>=starts[0]&&D.date[i]<=asOf)expected.push(i);
+ assert.ok(openedEvidence.indices.length>0&&openedEvidence.indices.every(i=>Number.isInteger(i)&&i>=0&&i<n.N),'agent/sales evidence contains valid shipment-register row indices: '+title);
+ assert.ok(openedEvidence.context.segment?.scope?.includes('Rolling 12-month'),'agent/sales evidence carries its rolling 12-month scope: '+title);
+ assert.equal(openedEvidence.context.date_basis,'Shipment Date');
+}
 
 // Targeted acceptance: verified operations comparison charts expose source-backed
 // Calculation & records for their exact current and comparison period rows.
