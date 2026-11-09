@@ -38,6 +38,7 @@ jobs:
           node frontend/tests/metric_trace_test.js
           node frontend/tests/metric_drawer_test.js
           node frontend/tests/explicit_reconciliation_test.js
+          node frontend/tests/help_guide_test.js
           node frontend/tests/visual_trace_test.js
       - name: Synthetic runtime visual inventory and coverage
         run: |
