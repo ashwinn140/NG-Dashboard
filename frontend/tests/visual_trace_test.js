@@ -44,4 +44,19 @@ n.S.sel={customer:new Set([n.COLS.customer.c[0],n.COLS.customer.c[1]])};n.comput
 const whole=n.traceVisual('ops.shipments','customer','Top customers'),expected=n.mask({skip:'customer'});
 assert.deepEqual(Array.from(whole.indices),Array.from(expected).flatMap((v,i)=>v?[i]:[]),'multi-select uses the full ranking visual scope, excluding only its own dimension');
 assert.equal(whole.context.filters.customer,undefined,'ranking scope does not claim a customer filter that it deliberately excludes');
-assert.deepEqual(errors,[]);w.close();console.log('PASS custom visual trace: exact group/split/Other membership, ratio numerators and denominators, no duplicate rows.');})().catch(e=>{console.error(e);dom.window.close();process.exit(1)});
+// A repeated Job No. must not broaden a click to another Job Date.
+n.S.group='profit';n.S.page='p_quality';n.S.sel={};
+assert.ok(n.COLS.p_jobdate,'profit dataset exposes Job Date as a filter dimension');
+const jobIndex=0,reusedIndex=1;
+n.COLS.p_job.pc[reusedIndex]=n.COLS.p_job.pc[jobIndex];
+n.COLS.company.pc[reusedIndex]=n.COLS.company.pc[jobIndex];
+n.COLS.p_lob.pc[reusedIndex]=n.COLS.p_lob.pc[jobIndex];
+const distinctDateCode=n.COLS.p_jobdate.d.length;
+n.COLS.p_jobdate.d.push('2099-12-31');
+n.COLS.p_jobdate.pc[reusedIndex]=distinctDateCode;
+n.selectProfitJob({i0:jobIndex});
+const exactJob=n.maskP({dates:'none'});
+assert.equal(exactJob[jobIndex],1,'clicked composite job remains selected');
+assert.equal(exactJob[reusedIndex],0,'same Job No. with a different Job Date is excluded');
+assert.deepEqual(Array.from(n.S.sel.p_jobdate),[n.COLS.p_jobdate.pc[jobIndex]]);
+assert.deepEqual(errors,[]);w.close();console.log('PASS custom visual trace and composite job selection: exact group/split/Other membership, ratio numerators and denominators, no duplicate rows.');})().catch(e=>{console.error(e);dom.window.close();process.exit(1)});
