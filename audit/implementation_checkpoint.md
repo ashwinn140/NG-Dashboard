@@ -414,3 +414,66 @@ The integrated HTML Help/User Guide is now complete enough for the first product
 - The GitHub workflow query did not surface a new run for this updated head during this session. The previous failing run `42646614859` is still the only verified CI evidence; the test-only commits are not yet certified.
 - Root cause of the two per-LOB integration classification failures remains unresolved. Do not infer that the test-only changes fixed them. Continue with a run that exposes `per_lob` / `last_shipment` values, then correct the data/query path.
 - The PR remains open, diverged from main (15 commits ahead, 10 behind at last comparison), and non-mergeable. Do not merge or deploy.
+
+
+## Master-prompt reconciliation against production — 9 November 2026
+
+### Reconciliation basis and scope override
+- Definitive baseline: master prompt `NG_Performance_Hub_Final_Master_Prompt.md` (19 sections), reconciled against deployed `main` commit `d1ffca38b2eba2d39693a89582daa5316e9323bc` and Railway deployment `59faedfd-328b-4c7c-94be-2c5041c59aeb` (SUCCESS).
+- Owner's latest source decision supersedes any older wording or audit artifacts: use only the existing simple, job-level Job Profit Analysis Report (JPR), one row per job, Basis: Job Date. Do not add charge-wise/Chargewise analysis, seek charge-wise workbooks, require Billing Date, or infer Billing Date from Job Date.
+- This is a documentation/reconciliation checkpoint only. No product code, database, production data, environment variables, or Railway configuration changed.
+
+### Current production verification
+- Railway production NG-Dashboard is Online, 1/1 replica, deployment SUCCESS for exact commit `d1ffca38`; PostgreSQL is Online, and there is no staged/pending Railway work. No active warnings/criticals or recent failures were reported.
+- Sampled runtime telemetry: 501 HTTP events, 500 responses 200 and one 303; no 4xx/5xx in that sample. This is service telemetry, not an authenticated browser test.
+- Production URL: https://ng-dashboard-production.up.railway.app/
+- Authenticated browser verification, responsive/accessibility checks and current live JPR-to-PostgreSQL-to-API-to-visual-to-Excel reconciliation have not been performed in this session. Do not claim them complete.
+
+### Master prompt requirement disposition
+
+| Master prompt area | Reconciled status | Deployed evidence / remaining boundary |
+|---|---|---|
+| Baseline, source rules, role/LOB security foundation | Completed and production-verified | Main/deployment inspected; permission-scoped dataset and metric evidence contracts exist. Continue targeted permission/export regression tests. |
+| Production shell/build integrity | Completed and production-verified | PR #23 fixed malformed generated HTML/visible-JavaScript incident and added fail-closed build checks; deployed. |
+| Origin/destination multi-select semantics | Completed and production-verified | PR #19 lane aggregation uses the normal active filter mask; OR within a field and AND across fields. Preserve existing regression coverage; do not rebuild. |
+| Explicit reconciliation framework | Completed for supported metric-backed visuals; overall coverage audit pending | PR #19/metric trace infrastructure provides explicit evidence actions without opening on ordinary KPI/ranking clicks. Keep unsupported visuals without fabricated records. Re-inventory all runtime visuals after PR #34. |
+| Operations last-five distinct jobs and Job Owner | Completed and production-verified | PR #25 source-readiness diagnostics and PR #26 recent-jobs endpoint/UI are merged and deployed. Preserve tests for distinct job identity, repeated owners, missing/conflicting owner, company/LOB scope and export. Authenticated live UI check remains outstanding. |
+| Customer 360 cross-LOB activity | Implemented and production-verified for visible-LOB context | PR #29 adds per-LOB activity breakdown from currently loaded, permission-scoped shipment rows; source-name matching and incomplete-snapshot caveats are explicit. `frontend/tests/customer360_test.js` covers separate LOB histories, active elsewhere and sparse history. It is not a stable customer-code master or proof of company-wide inactivity. |
+| PR #28 server-side cross-LOB classifier | Pending; not merge/deploy ready | PR #28 remains open, diverged (15 ahead/10 behind at last comparison), and its verified CI run failed (163 backend tests: 2 failures, 1 error). Test-only commits do not have a surfaced new CI run. Because deployed Customer 360 already exposes visible-LOB context, compare the exact remaining acceptance gap before investing further; do not duplicate the deployed feature or weaken history thresholds. |
+| Simple-JPR finance model | Core implementation deployed; full current production audit pending | JPR is `job_summary_v1`, one row per job, Job Date basis; Income, Expense and GP/Profit = Income − Expense validation are implemented. Prior independent JPR sample checks exist in historical audit artifacts, but are not current production snapshot certification. No charge-wise work is in scope. |
+| Finance controls / exception evidence | Completed for specific shipped controls; full finance audit pending | PR #24 expected-cost estimate is explicitly an estimate, not booked cost/liability; PR #30 customer concentration guard and zero/negative-baseline variance handling are deployed. Invoice placeholder handling and Job Date period tests exist. Audit all finance metrics, filters, evidence and Excel parity against the accepted simple JPR. |
+| Volume-unit correction | Completed and production-verified | PR #31 stores the Volume-adjacent unit for new imports and uses the audited legacy fallback. Preserve `tests/test_volume_units.py`; do not alter source values or introduce a new conversion without evidence. |
+| Invoice placeholder handling | Implemented and tested | Existing tests cover blank, 0, N/A, NIL and Pending as non-invoice references. Validate against current operational source snapshots during the remaining operations audit. |
+| Visual explanations / Visual Dictionary | Partially completed; coverage audit pending | PR #32 Help/Metric Dictionary is live. PR #34 adds source-backed explanations and `frontend/tests/visual_explanation_coverage_test.js` covers 15 high-value visuals. The earlier 408-visual inventory predates PR #34 and is stale; regenerate before assigning any remaining visual work. |
+| Variance/date behavior | Partially covered; complete audit pending | Existing targeted tests cover current/prior periods, FY/calendar boundaries, leap-day clamping, partial periods, zero baseline and negative baseline behavior. Audit all finance/operations variance views, exact date labels, missing-history states, filters, evidence and export parity. |
+| Integrated HTML Help & User Guide | Completed and production-verified | PR #32 deployed `/help`, search and permission-filtered Metric Dictionary; `frontend/tests/help_guide_test.js` is retained. Do not create a separate PDF/Word manual or rebuild the guide. |
+| Report Scheduler | Pending — genuinely missing capability | No durable scheduler/queue, execution-time authorization, recipient approval workflow, freshness gate, idempotency, retry/restart/concurrency controls or delivery history UI is deployed. Build only after design/security acceptance criteria and tests are ready. |
+| Business Pulse / Finance Control Tower / optional intelligence | Evaluate, do not blindly build | Reuse existing pages where adequate. Add only capabilities justified by verified business value, source feasibility, security and acceptance tests. KRKP must not be guessed. |
+| Authenticated browser, responsive, accessibility and final production smoke | Blocked | No authenticated browser session/tool is available in this continuation. Keep this explicit; synthetic jsdom and HTTP telemetry are not substitutes. |
+| Full source-to-export reconciliation and ingestion/data health | Pending / partly blocked by evidence | Need current accepted simple JPR source and current production import/snapshot evidence. Library search surfaced audit patches and prior reconciliation artifacts, not the actual current accepted JPR source workbooks. Do not substitute charge-wise workbooks. |
+
+### Targeted acceptance tests to retain (do not replace with broad, untargeted rewrites)
+- Lane/filter and explicit-only trace behavior: existing PR #19 regression coverage and `frontend/tests/metric_trace_test.js` / `frontend/tests/metric_drawer_test.js`.
+- Customer job history: `tests/test_customer_history.py`, `frontend/tests/ops_pages_fixes_test.js`, and the existing API scope/export tests.
+- Customer 360 cross-LOB and restricted visibility: `frontend/tests/customer360_test.js`; retain sparse-history and visible-LOB assertions.
+- Finance formulas and variance: `tests/test_metric_execution.py`, `frontend/tests/data_audit.js`, `frontend/tests/metric_trace_test.js`.
+- Invoice/volume data rules: `tests/test_invoice_reference.py`, `tests/test_volume_units.py`; retain operational-ageing regression coverage already in the suite.
+- Help/metric dictionary: `frontend/tests/help_guide_test.js`.
+- Post-PR #34 visual explanations: `frontend/tests/visual_explanation_coverage_test.js` (15 targeted high-value visuals). Add coverage only for a verified gap discovered by the regenerated inventory.
+- Existing backend permission, API, export and production-build checks remain release gates.
+
+### Work only on verified defects, audit gaps and missing capabilities
+
+1. Regenerate the synthetic runtime visual inventory against commit `d1ffca38` and classify each remaining item as verified explanation, unverified calculation, missing explanation, wrapper/container, or unsupported/no record-level evidence. Do not reuse the pre-PR #34 408-visual counts.
+2. Run a focused simple-JPR finance/variance audit: Income, Expense, GP, margin, job count, profit/job, customer/branch/LOB attribution, negative-profit and zero/negative baselines, Job Date period boundaries, missing comparison history, permission scope, metric evidence and Excel export parity. Clearly separate source validation from code-level tests. Do not add charge-wise logic.
+3. Audit operational data rules against currently accepted shipment snapshots: invoice placeholders, volume mapping (already corrected in code), operational/finance ageing date bases, job matching, source freshness and import coverage. Change code only if a reproducible defect is demonstrated.
+4. Reconcile PR #28 with deployed PR #29 Customer 360 behavior. Retain PR #28 as unmerged until a concrete unmet acceptance requirement is demonstrated, its integration data path is diagnosed, and its branch is updated from current main with green full CI. Do not weaken inactivity thresholds.
+5. Treat the generic secure Report Scheduler as the one major missing capability. Design first; implement durable queue, permission checks at execution, approved recipients, freshness policy, idempotency, bounded retries, restart/concurrency safety, accurate provider states and audit history. Do not activate real customer/financial emails before end-to-end security and delivery tests pass.
+6. Obtain an authorized browser session for 1920/1366/768/390 px, keyboard/focus, last-five jobs, Customer 360, filter, explicit reconciliation, export and production smoke checks. Until then, report this gate as Blocked.
+
+### Release posture
+- Do not rebuild deployed features already listed as complete.
+- Do not merge/deploy PR #28 based on the current failing evidence.
+- Do not change production data, schemas, source mappings or financial formulas merely to make an audit pass.
+- Only create a feature branch for a reproducible defect or a genuinely missing capability; keep the targeted acceptance test for that defect with the change.
+- Next checkpoint should record exact regenerated inventory results, JPR audit evidence, operational audit results, any PR decision, scheduler design/tests, and browser QA availability.
