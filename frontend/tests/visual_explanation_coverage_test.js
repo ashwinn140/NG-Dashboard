@@ -97,6 +97,7 @@ for(const title of ['Expected costs on jobs with none booked','Who needs to book
 }
 assert.ok(w.document.querySelectorAll('#page .card.kpi .mt-info').length>=6,'all finance quality KPI tiles expose calculation and records');
 n.setGroup('profit');n.S.page='p_rates';n.renderAll();
+assert.ok(w.document.querySelectorAll('#page .card.kpi .mt-info').length>=7,'all rate-analysis KPI tiles expose calculation and records');
 for(const title of ['Estimated freight margin by month','Margin per kg by month','Variance: estimated freight margin','Selling below buy','Estimated against actual']){
  const c=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()===title);
  assert.ok(c?.querySelector('.mt-info'),'rate-analysis visual exposes Calculation & records: '+title);
