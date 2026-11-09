@@ -23,4 +23,19 @@ assert.ok(lane.rows.every(r=>[mumbai,nhava].includes(r.o)&&r.d===dubai),'no unre
 n.S.sel={origin:new Set([mumbai,nhava])};n.compute();const originOnly=n.mask();
 assert.ok(Array.from(originOnly).every((v,i)=>!v||[mumbai,nhava].includes(n.COLS.origin.c[i])),'clearing destination retains only selected origins');
 n.S.sel={};n.compute();assert.equal(Array.from(n.mask()).reduce((s,v)=>s+v,0),n.N,'clearing all restores the full fixture');
+
+// Explicit card actions must expose metric-backed evidence without changing normal card clicks.
+n.S.sel={customer:new Set([n.COLS.customer.c[0]])};n.compute();n.renderAll();
+const requiredCards=['Trend','Top '+n.S.def.topN+' customers','Top '+n.S.def.topN+' branches','Top '+n.S.def.topN+' lanes','Top '+n.S.def.topN+' airlines and shipping lines','Shipment mix'];
+const buttons=[...w.document.querySelectorAll('#page .card button')].filter(b=>b.textContent.trim()==='Calculation & records');
+const byTitle=new Map(buttons.map(b=>[b.closest('.card')?.querySelector('h2')?.textContent.trim(),b]));
+for(const title of requiredCards)assert.ok(byTitle.has(title),'supported operational visual exposes explicit reconciliation: '+title);
+let opened=null;w.MetricTrace={openWithRequest:q=>{opened=q;}};
+byTitle.get('Top '+n.S.def.topN+' customers').click();
+assert.equal(opened.metric,'ops.shipments');assert.equal(opened.context.segment.value,n.COLS.customer.d[n.COLS.customer.c[0]],'single selected customer gets item-level evidence');
+assert.ok(opened.indices.every(i=>n.COLS.customer.c[i]===n.COLS.customer.c[0]),'selected-customer evidence contains only that customer');
+n.S.sel={customer:new Set([n.COLS.customer.c[0],n.COLS.customer.c[1]])};n.compute();
+const whole=n.traceVisual('ops.shipments','customer','Top customers'),expected=n.mask({skip:'customer'});
+assert.deepEqual(Array.from(whole.indices),Array.from(expected).flatMap((v,i)=>v?[i]:[]),'multi-select uses the full ranking visual scope, excluding only its own dimension');
+assert.equal(whole.context.filters.customer,undefined,'ranking scope does not claim a customer filter that it deliberately excludes');
 assert.deepEqual(errors,[]);w.close();console.log('PASS custom visual trace: exact group/split/Other membership, ratio numerators and denominators, no duplicate rows.');})().catch(e=>{console.error(e);dom.window.close();process.exit(1)});
