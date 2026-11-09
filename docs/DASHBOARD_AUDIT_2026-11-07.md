@@ -206,3 +206,13 @@ a blank salesperson. Administrator assignments are retained as actual source val
 master-sales owner or another employee is not substituted without a documented
 business mapping. The existing unassigned-sales warnings remain appropriate;
 these source values are not a calculation defect.
+
+## Source-scope decision — 9 November 2026 (IST)
+
+The project owner has confirmed that the dashboard will continue using the **simple Job Profit Analysis Report (JPR), in its existing format and Job Date basis**. Charge-wise source workbooks are not required for this project. Do not pursue or request additional charge-wise workbooks through Gmail, SharePoint or other sources, and do not block finance/variance review or release readiness on their availability.
+
+- Use the accepted simple JPR dataset and its existing company/LOB/job-level dimensions for booked income, expense and gross profit.
+- Retain Job Date as the finance reporting basis. Do not describe Job Date as Billing Date or infer a billing-date range from it.
+- Keep the existing source-coverage disclosure for missing historical months and any unmatched finance jobs. Missing Billing Date is not a blocker for the agreed JPR-based reporting scope.
+- Any future charge-wise analysis would be a separate, explicitly requested scope; it is not part of the current delivery or acceptance criteria.
+- Continue the finance/variance audit against the current JPR records, calculation definitions, permissions, exports and visual reconciliation. No source import or production data change is authorized by this decision.
