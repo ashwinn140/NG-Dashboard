@@ -249,6 +249,11 @@ def build_full(engine) -> dict:
                  if norm(n) in MASTER else ["", "", "", "", "", ""] for n in pcols["agent"]["d"]]
     for k, label in {"lob": "Line of business", "ic": "Intercompany", "job": "Job no.", "mode": "Mode (profit)", "direction": "Direction (profit)", "kind": "Service"}.items():
         e = enc(PD[k].fillna("").astype(str)); pcols["p_" + k] = {"l": label, "d": e["d"], "pc": e["c"]}
+    # Keep Job Date as an explicit filter dimension so a click on a Job No.
+    # selects the same composite identity used by profit aggregation:
+    # company + line of business + job number + job date.
+    job_dates = pd.to_datetime(PD.jd, errors="coerce").dt.strftime("%Y-%m-%d").fillna("")
+    e = enc(job_dates); pcols["p_jobdate"] = {"l": "Job Date", "d": e["d"], "pc": e["c"]}
     excluded = set(source_map.values()) | set(CFG.PROFIT_REQUIRED) | {"_format", "Profit Margin %"}
     for name in sorted({key for extra in source_values for key in extra} - excluded):
         if not name or name.startswith("_"):
