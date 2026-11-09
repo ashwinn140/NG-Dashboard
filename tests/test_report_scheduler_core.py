@@ -3,7 +3,7 @@ from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 from app.report_scheduler import (
     ScheduleValidationError, next_run_at, period_bounds,
-    validate_schedule, safe_excel_text,
+    validate_schedule, safe_excel_text, build_report_rows, build_report_workbook,
 )
 
 
