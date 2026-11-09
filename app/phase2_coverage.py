@@ -188,8 +188,10 @@ def job_history_data_quality(register_rows, job_rows):
         lob = str(row.get("lob") or "").strip()
         number = str(row.get("job_no") or "").strip()
         day = _day_key(row.get("job_date"))
+        if company not in EXPECTED:
+            continue
         group_key = (company, lob or "(missing LOB)")
-        if company not in EXPECTED or not number or not day or not lob:
+        if not number or not day or not lob:
             invalid[group_key] += 1
             continue
         grouped[(company, lob, number, day)].append(row)
