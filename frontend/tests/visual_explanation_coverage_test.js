@@ -67,7 +67,7 @@ explanation('profit','p_compare','Biggest decreases by branch','current and comp
 explanation('profit','p_compare','Variance by branch','change divided by the absolute previous value');
 
 n.setGroup('profit');n.S.page='p_compare';n.S.sel={};
-n.S.pcmp={unit:'month',against:'prev',basis:'full',custom:true,A:{from:evidenceDay('2026-10-01'),to:evidenceDay('2026-10-03')},B:{from:evidenceDay('2026-09-01'),to:evidenceDay('2026-09-03')},dim:'branch',measure:'profit',show:'all'};
+Object.assign(n.S.pcmp,{unit:'month',against:'prev',basis:'full',custom:true,A:{from:evidenceDay('2026-10-01'),to:evidenceDay('2026-10-03')},B:{from:evidenceDay('2026-09-01'),to:evidenceDay('2026-09-03')},dim:'branch',measure:'profit',show:'all'});
 n.S.cmp={unit:'month',against:'prev',basis:'full',custom:true,A:{from:evidenceDay('2024-01-01'),to:evidenceDay('2024-01-03')},B:{from:evidenceDay('2024-02-01'),to:evidenceDay('2024-02-03')}};
 n.renderAll();
 for(const [title,dimension] of [['Period by period: profit',null],['Biggest increases by branch','branch'],['Biggest decreases by branch','branch'],['Variance by branch','branch']]){
