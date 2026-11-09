@@ -92,6 +92,7 @@ def aggregate(metric,rows,options=None):
  if metric=='profit.margin':return dict(value=(inc-exp)/inc if inc>0 else None,numerator=inc-exp,denominator=inc)
  if metric=='profit.cost_coverage':return dict(value=sum(r.get('expense',0)>0 for r in rows)/len(keys) if keys else None,numerator=sum(r.get('expense',0)>0 for r in rows),denominator=len(keys))
  if metric=='profit.expected_adjusted':return dict(value=sum(r.get('profit',0)-r.get('expected_cost',0) for r in rows),numerator=None,denominator=None)
+ if metric=='profit.expected_cost_only':return dict(value=sum(r.get('expected_cost',0) for r in rows),numerator=None,denominator=None)
  if metric=='profit.per_job':return dict(value=(inc-exp)/len(keys) if keys else None,numerator=inc-exp,denominator=len(keys))
  if metric in ['profit.jobs','ops.shipments']:return dict(value=len(keys),numerator=None,denominator=None)
  if metric=='ops.air_weight_kg':return dict(value=sum(r['air_weight_t']*1000 for r in rows),numerator=None,denominator=None)
@@ -108,6 +109,7 @@ def eligible_records(metric, rows, context):
  'ops.invoice_reference_count':lambda r:r['invoice_count']>0,
  'ops.invoiced_count':lambda r:r['invoice_day']>0,
  'profit.cost_not_booked_proxy':lambda r:r['income']>0 and r['expense']==0,
+ 'profit.expected_cost_only':lambda r:r['income']>0 and r['expense']==0,
  'profit.billing_pending_proxy':lambda r:r['income']<=0 and r['expense']>0,
  'profit.loss_making':lambda r:r['profit'] < -1 and not(r['income']<=0 and r['expense']>0),
  'profit.low_margin':lambda r:r['income']>0 and r['expense']!=0 and r['profit']>=-1 and r['profit']/r['income'] < float(context.get('low_margin',10))/100,
@@ -144,7 +146,7 @@ def execute(D,body,definitions):
  snap=snapshot_id(D)
  if body.get('snapshot') and body['snapshot']!=snap:raise ValueError('Data snapshot changed. Reload before inspecting or exporting.')
  current=eligible_records(metric.id,records(D,source,body.get('indices',[])),body.get('context',{}));previous=eligible_records(metric.id,records(D,source,body.get('previous_indices',[])),body.get('context',{}));operations_records=records(D,'operations',body.get('ops_indices',[]));benchmark=[]
- if metric.id=='profit.expected_adjusted':
+ if metric.id in ['profit.expected_adjusted','profit.expected_cost_only']:
   benchmark=[r for r in records(D,'profit',list(range(len(D['p']['co'])))) if r['income']>0 and r['expense']>0]
   ratios={};ti=te=0
   for r in benchmark:
