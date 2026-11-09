@@ -38,4 +38,23 @@ for(const title of ['Running total','Period by period']){
  assert.equal(q.context.date_basis,'Shipment Date');
 }
 
+
+n.setGroup('summary');n.S.page='s_owner';n.S.compare=false;n.renderAll();
+for(const [title,dimension] of [
+ ['Top '+n.S.def.topN+' customers by profit','customer'],
+ ['Top '+n.S.def.topN+' sales people by profit','x_salesperson'],
+ ['Top '+n.S.def.topN+' branches by profit','branch']
+]){
+ const c=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()===title);
+ assert.ok(c,'summary JPR ranking exists: '+title);
+ const b=c.querySelector('.mt-info');assert.ok(b,'Calculation & records action exists: '+title);
+ assert.equal(b.dataset.traceMetric,'profit.gp');assert.equal(b.dataset.traceDimension,dimension);
+ const q=n.traceVisual('profit.gp',dimension,title);
+ assert.ok(q.indices.length>0,'current JPR evidence rows supplied: '+title);
+ assert.equal(q.previous_indices.length,0,'no comparison rows when comparison is off: '+title);
+ assert.equal(q.context.date_basis,'Job Date');
+ assert.equal(q.context.visual_dimension,n.COLS[dimension].l);
+ assert.ok(Math.abs(q.displayed_value-n.R.t.profit)<0.005,'evidence total matches selected summary JPR profit: '+title);
+}
+
 assert.deepEqual(errors,[]);w.close();console.log('PASS verified visual explanations: summary, scorecard, agent reports, profitability, billing, variance and source-status pages.');})().catch(e=>{console.error(e);dom.window.close();process.exit(1)});
