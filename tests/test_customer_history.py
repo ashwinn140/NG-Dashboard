@@ -75,6 +75,7 @@ class CustomerHistoryTests(unittest.TestCase):
         fixture.setUp()
         app = None
         try:
+            fixture.load(fixture.register())
             report = fixture.profit()
             report.df = pd.DataFrame([
                 {"Location": "Mumbai", "LOB": "FFWD AIR EXP", "Job No.": f"JOB-{n}",
