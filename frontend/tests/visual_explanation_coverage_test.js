@@ -27,6 +27,8 @@ const billingMonth=[...w.document.querySelectorAll('#page svg[aria-label="Shipme
 assert.ok(billingMonth.length>0,'monthly shipment/invoice bars are individually drillable');
 const billingVariance=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()==='Variance: shipments invoiced');
 assert.ok(billingVariance&&[...billingVariance.querySelectorAll('tbody button')].some(b=>b.textContent.trim()==='View records'),'invoice variance rows expose current and comparison records');
+assert.ok(billingVariance?.querySelector('.mt-info'),'invoice variance visual exposes a header-level Calculation & records action');
+assert.equal(billingVariance.querySelector('.mt-info')?.dataset.traceMetric,'ops.invoiced_count','invoice variance evidence uses first-invoice-date records');
 explanation('profit','p_billing','Shipments against invoices, by month','different date fields');
 explanation('profit','p_billing','Variance: shipments invoiced','first invoice date');
 explanation('profit','p_compare','Variance: change in value and percentage','absolute comparison value');
