@@ -328,3 +328,21 @@
 ### Release posture
 - PR #29 and PR #30 are merged, CI-passing and included in the current production commit.
 - This is an incremental production release, not final project completion. Keep working on the five remaining principal workstreams. Do not declare final readiness until critical finance/security tests, visual coverage, scheduler safety, guide synchronization and authenticated browser QA are complete or explicitly recorded as blocked with evidence.
+
+## Latest continuation — PR #31 and PR #32 deployed
+
+- PR #31 merged at `fff3662b688bb1bd4332f45c477bb108faf305af`; CI run `42649189412` SUCCESS.
+- PR #32 merged at `e1df8cc32db8e8af8bef5820a45571cc44ceb53e`; CI run `42649548516` SUCCESS, including the new `frontend/tests/help_guide_test.js`.
+- Railway production deployment `7c5276b5-b698-46ca-b1a4-4a437ad5b180` SUCCESS, exact commit `e1df8cc32db8e8af8bef5820a45571cc44ceb53e`, 9 Nov 2026 15:56 UTC. Startup logs show PostgreSQL, application startup complete and Uvicorn listening. HTTP telemetry query returned no rows; authenticated browser smoke test remains outstanding.
+- PR #31 volume fix is in production. New imports persist the Volume-adjacent unit in `extra._volume_unit_source`; existing legacy rows use only the audited `Unit.5` column. No schema migration or data rewrite.
+- PR #32 in-app Help and searchable Metric Dictionary is in production at `/help`; metric definitions are loaded through the existing permission-filtered endpoint. Navigation includes Help & User Guide. The guide clearly distinguishes code-verified mapping from independent source reconciliation.
+- Help guide test verifies source-field search, permission-filtered definitions and that finance-only definitions are not client-side synthesized for an operations-only response.
+
+### Updated remaining work count after PR #32
+Four principal workstreams remain:
+1. Finish the simple-JPR finance/variance audit and remaining source-to-visual reconciliation, including any unresolved source mappings (volume mapping now fixed).
+2. Finish the visual explanation/Calculation & records audit: latest available synthetic inventory remains 408 role/page/title visuals with 72 unverified calculations and 47 missing explanation blocks. Re-run inventory after visual work; classify wrappers separately and do not invent evidence actions.
+3. Design and implement the secure Report Scheduler with durable queue, permission-at-execution, safe recipient rules, freshness, idempotency, retries and actual delivery tests. No scheduler has been deployed; mailer capability alone is not a scheduler.
+4. Complete authenticated browser, responsive, accessibility and production smoke QA; synthetic jsdom tests do not replace it.
+
+The integrated HTML Help/User Guide is now complete enough for the first production release and is no longer a remaining workstream. Final release readiness is still pending the four items above.
