@@ -57,4 +57,40 @@ for(const [title,dimension] of [
  assert.ok(Math.abs(q.displayed_value-n.R.t.profit)<0.005,'evidence total matches selected summary JPR profit: '+title);
 }
 
+
+explanation('profit','p_overview','From income to profit','estimate, not booked cost');
+explanation('profit','p_overview','Income and expense by week','Job Date');
+explanation('profit','p_overview','How healthy are the jobs?','rounding');
+explanation('profit','p_compare','Period by period: profit','page-specific Profit Compare controls');
+explanation('profit','p_compare','Biggest increases by branch','current and comparison Job Date periods');
+explanation('profit','p_compare','Biggest decreases by branch','current and comparison Job Date periods');
+explanation('profit','p_compare','Variance by branch','change divided by the absolute previous value');
+
+n.setGroup('profit');n.S.page='p_compare';n.S.sel={};
+Object.assign(n.S.pcmp,{unit:'month',against:'prev',basis:'full',custom:true,A:{from:evidenceDay('2026-10-01'),to:evidenceDay('2026-10-03')},B:{from:evidenceDay('2026-09-01'),to:evidenceDay('2026-09-03')},dim:'branch',measure:'profit',show:'all'});
+n.S.cmp={unit:'month',against:'prev',basis:'full',custom:true,A:{from:evidenceDay('2024-01-01'),to:evidenceDay('2024-01-03')},B:{from:evidenceDay('2024-02-01'),to:evidenceDay('2024-02-03')}};
+n.renderAll();
+for(const [title,dimension] of [['Period by period: profit',null],['Biggest increases by branch','branch'],['Biggest decreases by branch','branch'],['Variance by branch','branch']]){
+ const c=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()===title);
+ assert.ok(c,'Profit Compare visual exists: '+title);
+ const b=c.querySelector('.mt-info');assert.ok(b,'Calculation & records action exists: '+title);
+ assert.equal(b.dataset.traceMetric,'profit.gp');
+ if(dimension)assert.equal(b.dataset.traceDimension,dimension);
+ const q=n.traceVisual('profit.gp',dimension,title);
+ assert.ok(q.indices.length>0,'current Job Date evidence rows supplied: '+title);
+ assert.ok(q.previous_indices.length>0,'comparison Job Date evidence rows supplied: '+title);
+ assert.ok(q.indices.every(i=>D.p.jd[i]>=evidenceDay('2026-10-01')&&D.p.jd[i]<=evidenceDay('2026-10-03')),'current evidence follows Profit Compare current period: '+title);
+ assert.ok(q.previous_indices.every(i=>D.p.jd[i]>=evidenceDay('2026-09-01')&&D.p.jd[i]<=evidenceDay('2026-09-03')),'comparison evidence follows Profit Compare prior period: '+title);
+ assert.equal(q.context.date_basis,'Job Date');
+}
+n.S.page='p_overview';n.renderAll();
+const bandJob=n.pjob[0],savedBandIncome=n.pjInc[bandJob],savedBandExpense=n.pjExp[bandJob];
+const assertBand=(income,expense,label)=>{n.pjInc[bandJob]=income;n.pjExp[bandJob]=expense;n.renderAll();assert.equal(n.COLS.band.d[n.COLS.band.pc[0]],label);};
+assertBand(100,101.5,'Loss (profit below −₹1)');
+assertBand(100,100.5,'Below 10%');
+assertBand(100,-10,'60% and above');
+assertBand(100,0,'100% (no cost booked)');
+assertBand(0,100,'No income');
+n.pjInc[bandJob]=savedBandIncome;n.pjExp[bandJob]=savedBandExpense;n.renderAll();
+
 assert.deepEqual(errors,[]);w.close();console.log('PASS verified visual explanations: summary, scorecard, agent reports, profitability, billing, variance and source-status pages.');})().catch(e=>{console.error(e);dom.window.close();process.exit(1)});
