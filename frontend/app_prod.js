@@ -891,7 +891,7 @@ function pageCompare() {
   for (let k = 1; k < L; k++) { cum[k] += cum[k - 1]; cumP[k] += cumP[k - 1]; }
   const lineBox = h('div', {class: 'trend'}), barBox = h('div', {class: 'trend'});
   const mTxt = useVol ? (tot.hasAir ? 'Chargeable weight (tonnes)' : 'TEUs') : 'Shipments';
-  root.append(h('div', {class: 'grid', style: 'margin-bottom:.9rem'}, card('Running total', mTxt + ', adding up day by day from the start of each period. The gap between the lines is the change.', lineBox), card('Period by period', mTxt + ' in each part of the period, with the percentage change above each pair.', barBox)));
+  root.append(h('div', {class: 'grid', style: 'margin-bottom:.9rem'}, card('Running total', mTxt + ', adding up day by day from the start of each period. The gap between the lines is the change.', lineBox, null, {metric: opsVisualMetric()}), card('Period by period', mTxt + ' in each part of the period, with the percentage change above each pair.', barBox, null, {metric: opsVisualMetric()})));
   cmpChartLine(lineBox, {cur: cum, prev: cumP, L, curN: nDays(pr.cur), prevN: nDays(pr.prev)}, pr, info); cmpChartBars(barBox, {n: bk.n, labels: bk.labels, cur: bc, prev: bpv}, info);
 
   // dimension table
