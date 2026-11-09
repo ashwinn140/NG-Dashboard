@@ -40,6 +40,7 @@ jobs:
           node frontend/tests/explicit_reconciliation_test.js
           node frontend/tests/help_guide_test.js
           node frontend/tests/visual_trace_test.js
+          node frontend/tests/visual_explanation_coverage_test.js
       - name: Synthetic runtime visual inventory and coverage
         run: |
           python scripts/audit_visual_contract.py
