@@ -254,6 +254,7 @@ function businessMeaning(label, note, metricExplanation) {
 function traceExplanation(trace,title) {
  if(!trace)return null;
  const m=trace.metric,k=trace.dimension;
+ if((k&&!COLS[k])||title==='Income against margin')return null;
  const ops={ 'ops.shipments':'shipment records','ops.air_weight':'air chargeable weight (tonnes)','ops.teu':'ocean TEUs' };
  const fin={ 'profit.gp':'gross profit','profit.income':'income','profit.expense':'expense' };
  if(ops[m]){
