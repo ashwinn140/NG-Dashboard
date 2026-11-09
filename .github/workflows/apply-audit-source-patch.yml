@@ -34,10 +34,10 @@ jobs:
         run: python -m pip install -r requirements-dev.txt
       - name: JavaScript syntax
         run: node --check frontend/app_prod.js
-      - name: Python regression suite
-        run: python -m unittest discover -s tests -v
       - name: Rebuild production dashboard
         run: sh frontend/build.sh
+      - name: Python regression suite
+        run: python -m unittest discover -s tests -v
       - name: Verify generated dashboard
         run: test -s app/web/dashboard.html
       - name: Commit verified source and generated dashboard
