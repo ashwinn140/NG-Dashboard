@@ -396,6 +396,24 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             if not normalized:
                 return {"histories": []}
             with engine.connect() as conn:
+                # A caller may request only customers already present in the
+                # current operational register within their authorized scope.
+                visible_report_types = sorted(set.intersection(*[set(lobs) for _, _, lobs in normalized]) if normalized and all(lobs for _, _, lobs in normalized) else {"AE", "AI", "OE", "OI"})
+                visible_rows = conn.execute(select(
+                    shipments.c.company, shipments.c.customer
+                ).where(
+                    shipments.c.company.in_(sorted(all_companies)),
+                    shipments.c.report_type.in_(visible_report_types),
+                    shipments.c.to_import.is_(None),
+                    func.lower(func.trim(shipments.c.customer)).in_(sorted(all_names))
+                )).all()
+                visible = {
+                    (company, " ".join(str(customer or "").split()).casefold())
+                    for company, customer in visible_rows
+                }
+                for name, companies, _ in normalized:
+                    if not any((company, name.casefold()) in visible for company in companies):
+                        raise PermissionError("The customer is outside your visible operational scope.")
                 source_rows = conn.execute(select(
                     profit_lines.c.id, profit_lines.c.company, profit_lines.c.job_no,
                     profit_lines.c.job_date, profit_lines.c.lob, profit_lines.c.customer,
