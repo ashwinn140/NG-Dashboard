@@ -160,8 +160,14 @@ function businessMeaning(label, note) {
   const lower = name.toLowerCase();
   const formula = /gross profit|\bgp\b/.test(lower)
     ? 'Gross profit = recorded income minus recorded expense for the selected jobs.'
-    : /margin %|margin rate|profit margin/.test(lower)
+    : /^(margin|profit margin|margin %)$/.test(lower) || /margin rate/.test(lower)
     ? 'Margin percentage = gross profit divided by income, multiplied by 100, where income is non-zero.'
+    : /^(profit|actual profit)$/.test(lower)
+    ? 'Profit = income minus booked expense across the selected job-summary records.'
+    : /^(jobs)$/.test(lower)
+    ? 'Number of jobs represented by the selected Job Profit Analysis Report records.'
+    : /^(profit per job)$/.test(lower)
+    ? 'Total profit divided by the number of selected jobs, when the job count is non-zero.'
     : /shipments|shipment count/.test(lower)
     ? 'Count of shipment records meeting the selected date, company, LOB and other filters.'
     : /teu/.test(lower)
@@ -832,7 +838,7 @@ function ppOverview() {
   const stat = groupByP('jobstatus', maskP({skip: 'jobstatus'})), st = (n) => stat.find((r) => r.label === n) || {jobs: 0, inc: 0, exp: 0, profit: 0};
   const ptsDelta = t.margin != null && tp.margin != null && on ? (t.margin >= tp.margin ? '+' : '−') + ((Math.abs(t.margin - tp.margin)) * 100).toFixed(1) + ' pts vs ' + cmpLabel() : null;
   const kp = [kpi('Income', money(t.inc), dd(t.inc, tp.inc), 'Income recorded in Job Profit Analysis Report', '', money(tp.inc)), kpi('Expense', money(t.exp), dd(t.exp, tp.exp), 'Costs booked so far', '', money(tp.exp)), kpi('Profit', money(t.profit), dd(t.profit, tp.profit), 'Income minus expense', t.profit < 0 ? 'bad' : '', money(tp.profit)),
-    h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'Margin'), h('div', {class: 'kv'}, fMargin(t.margin)), ptsDelta ? h('div', {class: 'delta flat'}, ptsDelta) : null, h('div', {class: 'kn'}, 'Profit as a share of income')),
+    h('div', {class: 'card kpi'}, h('div', {class: 'kl'}, 'Margin'), h('div', {class: 'kv'}, fMargin(t.margin)), ptsDelta ? h('div', {class: 'delta flat'}, ptsDelta) : null, h('div', {class: 'kn'}, 'Profit as a share of income'), businessMeaning('Margin', 'Profit divided by income for the selected job summaries')),
     kpi('Jobs', fInt(t.jobs), dd(t.jobs, tp.jobs), 'With at least one line', '', fInt(tp.jobs)), kpi('Profit per job', t.jobs ? money(t.profit / t.jobs) : '–', null, 'Average over these jobs'),
     kpi('Jobs with cost booked', t.jobs ? fP0(cov) : '–', null, t.booked + ' of ' + t.jobs + ' jobs', cov * 100 < S.def.costCoverage ? 'warn' : ''),
     kpi('Profit after expected costs', money(t.profit - ex.est), null, 'Estimate: unbooked jobs get the cost ratio of booked jobs', 'warn')];
