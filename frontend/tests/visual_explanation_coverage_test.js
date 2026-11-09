@@ -19,4 +19,23 @@ explanation('profit','p_billing','Variance: shipments invoiced','first invoice d
 explanation('profit','p_compare','Variance: change in value and percentage','absolute comparison value');
 explanation('profit','p_status','Profit data status','simple Job Profit Analysis Report');
 explanation('profit','p_status','Matched to the shipment register','unique match');
+
+// Targeted acceptance: verified operations comparison charts expose source-backed
+// Calculation & records for their exact current and comparison period rows.
+const evidenceDay=s=>Math.round(Date.parse(s)/86400000);
+n.setGroup('ops');n.S.page='compare';n.S.measure='count';
+n.S.cmp.custom=true;n.S.cmp.A={from:evidenceDay('2026-10-01'),to:evidenceDay('2026-10-03')};n.S.cmp.B={from:evidenceDay('2026-09-01'),to:evidenceDay('2026-09-03')};n.renderAll();
+for(const title of ['Running total','Period by period']){
+ const c=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()===title);
+ assert.ok(c,'operations comparison visual exists: '+title);
+ const b=c.querySelector('.mt-info');assert.ok(b,'Calculation & records action exists: '+title);
+ assert.equal(b.dataset.traceMetric,'ops.shipments');
+ const q=n.traceVisual('ops.shipments',null,title);
+ assert.ok(q.indices.length>0,'current-period records supplied: '+title);
+ assert.ok(q.previous_indices.length>0,'comparison-period records supplied: '+title);
+ assert.ok(q.indices.every(i=>D.date[i]>=evidenceDay('2026-10-01')&&D.date[i]<=evidenceDay('2026-10-03')),'current evidence respects current Shipment Date range: '+title);
+ assert.ok(q.previous_indices.every(i=>D.date[i]>=evidenceDay('2026-09-01')&&D.date[i]<=evidenceDay('2026-09-03')),'comparison evidence respects comparison Shipment Date range: '+title);
+ assert.equal(q.context.date_basis,'Shipment Date');
+}
+
 assert.deepEqual(errors,[]);w.close();console.log('PASS verified visual explanations: summary, scorecard, agent reports, profitability, billing, variance and source-status pages.');})().catch(e=>{console.error(e);dom.window.close();process.exit(1)});
