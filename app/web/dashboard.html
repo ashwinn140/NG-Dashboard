@@ -839,7 +839,7 @@ function pageCustomers() {
     for(let offset=0;offset<visible.length;offset+=100){
       const batch=visible.slice(offset,offset+100);
       try{
-        const histories=await loadRecentJobs(batch.map(r=>({customer:COLS.customer.d[r.j],companies:historyCompanies(r.j),lobs:historyLobs(),last_shipment_date:fIso(dDate(r.last))})));
+        const histories=await loadRecentJobs(batch.map(r=>({customer:COLS.customer.d[r.j],companies:historyCompanies(r.j),lobs:historyLobs(),last_shipment_date:fIso(dDate(r.last))}));
         histories.forEach(history=>{
           const row=batch.find(r=>COLS.customer.d[r.j].trim().toLowerCase()===String(history.customer||'').trim().toLowerCase());
           if(row) ownerByCustomer.set(row.j,history.last_shipment_job_owner||'Owner unavailable');
