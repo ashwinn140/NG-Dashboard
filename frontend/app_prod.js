@@ -168,19 +168,19 @@ function businessMeaning(label, note) {
     ? 'Number of jobs represented by the selected Job Profit Analysis Report records.'
     : /^(profit per job)$/.test(lower)
     ? 'Total profit divided by the number of selected jobs, when the job count is non-zero.'
-    : /shipments|shipment count/.test(lower)
-    ? 'Count of shipment records meeting the selected date, company, LOB and other filters.'
+    : /^(shipments|air export shipments|sea export shipments|air import shipments|sea import shipments)$/.test(lower)
+    ? 'Count of selected shipment-register records within the current filters.'
     : /teu/.test(lower)
     ? 'Sum of TEUs for selected sea shipment records.'
     : /chargeable weight/.test(lower)
-    ? 'Sum of chargeable weight for selected air shipment records.'
+    ? 'Sum of chargeable weight for selected air shipment records, converted to the displayed weight unit.'
     : /customer/.test(lower) && /active|distinct|unique/.test(lower)
     ? 'Count of distinct customers meeting the current filters and the configured activity threshold.'
     : /revenue|income|sales value/.test(lower)
     ? 'Sum of recorded income for the selected job-summary records.'
     : /cost|expense/.test(lower)
     ? 'Sum of recorded expenses for the selected job-summary records.'
-    : /variance|change|growth|decline/.test(lower)
+    : /^(variance|variance:.*|change|growth|decline)$/.test(lower)
     ? 'Difference between the selected current and comparison periods; percentage change uses the previous value as the denominator when non-zero.'
     : '';
   // Financial imports are job-summary snapshots, not charge-level rows.
