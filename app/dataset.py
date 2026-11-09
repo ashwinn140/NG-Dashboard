@@ -10,7 +10,7 @@ REPS = [("NG", "AE"), ("NG", "AI"), ("NG", "OE"), ("NG", "OI"), ("NCS", "AE"), (
 EXTRAS = ["Sales Person", "Trade Lane Name", "Loading Country", "Discharge Country", "Collection Executive", "Business Dimension", "Inco Terms", "Freight Type", "Contract Type",
           "Commodity Type", "Co-Load Type", "Origin Agent", "Customer Branch", "Document Executive (UDF)", "Place Of Execution", "Container Types"]
 UNIT_COLUMNS = ["Unit"] + [f"Unit.{i}" for i in range(1, 8)]   # the register repeats "Unit" (weight, packages, volume...)
-DASHBOARD_COLUMNS = sorted(set(EXTRAS) | set(UNIT_COLUMNS) | {c for cols in CFG.SOURCE_COLUMNS.values() for c in cols} |
+DASHBOARD_COLUMNS = sorted(set(EXTRAS) | set(UNIT_COLUMNS) | {"_volume_unit_source"} | {c for cols in CFG.SOURCE_COLUMNS.values() for c in cols} |
                            {"Booking Thru", "Invoice No. & Date", "Billing Details", "Buy Rate (UDF)", "Sell Rate (UDF)", "Dest. Agent", "Destination Agent"})
 norm = lambda s: re.sub(r"[^a-z0-9]", "", str(s).lower())
 INV_RE = re.compile(r"([A-Za-z0-9/\-\.]+?)\s*dt\.?\s*(\d{1,2})[-/ ]([A-Za-z]{3})[A-Za-z]*[-/ ](\d{4})", re.I)
@@ -53,14 +53,22 @@ def _inv(a, b):
 
 
 def volume_cbm(A):
-    """Register Volume in cubic metres. Rows whose volume unit is CCM (cubic centimetres) are divided by 1,000,000.
-    The unit sits in one of several repeated "Unit" columns, so a row counts as CCM if any of its unit cells says CCM
-    (the other Unit columns hold weight and package units such as KGS, PKG, NOS)."""
+    """Return Volume in CBM using only the unit paired with the Volume source field.
+
+    New imports preserve the adjacent repeated Unit header as _volume_unit_source.
+    Legacy rows predate that field; the audited legacy register layout pairs Volume
+    with Unit.5. Other repeated Unit columns never trigger conversion.
+    """
     vol = pd.to_numeric(A["Volume"], errors="coerce").fillna(0) if "Volume" in A.columns else pd.Series([0.0] * len(A), index=A.index)
-    ccm = pd.Series(False, index=A.index)
-    for c in UNIT_COLUMNS:
-        if c in A.columns:
-            ccm |= A[c].fillna("").astype(str).str.strip().str.upper().eq("CCM")
+    if "_volume_unit_source" in A.columns:
+        raw = A["_volume_unit_source"]
+        unit = raw.fillna("").astype(str)
+        legacy = raw.isna()
+        if "Unit.5" in A.columns:
+            unit = unit.where(~legacy, A["Unit.5"].fillna("").astype(str))
+    else:
+        unit = A["Unit.5"].fillna("").astype(str) if "Unit.5" in A.columns else pd.Series([""] * len(A), index=A.index)
+    ccm = unit.str.strip().str.upper().eq("CCM")
     return vol.where(~ccm, vol / 1_000_000)
 
 
