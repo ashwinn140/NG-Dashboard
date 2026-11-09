@@ -128,3 +128,34 @@
 | HTML Help & User Guide | Pending | Not implemented |
 | Authenticated browser/responsive QA | Blocked | No authenticated browser session/tool available |
 
+
+
+## Continued work — 9 November 2026, evening
+
+### Dashboard visible-JavaScript rendering incident — fixed and deployed
+- User screenshot showed the dashboard filter panel followed by a large block of JavaScript rendered as page text.
+- Root cause: generated `app/web/dashboard.html` contained seven `<!doctype html>` document starts inside script content and unbalanced script tags. The corruption pattern is consistent with JavaScript replacement-string expansion (`$&`, `$'`, etc.) while inserting minified JS into HTML.
+- Rebuilt from canonical `frontend/production_shell.html`, `frontend/vendor/fflate.js`, `frontend/vendor/d3.min.js` and `frontend/app_prod.js` using callback/literal replacement. Correct artifact: 706,922 bytes, exactly one doctype, 8 opening and 8 closing script tags.
+- `frontend/build_prod.py` now fails closed unless the generated document has exactly one doctype, balanced script tags and no remaining production placeholders.
+- PR #23 merged as `a3a5ff5be7c8da2837bd807649c04a0d201d2fdc`; CI run `42636124126` SUCCESS; Railway deployment `45990086-c012-4b11-8c6b-9fabb9bf0e9a` SUCCESS.
+
+### Finance quality evidence extension — merged and deployed
+- PR #24 merged as `1be22360ed858b44ece6884796828ffbc1fb234f`; CI run `42636584444` SUCCESS; Railway deployment `14e9b3b0-69b3-4304-85bf-c87f0e199f8b` SUCCESS.
+- Added `profit.expected_cost_only` as a separately traceable estimate for positive-income jobs with exactly zero recorded expense, using same-LOB booked expense/income benchmark, overall authorized fallback, then zero. Explicitly disclosed as estimated exposure, not booked cost/liability.
+- Added evidence actions to expected-cost, cost-not-booked and loss-making visuals. Visible loss list and evidence metric now exclude billing-pending jobs consistently.
+- No booked GP formula, source data, DB schema, or permissions changed.
+
+### Current production health after both releases
+- Railway NG-Dashboard Online, 1/1 replica, zero warnings/criticals, zero recent failures, no pending work.
+- Latest production commit: `1be22360ed858b44ece6884796828ffbc1fb234f`.
+- HTTP request telemetry at check time: 392 observed requests, 0 HTTP 5xx (telemetry window; not a browser test).
+- PostgreSQL remained attached; no migration or production data write was performed.
+- Public web-reader access was unavailable and no authenticated browser session was available. Do not claim pixel/browser-level confirmation. Ask the user to hard-refresh the authenticated page (Ctrl+Shift+R) to bypass cached HTML/JS.
+
+### Remaining work, ordered
+1. Verify screenshot fix in the user's authenticated browser after hard refresh; inspect console/network if any further error remains.
+2. Continue metric explanation coverage: 80 previously unverified calculations and 47 visuals missing explanation blocks from the synthetic inventory; verify formulas before attaching reconciliation actions.
+3. Obtain current accepted ERP source workbooks / current production import metadata to certify Job Owner, Job No., last-five distinct jobs, finance totals and invoice/ageing quality. Do not infer coverage from synthetic fixtures or old samples.
+4. Implement cross-LOB inactivity/lost-customer classification only after permission-scoped complete relationship history and source keys are verified.
+5. Continue variance/date-basis audit, Report Scheduler authorization and Help/User Guide only after source and security acceptance criteria are defined.
+6. Authenticated browser/responsive QA remains outstanding.
