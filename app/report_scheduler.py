@@ -57,7 +57,7 @@ REPORT_CATALOG = {
         "date_basis": "Job Date", "date_array": "p.jd",
         "columns": (
             "company", "lob", "job_no", "job_date", "customer", "branch",
-            "mode", "direction", "service", "income", "expense", "profit",
+            "mode", "direction", "service", "salesperson", "income", "expense", "profit",
             "margin",
         ),
         "summary_columns": (
@@ -267,6 +267,17 @@ def validate_schedule(user: dict, payload: dict) -> dict:
     if freshness["action"] == "delay" and (not isinstance(max_delay, int) or not 1 <= max_delay <= 72):
         raise ScheduleValidationError("Delay max_delay_hours must be between 1 and 72.")
 
+    start_at = payload.get("start_at")
+    end_at = payload.get("end_at")
+    try:
+        start_at = datetime.fromisoformat(start_at.replace("Z", "+00:00")) if start_at else None
+        end_at = datetime.fromisoformat(end_at.replace("Z", "+00:00")) if end_at else None
+    except (TypeError, ValueError):
+        raise ScheduleValidationError("Schedule start/end must be ISO timestamps.")
+    if start_at and start_at.tzinfo is None or end_at and end_at.tzinfo is None:
+        raise ScheduleValidationError("Schedule start/end timestamps must include a timezone.")
+    if start_at and end_at and end_at <= start_at:
+        raise ScheduleValidationError("Schedule end must be after schedule start.")
     return {
         "report_id": report_id, "report_version": report["version"],
         "companies": sorted(companies), "lobs": sorted(lobs), "filters": clean_filters,
@@ -279,7 +290,8 @@ def validate_schedule(user: dict, payload: dict) -> dict:
         "monthday": monthday if frequency == "monthly" else None,
         "recipients": ["self"], "owner_id": int(user["id"]),
         "status": "paused", "freshness_policy": freshness,
-        "start_at": payload.get("start_at"), "end_at": payload.get("end_at"),
+        "start_at": start_at.isoformat() if start_at else None,
+        "end_at": end_at.isoformat() if end_at else None,
     }
 
 
@@ -331,7 +343,10 @@ def _match_filters(row, filters):
 def _sort_rows(rows, definition):
     key = definition["sort"]["field"]
     reverse = definition["sort"]["direction"] == "desc"
-    return sorted(rows, key=lambda r: (r.get(key) is None, str(r.get(key) or "").casefold() if isinstance(r.get(key), str) else r.get(key)), reverse=reverse)
+    present = [r for r in rows if r.get(key) is not None]
+    missing = [r for r in rows if r.get(key) is None]
+    present.sort(key=lambda r: r[key].casefold() if isinstance(r[key], str) else r[key], reverse=reverse)
+    return present + missing
 
 
 def _shipment_rows(D, definition, start, end):
