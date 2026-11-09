@@ -102,6 +102,85 @@ class SchedulerCoreTests(unittest.TestCase):
         with self.assertRaises(ScheduleValidationError):
             validate_schedule(user, {"report_id": "shipment_register", "filters": {"table": ["users"]}})
 
+    def fixture_dataset(self):
+        from datetime import date
+        day1 = (date(2026, 11, 7) - date(1970, 1, 1)).days
+        day2 = (date(2026, 11, 8) - date(1970, 1, 1)).days
+        cols = {
+            "customer": {"d": ["=HYPERLINK(\\\"bad\\\")"], "c": [0, 0], "pc": [0]},
+            "branch": {"d": ["Mumbai"], "c": [0, 0], "pc": [0]},
+            "agent": {"d": ["Agent A"], "c": [0, 0]},
+            "job_owner": {"d": ["Owner A"], "c": [0, 0]},
+            "origin": {"d": ["BOM"], "c": [0, 0]},
+            "destination": {"d": ["DXB"], "c": [0, 0]},
+            "status": {"d": ["Open"], "c": [0, 0]},
+            "p_job": {"d": ["J1"], "pc": [0]},
+            "p_lob": {"d": ["Air Export"], "pc": [0]},
+            "p_mode": {"d": ["Air"], "pc": [0]},
+            "p_direction": {"d": ["Export"], "pc": [0]},
+            "p_kind": {"d": ["Freight forwarding"], "pc": [0]},
+            "jp_sales_person": {"d": ["Sales A"], "pc": [0]},
+        }
+        return {"rep": [0, 0], "reps": [["NG", "AE"]], "no": ["S1", "S2"],
+                "date": [day1, day2], "ops": [-1, -1], "fin": [-1, -1],
+                "gross": [1.0, 2.0], "chg": [1.5, 2.5], "teus": [0.0, 0.0],
+                "cbm": [1.0, 2.0], "cols": cols,
+                "p": {"co": [0], "jd": [day2], "income": [100.0], "expense": [40.0]}}
+
+    def test_shipment_register_workbook_uses_shipment_date_and_escapes_text(self):
+        from openpyxl import load_workbook
+        from io import BytesIO
+        from datetime import date
+        user = {"id": 7, "email": "ops@example.com", "companies": ["NG"], "lobs": ["AE"], "finance": False}
+        definition = validate_schedule(user, {"report_id": "shipment_register", "frequency": "daily",
+            "columns": ["company", "lob", "shipment_no", "shipment_date", "customer", "chargeable_weight_t"]})
+        rows = build_report_rows(self.fixture_dataset(), definition, date(2026, 11, 1), date(2026, 11, 9))
+        self.assertEqual(len(rows), 2)
+        result = build_report_workbook(self.fixture_dataset(), definition, date(2026, 11, 1), date(2026, 11, 9),
+            {"status": "fresh", "max_age_hours": 48})
+        wb = load_workbook(BytesIO(result["content"]), data_only=True)
+        ws = wb["Report"]
+        self.assertEqual(result["row_count"], 2)
+        self.assertTrue(str(ws["E7"].value).startswith("'="), "untrusted source text is escaped for Excel")
+        self.assertEqual(ws["D7"].number_format, "dd-mmm-yyyy")
+        self.assertTrue(ws.auto_filter.ref.startswith("A6:"))
+
+    def test_shipment_register_summary_and_customer_performance_aggregate(self):
+        from datetime import date
+        user = {"id": 7, "email": "ops@example.com", "companies": ["NG"], "lobs": ["AE"], "finance": False}
+        d = self.fixture_dataset()
+        shipment = validate_schedule(user, {"report_id": "shipment_register", "summary_detail": "summary"})
+        rows = build_report_rows(d, shipment, date(2026, 11, 1), date(2026, 11, 9))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["shipments"], 2)
+        self.assertEqual(rows[0]["air_chargeable_weight_t"], 4.0)
+        customer = validate_schedule(user, {"report_id": "customer_performance"})
+        rows2 = build_report_rows(d, customer, date(2026, 11, 1), date(2026, 11, 9))
+        self.assertEqual(rows2[0]["shipments"], 2)
+        with self.assertRaises(ScheduleValidationError):
+            validate_schedule(user, {"report_id": "customer_performance", "summary_detail": "detail"})
+
+    def test_job_profitability_workbook_uses_job_date_and_jpr_amounts(self):
+        from datetime import date
+        finance = {"id": 9, "email": "finance@example.com", "companies": ["NG"], "lobs": ["AE"], "finance": True}
+        definition = validate_schedule(finance, {"report_id": "job_profitability", "frequency": "monthly",
+            "columns": ["company", "lob", "job_no", "job_date", "customer", "income", "expense", "profit", "margin"]})
+        rows = build_report_rows(self.fixture_dataset(), definition, date(2026, 11, 1), date(2026, 11, 9))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["profit"], 60.0)
+        self.assertEqual(rows[0]["margin"], 0.6)
+
+    def test_database_contains_durable_schedule_and_run_tables(self):
+        from sqlalchemy import create_engine, inspect
+        from app.db import metadata
+        engine = create_engine("sqlite:///:memory:")
+        metadata.create_all(engine)
+        names = set(inspect(engine).get_table_names())
+        self.assertIn("report_schedules", names)
+        self.assertIn("report_runs", names)
+        self.assertIn("uq_report_run_schedule_instant", {c["name"] for c in inspect(engine).get_unique_constraints("report_runs")})
+        engine.dispose()
+
     def test_excel_formula_injection_is_escaped(self):
         for value in ("=1+1", "+cmd", "-1+1", "@SUM(A1:A2)", "\t=1", "\r=1"):
             self.assertTrue(safe_excel_text(value).startswith("'"))
