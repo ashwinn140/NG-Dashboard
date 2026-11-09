@@ -159,3 +159,42 @@
 4. Implement cross-LOB inactivity/lost-customer classification only after permission-scoped complete relationship history and source keys are verified.
 5. Continue variance/date-basis audit, Report Scheduler authorization and Help/User Guide only after source and security acceptance criteria are defined.
 6. Authenticated browser/responsive QA remains outstanding.
+
+
+## Continued work — Job Owner readiness — 9 November 2026
+
+### Source-to-visual and source-workbook clarification
+- The prior checkpoint statement that accepted ERP workbooks were unavailable is only partially current. The detailed audit in docs/DASHBOARD_AUDIT_2026-11-07.md records two original workbooks recovered and independently reconciled row-by-row: NG current FY 2026 (134,655 charge lines) and NCS FY2025 (53,150 charge lines), 187,805 total, zero unmatched rows, SHA-256 matching promoted import metadata.
+- The remaining NG FY2025 and NCS current-FY original charge-wise workbooks are not row-level certified. Their API/import metadata reconciliation is not equivalent to original workbook reconciliation.
+- Historical 2025 Job Profit Analysis Reports are Basis: Job Date, one row per job, and contain no Charge or Billing Date columns. They cannot fill January–March 2025 billing-date gaps. Do not merge those amounts into billing-date data.
+- SharePoint direct access returned HTTP 403 in the prior audit; no access control was bypassed.
+
+### PR #25 — Job Owner readiness diagnostics
+- PR #25 merged to main as c84c2b8c344e8f5c75cc52c1dabd5e5142c074fe.
+- GitHub Actions: Phase 2 isolated tests run 42639016021 SUCCESS; full metric-traceability run 42639016055 SUCCESS. Production build reproduction, full backend/permission/Excel tests, frontend metric contracts and synthetic runtime inventory all passed.
+- Railway deployment c0c98f5c-4edd-4aa5-8fd7-ee12346fb80d SUCCESS for the exact merged SHA, region iad. NG-Dashboard Online, 1/1 replica, no warnings/criticals or recent failures at deployment verification.
+- Admin-only /api/admin/phase2/source-readiness now returns aggregate job_history_quality by company/LOB: distinct job counts, uniquely matched register jobs, ambiguous/unmatched matches, owner populated/missing counts, JPR/register owner source counts, duplicate identities and coverage percentages.
+- Admin page now displays a Job Owner data completeness table. It does not expose job numbers, customer names, owner names or financial amounts.
+- Matching mirrors the existing dashboard logic: company + job number + exact date first; number-only fallback second; expected LOB register filter; only one candidate accepted. Ambiguous and unmatched jobs never get a guessed owner.
+- JPR Job Owner source values retain precedence, including explicit blanks. Optional header matching now handles case/spacing variants for new imports and existing stored extras.
+- No schema migration, import promotion, business-record change, financial formula change or source data write was performed.
+
+### Current workstream status
+| Workstream | Status | Evidence / limitation |
+|---|---|---|
+| Screenshot rendering defect | Fixed and deployed | PR #23, CI success, canonical HTML rebuilt with one doctype and balanced scripts; authenticated browser confirmation still needed |
+| Finance expected-cost evidence | Implemented and deployed | PR #24 and full CI success; estimates are explicitly not booked expense |
+| Job Owner header readiness | Implemented and deployed | Admin source-readiness header table |
+| Job Owner row-level completeness | Implemented and deployed | Aggregate-only, admin-only current-snapshot diagnostics; authenticated admin page must be inspected to obtain actual live coverage values |
+| Last five distinct jobs in Operations → Customers | Not yet implemented | Wait for live row-level completeness and source-key review; must use distinct jobs and repeat owners, with deterministic date/job tie-break |
+| Cross-LOB inactivity/lost customer | Pending | Existing inactivity is selected-scope only; complete company/LOB authorization and customer identity history must be proven |
+| Original workbook reconciliation | Partially complete | 187,805 rows independently reconciled across two originals; two other accepted originals still not independently row-level reconciled |
+| Variance/date and ingestion audits | Pending | Continue against source-backed accepted reports and live snapshot metadata |
+| Authenticated browser/responsive QA | Pending | No authenticated browser session available in this continuation |
+
+### Next exact actions
+1. Inspect the new Job Owner data completeness table in the authenticated admin portal. Use actual current-snapshot counts to decide if owner history is sufficiently complete by company/LOB.
+2. Only then implement Operations → Customers latest owner + last five distinct jobs. Retain repeated owners, include job number/date/owner/LOB, stable tie-break, and authorized Excel export. Do not substitute salesperson or relationship owner.
+3. Add cross-LOB customer inactivity only after complete authorized coverage and canonical customer identity are verified. Distinguish selected-LOB inactivity from customer-wide inactivity.
+4. Continue independent finance and variance/date audits with the two remaining original source workbooks and current production snapshot.
+5. Verify the screenshot fix in an authenticated browser after hard refresh; do not equate CI or HTTP telemetry with browser visual confirmation.
