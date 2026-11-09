@@ -134,7 +134,8 @@ class JobHistoryDataQualityTests(unittest.TestCase):
                      "shipment_date": date(2026, 11, 8), "job_owner": "Air Owner"}]
         jobs = [{"company": "NG", "job_no": "J-1", "job_date": date(2026, 11, 8),
                  "lob": "FFWD SEA EXP", "extra": {}}]
-        row = job_history_data_quality(register, jobs)[0]
+        rows = job_history_data_quality(register, jobs)
+        row = next(item for item in rows if item["lob"] == "Sea Export")
         self.assertEqual(row["matched_register_jobs"], 0)
         self.assertEqual(row["unmatched_register_jobs"], 1)
         self.assertEqual(row["job_owner_missing"], 1)
