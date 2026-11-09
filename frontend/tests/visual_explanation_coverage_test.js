@@ -35,6 +35,29 @@ explanation('profit','p_compare','Variance: change in value and percentage','abs
 explanation('profit','p_status','Profit data status','simple Job Profit Analysis Report');
 explanation('profit','p_status','Matched to the shipment register','unique match');
 
+// Full Operations overview evidence coverage: ageing, owner worklist and KPI tiles.
+n.setGroup('ops');n.S.page='ops';n.S.sel={};n.renderAll();
+let openedEvidence=null;w.MetricTrace={openWithRequest:q=>{openedEvidence=q;}};
+const openStage=n.COLS.stage.d.indexOf('Closed');
+const expectedOpen=Array.from(n.mask({dates:'none'})).flatMap((v,i)=>v&&n.COLS.stage.c[i]!==openStage?[i]:[]);
+for(const title of ['How long shipments have been open','Open shipments by job owner','Worklist']){
+ const c=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()===title);
+ assert.ok(c,'Operations overview visual exists: '+title);
+ const b=c.querySelector('.mt-info');assert.ok(b,'Operations visual exposes Calculation & records: '+title);
+ assert.equal(b.dataset.traceMetric,'ops.shipments');
+ b.click();assert.ok(openedEvidence,'Operations action opens evidence: '+title);
+ assert.deepEqual(openedEvidence.indices,expectedOpen,'Operations evidence is exactly the non-closed shipment set: '+title);
+ assert.equal(openedEvidence.previous_indices.length,0,'no comparison rows for open worklist: '+title);
+}
+const opsKpis=[['Waiting for operations lock','ops.waiting_lock'],['Operations locked, financials open','ops.financials_open'],['Open more than '+n.S.def.oldDays+' days','ops.old_open'],['Oldest open shipment (days)','ops.oldest_open'],['Days from ops lock to financial lock','ops.lock_lag']];
+for(const [label,metric] of opsKpis){
+ const k=[...w.document.querySelectorAll('#page .card.kpi')].find(x=>x.querySelector('.kl')?.textContent.trim()===label);
+ assert.ok(k,'Operations KPI exists: '+label);
+ const b=k.querySelector('.mt-info');assert.ok(b,'Operations KPI exposes Calculation & records: '+label);
+ assert.equal(b.dataset.traceMetric,metric);
+ b.click();assert.equal(openedEvidence.metric,metric,'KPI evidence uses its registered metric: '+label);
+}
+
 // Targeted acceptance: verified operations comparison charts expose source-backed
 // Calculation & records for their exact current and comparison period rows.
 const evidenceDay=s=>Math.round(Date.parse(s)/86400000);
