@@ -31,6 +31,7 @@ jobs:
           python scripts/build_metric_fixture.py
       - name: Frontend and metric contract audit
         run: |
+          node --check frontend/app_prod.js
           node frontend/tests/data_audit.js
           node frontend/tests/ops_pages_fixes_test.js
           node frontend/tests/customer360_test.js
