@@ -143,6 +143,10 @@ def _job_report_type(lob):
         return "OI"
     return None
 
+def _job_lob_label(lob):
+    report = _job_report_type(lob)
+    return {"AE": "Air Export", "AI": "Air Import", "OE": "Sea Export", "OI": "Sea Import"}.get(report, str(lob or "").strip() or "(missing LOB)")
+
 
 def _day_key(value):
     from datetime import date, datetime
@@ -190,7 +194,7 @@ def job_history_data_quality(register_rows, job_rows):
         day = _day_key(row.get("job_date"))
         if company not in EXPECTED:
             continue
-        group_key = (company, lob or "(missing LOB)")
+        group_key = (company, _job_lob_label(lob))
         if not number or not day or not lob:
             invalid[group_key] += 1
             continue
@@ -210,7 +214,8 @@ def job_history_data_quality(register_rows, job_rows):
             "register_rows": 0, "register_owner_populated": 0,
         })
 
-    for (company, lob, number, day), rows in grouped.items():
+    for (company, source_lob, number, day), rows in grouped.items():
+        lob = _job_lob_label(source_lob)
         stats = bucket(company, lob)
         stats["job_count"] += 1
         if len(rows) != 1:
@@ -231,7 +236,7 @@ def job_history_data_quality(register_rows, job_rows):
                 stats["job_owner_missing"] += 1
             continue
 
-        is_clearance = _norm(lob).startswith("ccl") or "customsclearance" in _norm(lob)
+        is_clearance = _norm(source_lob).startswith("ccl") or "customsclearance" in _norm(source_lob)
         if is_clearance:
             stats["register_not_applicable"] += 1
             stats["job_owner_missing"] += 1
@@ -240,7 +245,7 @@ def job_history_data_quality(register_rows, job_rows):
         candidates = by_key.get((company, number, day), [])
         if not candidates:
             candidates = by_no.get((company, number), [])
-        expected = _job_report_type(lob)
+        expected = _job_report_type(source_lob)
         if expected:
             candidates = [candidate for candidate in candidates if candidate["report_type"] == expected]
 
