@@ -25,6 +25,13 @@ class ReconciliationTests(unittest.TestCase):
         self.one = ["NG", "JOB1", "2024-01-03", "AIR EXPORT", "100", "70", "30"]
         self.two = ["NCS", "JOB2", "2024-01-04", "SEA IMPORT", "250", "100", "150"]
 
+    def test_empty_exports_cannot_be_certified(self):
+        write(self.source, [])
+        write(self.database, [])
+        result = reconcile(self.source, self.database)
+        self.assertEqual(result['status'], 'mismatch')
+        self.assertTrue(result['empty_input'])
+
     def test_identical_exports_match(self):
         write(self.source, [self.one, self.two])
         write(self.database, [self.two, self.one])
