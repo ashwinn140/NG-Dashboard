@@ -21,7 +21,7 @@ for(const role of ['admin','ops','finance']){
  for(const [group,pages] of Object.entries(groups)){
   if(role==='ops'&&group==='profit')continue;ng.setGroup(group);
   for(const page of pages){unvisited.delete(page);
-   try{ng.S.page=page;ng.renderAll();}catch(e){(errors[role+':'+page]=errors[role+':'+page]||[]).push(String(e));continue}
+   try{ng.S.page=page;ng.renderAll();await sleep(30);}catch(e){(errors[role+':'+page]=errors[role+':'+page]||[]).push(String(e));continue}
    const root=d.querySelector('#page');if(!root)continue;
    [...root.querySelectorAll('.card')].forEach((el,idx)=>{
     const isKpi=el.classList.contains('kpi');
