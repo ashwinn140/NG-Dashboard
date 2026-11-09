@@ -1726,23 +1726,46 @@ function metricTraceVariance(metric,pr,displayed){
  for(let i=0;i<m.length;i++){if(dates[i]<pr.cur.from||dates[i]>pr.cur.to)m[i]=0;if(dates[i]<pr.prev.from||dates[i]>pr.prev.to)p[i]=0;}
  const q=metricTraceSelection(metric,'Variance');q.indices=Array.from(m).flatMap((v,i)=>v?[i]:[]);q.previous_indices=Array.from(p).flatMap((v,i)=>v?[i]:[]);q.displayed_value=displayed;q.context.period=pr;q.context.active_min=1;q.context.date_basis=metric==='ops.invoiced_count'?'First parsed invoice date':fin?'Job Date':'Shipment Date';return q;
 }
+function metricTraceMasks(metric,key) {
+ const fin=metric.startsWith('profit.'),skip=key?{skip:key}:{};
+ if((fin&&S.page==='p_compare')||(!fin&&S.page==='compare')){
+  const pr=periods(S.cmp);if(pr.err)throw Error(pr.err);
+  const m=fin?maskP({...skip,dates:'none'}):mask({...skip,dates:'none'}),p=fin?maskP({...skip,dates:'none'}):mask({...skip,dates:'none'}),ds=fin?pdate:date;
+  for(let i=0;i<m.length;i++){if(ds[i]<pr.cur.from||ds[i]>pr.cur.to)m[i]=0;if(ds[i]<pr.prev.from||ds[i]>pr.prev.to)p[i]=0;}
+  return {m,p};
+ }
+ return {m:fin?maskP(skip):mask(skip),p:fin?maskP({...skip,dates:'prev'}):mask({...skip,dates:'prev'})};
+}
+function metricTraceValue(metric,m) {
+ if(metric==='ops.shipments')return opsFacts(m).n;
+ if(metric==='ops.air_weight')return opsFacts(m).air;
+ if(metric==='ops.teu')return opsFacts(m).sea;
+ if(metric==='profit.gp')return totalsP(m).profit;
+ if(metric==='profit.income')return totalsP(m).inc;
+ if(metric==='profit.expense')return totalsP(m).exp;
+ if(metric==='profit.jobs')return totalsP(m).jobs;
+ return undefined;
+}
 function metricTraceCategory(metric,key,code){
- const fin=metric.startsWith('profit.'),m=fin?maskP({skip:key}):mask({skip:key}),p=fin?maskP({skip:key,dates:'prev'}):mask({skip:key,dates:'prev'}),codes=fin?COLS[key].pc:COLS[key].c;
- for(let i=0;i<m.length;i++)if(codes[i]!==code){m[i]=0;p[i]=0;}
- const q=metricTraceSelection(metric,COLS[key].l+': '+COLS[key].d[code]);q.indices=Array.from(m).flatMap((v,i)=>v?[i]:[]);q.previous_indices=Array.from(p).flatMap((v,i)=>v?[i]:[]);q.context.segment={dimension:COLS[key].l,value:COLS[key].d[code]};
- if(fin){const t=totalsP(m);q.displayed_value=metric==='profit.income'?t.inc:metric==='profit.expense'?t.exp:t.profit;}else{const t=opsFacts(m);q.displayed_value=metric==='ops.air_weight'?t.air:metric==='ops.teu'?t.sea:t.n;}
+ const {m,p}=metricTraceMasks(metric,key),codes=COLS[key].pc||COLS[key].c;
+ for(let i=0;i<m.length;i++)if(m[i]&&codes[i]!==code)m[i]=0;
+ for(let i=0;i<p.length;i++)if(p[i]&&codes[i]!==code)p[i]=0;
+ const q=metricTraceSelection(metric,COLS[key].l+': '+(COLS[key].d[code]??code));
+ q.indices=Array.from(m).flatMap((v,i)=>v?[i]:[]);q.previous_indices=Array.from(p).flatMap((v,i)=>v?[i]:[]);
+ q.context.segment={dimension:COLS[key].l||key,value:COLS[key].d[code]??code};
+ if(q.context.filters){q.context.filters={...q.context.filters};delete q.context.filters[key];}
+ const value=metricTraceValue(metric,m);if(value===undefined)delete q.displayed_value;else q.displayed_value=value;
  return q;
 }
 function metricTraceVisual(metric,key,label) {
- if(key && S.sel[key] && S.sel[key].size===1)return metricTraceCategory(metric,key,[...S.sel[key]][0]);
- const fin=metric.startsWith('profit.'),skip=key?{skip:key}:{};
- const m=fin?maskP(skip):mask(skip),p=fin?maskP({...skip,dates:'prev'}):mask({...skip,dates:'prev'});
  const q=metricTraceSelection(metric,label);
+ if(!key)return q;
+ if(S.sel[key]&&S.sel[key].size===1)return metricTraceCategory(metric,key,[...S.sel[key]][0]);
+ const {m,p}=metricTraceMasks(metric,key);
  q.indices=Array.from(m).flatMap((v,i)=>v?[i]:[]);q.previous_indices=Array.from(p).flatMap((v,i)=>v?[i]:[]);
- if(key&&q.context&&q.context.filters){q.context.filters={...q.context.filters};delete q.context.filters[key];}
- q.context.visual_dimension=key?(COLS[key]?.l||key):null;
- if(fin){const t=totalsP(m);q.displayed_value=metric==='profit.income'?t.inc:metric==='profit.expense'?t.exp:metric==='profit.jobs'?t.jobs:t.profit;}
- else{const f=opsFacts(m);q.displayed_value=metric==='ops.air_weight'?f.air:metric==='ops.teu'?f.sea:f.n;}
+ if(q.context.filters){q.context.filters={...q.context.filters};delete q.context.filters[key];}
+ q.context.visual_dimension=COLS[key]?.l||key;
+ const value=metricTraceValue(metric,m);if(value===undefined)delete q.displayed_value;else q.displayed_value=value;
  return q;
 }
 function metricTraceSelection(metric,label) {
