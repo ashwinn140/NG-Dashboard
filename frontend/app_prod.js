@@ -1548,24 +1548,7 @@ function ppBilling() {
     vroot.append(h('p', {class: 'meta'}, h('strong', null, 'Shipments invoiced: ' + fInt(tA) + ' against ' + fInt(tB)), ' (' + (tB > 0 ? fPctS((tA - tB) / tB) : 'no comparison data') + ') · ' + pr.title), cmpControls(),
       h('div', {class: 'frow'}, h('label', {class: 'f'}, h('span', null, 'Rows by'), sel(dims, vk, (v) => { bl.vdim = v; renderAll(); })), h('label', {class: 'f'}, h('span', null, 'Show'), sel([['all', 'All changes'], ['up', 'Increases only'], ['down', 'Decreases only']], bl.vshow, (v) => { bl.vshow = v; renderAll(); })), dlButton('Download Excel', expV)),
       h('p', {class: 'note'}, 'Hides changes smaller than the limits under Definitions: ' + S.def.varMinPct + '% / value ' + S.def.varMinAbs + ' / previous at least ' + S.def.varMinBase + '.'), h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, vh, vb))); }
-  const invoiceVarianceTrace = {
-    metric: 'ops.invoiced_count',
-    request: function () {
-      const q = window.NG?.traceVariance?.('ops.invoiced_count', pr, tA);
-      if (!q) return null;
-      const current = [], previous = [], all = mask({dates: 'none'});
-      for (let i = 0; i < N; i++) {
-        if (!all[i] || inv1[i] <= 0) continue;
-        if (inv1[i] >= pr.cur.from && inv1[i] <= pr.cur.to) current.push(i);
-        if (inv1[i] >= pr.prev.from && inv1[i] <= pr.prev.to) previous.push(i);
-      }
-      q.indices = current;
-      q.previous_indices = previous;
-      q.context.date_basis = 'First parsed invoice date';
-      q.context.segment = {visual: 'All displayed invoice-variance dimensions'};
-      return q;
-    }
-  };
+  const invoiceVarianceTrace = {metric: 'ops.invoiced_count', request: () => window.NG?.traceVariance?.('ops.invoiced_count', pr, tA)};
   root.append(h('p', {class: 'meta'}, 'Invoice counts and dates come from the shipment registers, independently of the job-profit snapshots. Invoiced means the register shows an invoice in either “Invoice No. & Date” or “Billing Details”, counted on the earliest date found. About a third of shipments have a document only in Billing Details, so the two columns are read together.'), kp, h('div', {class: 'grid', style: 'margin-top:.9rem'}, ageCard, card('Shipments against invoices, by month', 'The gap between the bars is billing waiting to happen.', chart), slow, card('Variance: shipments invoiced', 'Value and percentage change against the earlier period, by any angle.', vroot, 'full', invoiceVarianceTrace)));
   return root;
 }
