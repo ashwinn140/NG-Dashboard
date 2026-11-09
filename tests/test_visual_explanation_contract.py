@@ -56,11 +56,25 @@ class VisualExplanationContract(unittest.TestCase):
 
     def test_specific_kpi_formulas_not_title_guesses(self):
         for label in ("air chargeable weight (tonnes)", "sea teus",
-                      "active customers", "jobs with cost booked",
+                      "jobs with cost booked",
                       "profit after expected costs", "shipments invoiced",
                       "jobs matched to the register"):
             with self.subTest(label=label):
                 self.assertIn("'" + label + "': [", APP)
+
+    def test_customer_profit_and_air_rate_descriptions(self):
+        for label in ("customers making 80% of profit", "loss-making customers",
+                      "air: profit per tonne", "sea: profit per teu",
+                      "days from shipment to first invoice",
+                      "days from ops lock to first invoice",
+                      "average sell rate", "average buy rate",
+                      "freight margin per kg", "estimated freight margin",
+                      "selling below buy"):
+            with self.subTest(label=label):
+                self.assertIn("'" + label + "': [", APP)
+
+    def test_ambiguous_active_customer_label_not_assigned_one_formula(self):
+        self.assertNotIn("'active customers': [", APP)
 
     def test_no_demo_rows_generated(self):
         self.assertIn("const DEMO_KEEP = [0, 0.86, 0.72], demoSrc = [], demoK = []", APP)
