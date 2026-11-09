@@ -288,3 +288,43 @@
 - The previous outstanding charge-wise workbook reconciliation is removed from scope by the owner's explicit decision.
 - Five principal workstreams remain before release readiness: (1) simple-JPR finance/variance audit, (2) visual explanation/reconciliation coverage, (3) secure Report Scheduler, (4) integrated HTML Help/User Guide, and (5) authenticated browser/responsive/security QA.
 - Final merge/deployment verification is a release gate after those workstreams, not a substitute for them.
+
+## Production continuation — 9 November 2026, after PR #30
+
+### PR #30 — customer GP concentration guard
+- PR #30 merged as `3067c6d0855ded2d72b66b657f71890a73a22028`.
+- GitHub Actions run `42648430744` completed SUCCESS for head `aa03454a2f2a67708362cf35a10bf3029e85a78c`. Production build, backend/permission/Excel suite, frontend metric contract checks and synthetic visual inventory all passed.
+- Changed `app/metric_execution.py`, `app/metric_definitions.py`, `frontend/app_prod.js`, `tests/test_metric_execution.py` and `frontend/tests/data_audit.js`.
+- Biggest Customer Share retains largest customer GP / total net GP when total net GP is positive. It is unavailable when total net GP is zero or negative. Frontend KPI trace and backend evidence use the same rule. Added tests for positive, zero and negative net GP.
+- Added variance tests confirming negative-baseline percentage changes use absolute baseline magnitude and zero baselines are unavailable.
+
+### Current production deployment
+- Railway NG-Dashboard deployment `0ad58d2a-2409-4c2c-8192-0e0f90a0c6ce` — SUCCESS, branch `main`, exact commit `3067c6d0855ded2d72b66b657f71890a73a22028`, region `iad`.
+- This deployment includes PR #29 cross-LOB Customer 360 and PR #30 finance correction. The prior intermediate deployment for PR #29 was superseded; current deployment is the authoritative live release.
+- Runtime logs show volume mount, application startup complete, PostgreSQL database connection and Uvicorn listening on port 8080. No HTTP telemetry rows were returned for this immediate post-deploy log query; do not claim authenticated browser smoke testing.
+- Production environment reports no staged changes or pending work. Existing PostgreSQL and persistent application volume remain attached. No schema migration or production business-data modification was made.
+
+### Updated synthetic visual inventory
+- Artifact from successful PR #29 CI run `42647512306` was downloaded and inspected.
+- 414 role/page visual instances; 408 unique role/page/title visuals; 159 KPIs; 249 cards; 71 table-bearing visuals; 31 chart-bearing visuals; all registered pages visited; zero synthetic runtime errors.
+- 289/408 have verified calculation explanations; 72 have an explanation but the calculation remains unverified; 47 have no explanation. This supersedes earlier inventory counts of 281/80/47.
+- These figures are synthetic inventory, not authenticated browser or live production evidence. Continue to classify wrapper/untitled cards and non-record visuals appropriately rather than inventing drill-down evidence.
+
+### Finance and operational audit findings on agreed simple-JPR scope
+- JPR ingestion is explicitly `job_summary_v1`, Basis: Job Date, one row per job. Import validation checks the report grand totals, validates Profit = Income - Expense within the configured tolerance, rejects missing Job No./Location/LOB, rejects duplicate Job No. + Job Date + LOB rows and preserves the prior accepted data on invalid replacements.
+- The finance audit should use this accepted simple JPR and its current Job Date basis. No charge-wise source workbook is needed or to be pursued.
+- Invoice placeholder handling is covered by `tests/test_invoice_reference.py`: blank, zero, N/A, NIL and Pending do not count as invoice references; text references without parseable dates count as references but have no invoice date.
+- Ageing tests include a later-finance-date regression and verify operational ageing remains based on latest shipment-register date, not a later finance date.
+- **Volume-unit issue remains unresolved and must not be certified:** `app/dataset.py::volume_cbm` currently converts Volume when *any* repeated Unit column (Unit, Unit.1 … Unit.7) equals CCM. This can incorrectly convert a row when CCM belongs to weight/package or another measure rather than Volume. The existing `tests/test_volume_units.py` exercises several unit positions but does not establish which unit header is actually paired with Volume in the accepted shipment-register source. Correct design is to derive the Volume unit from the corresponding Volume-adjacent source column/header position, not OR together every repeated Unit column. Do not guess the index or rewrite production data without a source-header mapping verified from an accepted shipment-register source or its exact preserved header order.
+- Customer concentration denominator defect is fixed and production-deployed. Remaining finance audit still includes the complete visual/date/variance/filter/export parity review.
+
+### Remaining principal workstreams
+1. Complete simple-JPR finance and variance audit, including metric parity, all variance/date edge cases, finance permissions, drilldown and Excel exports. No charge-wise workbook dependency.
+2. Complete visual explanation and Calculation & records coverage. Start with 72 unverified calculation explanations and 47 missing explanation blocks in the latest synthetic inventory; do not add evidence actions where a correct metric/source mapping cannot be proved.
+3. Implement a secure generic Report Scheduler with durable server-side queue, execution-time permissions, approved recipients, freshness policy, idempotency, retry/restart/concurrency handling and accurate provider delivery states. Existing `app/mailer.py` supports SMTP/Resend but no scheduler persistence/worker/UI was found. Do not activate real scheduled emails before full security and delivery tests.
+4. Build the integrated searchable HTML Help & User Guide and Visual Dictionary inside the app, synchronized with shared metric metadata and CI. No separate PDF/Word manual.
+5. Authenticated browser, responsive, keyboard/accessibility and production smoke QA remains blocked until an authenticated browser session is available. Synthetic jsdom tests are not a substitute.
+
+### Release posture
+- PR #29 and PR #30 are merged, CI-passing and included in the current production commit.
+- This is an incremental production release, not final project completion. Keep working on the five remaining principal workstreams. Do not declare final readiness until critical finance/security tests, visual coverage, scheduler safety, guide synchronization and authenticated browser QA are complete or explicitly recorded as blocked with evidence.
