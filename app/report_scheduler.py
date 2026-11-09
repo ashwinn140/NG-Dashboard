@@ -30,7 +30,12 @@ REPORT_CATALOG = {
             "branch", "agent", "salesperson", "job_owner", "origin",
             "destination", "status", "operations_locked_on",
             "financials_locked_on", "gross_weight_t", "chargeable_weight_t",
-            "teus", "volume_cbm",
+            "teus", "volume_cbm", "shipments", "air_shipments", "ocean_shipments",
+            "air_chargeable_weight_t", "ocean_teus", "lob_count", "last_shipment_date",
+        ),
+        "summary_columns": (
+            "company", "customer", "shipments", "air_shipments", "ocean_shipments",
+            "air_chargeable_weight_t", "ocean_teus", "lob_count", "last_shipment_date",
         ),
         "filters": ("customer", "branch", "agent", "salesperson", "job_owner", "status"),
     },
@@ -50,7 +55,10 @@ REPORT_CATALOG = {
         "columns": (
             "company", "lob", "job_no", "job_date", "customer", "branch",
             "mode", "direction", "service", "income", "expense", "profit",
-            "margin",
+            "margin", "jobs",
+        ),
+        "summary_columns": (
+            "company", "lob", "customer", "branch", "jobs", "income", "expense", "profit", "margin",
         ),
         "filters": ("customer", "branch", "salesperson", "lob", "mode", "direction", "service"),
     },
@@ -218,13 +226,13 @@ def validate_schedule(user: dict, payload: dict) -> dict:
     if period == "fixed_range":
         period_bounds(period, date.today(), start_date=payload.get("start_date"), end_date=payload.get("end_date"))
 
-    columns = payload.get("columns") or list(report["columns"])
+    columns = payload.get("columns") or list(available_columns)
     if not isinstance(columns, list) or not columns or len(columns) != len(set(columns)):
         raise ScheduleValidationError("Select one or more unique report columns.")
-    if not set(columns).issubset(set(report["columns"])):
-        raise ScheduleValidationError("One or more selected columns are not available for this report.")
+    if not set(columns).issubset(set(available_columns)):
+        raise ScheduleValidationError("One or more selected columns are not available in this report mode.")
     sort = payload.get("sort") or {"field": columns[0], "direction": "asc"}
-    if not isinstance(sort, dict) or sort.get("field") not in report["columns"] or sort.get("direction") not in ("asc", "desc"):
+    if not isinstance(sort, dict) or sort.get("field") not in available_columns or sort.get("direction") not in ("asc", "desc"):
         raise ScheduleValidationError("Choose a valid sort field and direction.")
 
     filters = payload.get("filters") or {}
@@ -236,9 +244,12 @@ def validate_schedule(user: dict, payload: dict) -> dict:
             raise ScheduleValidationError("Filter values must be lists of at most 100 text values.")
         clean_filters[key] = list(dict.fromkeys(v.strip() for v in values if v.strip()))
 
-    mode = payload.get("summary_detail", "detail")
+    mode = payload.get("summary_detail", "summary" if report_id == "customer_performance" else "detail")
     if mode not in ("summary", "detail"):
         raise ScheduleValidationError("Choose summary or detail mode.")
+    if report_id == "customer_performance" and mode != "summary":
+        raise ScheduleValidationError("Customer Performance is a summary report in the pilot.")
+    available_columns = report["summary_columns"] if mode == "summary" else report["columns"]
     recipients = payload.get("recipients", ["self"])
     if recipients != ["self"]:
         raise PermissionError("The pilot only supports delivery to the schedule owner's verified account email.")
