@@ -250,3 +250,41 @@
 4. Original charge-wise source reconciliation remains partial: NG current FY2026 and NCS FY2025 were independently row-reconciled (187,805 lines, zero unmatched); NG FY2025 and NCS current FY2026 originals remain uncertified at row level. Searchable Library did not surface those remaining source workbooks.
 5. Continue variance/date-basis, ingestion completeness, metric-definition coverage, and Report Scheduler/HTML Help work only with validated source and security evidence. Never activate real recurring report sends until authorization, recipient and delivery tests pass.
 6. Re-check the last-five-jobs modal and Excel worksheet in an authenticated browser when a user session becomes available.
+
+## Continuation checkpoint — 9 November 2026, 21:xx IST
+
+### Current repository and production state
+- Repository: `ashwinn140/NG-Dashboard`; default branch `main`.
+- Latest main commit at checkpoint: `2cdebb53b0771e5b9d1525dc85c4b2a7ec68c3a4`.
+- Production Railway is still on commit `b8dc0c442cbb3230803262e215ae1f11efaa32c8`, deployment `c1c36f08-e94c-4723-8d70-aaf36dce92da`, SUCCESS.
+- Production environment has no staged changes or pending deployment work. PostgreSQL and the existing persistent volumes remain attached.
+- PR #29 was merged as `2cdebb53b0771e5b9d1525dc85c4b2a7ec68c3a4`; GitHub Actions run `42647512306` completed SUCCESS. Steps passed: dependency setup, production build reproduction, backend/permission/Excel suite, synthetic fixture generation, frontend/metric contract audit, synthetic runtime visual inventory.
+- PR #29 adds Customer 360 cross-LOB activity breakdowns, adaptive LOB-level activity states, selected-LOB versus other-visible-LOB context and synthetic regression tests. It uses only the already authorized loaded dataset, exact source-name matching and explicit scope caveats. No schema, permission, finance or production data changes.
+- The merge has NOT yet been deployed to Railway. Do not call PR #29 production-verified.
+- Commit `05abb1506da077c68f3a3c8f39582c41f5f77b8a` records the agreed simple-JPR source scope in this checkpoint's audit documentation.
+
+### Binding source-scope decision from Ashwin — 9 November 2026
+- Continue using the existing simple **Job Profit Analysis Report (JPR)** in its current format, with Job Date as the finance reporting basis.
+- Charge-wise source workbooks are NOT required for this project. Do not continue searching Gmail, SharePoint or Library for missing charge-wise originals, and do not block completion on their availability.
+- Do not require Billing Date or charge-level reconciliation for the agreed JPR scope. Do not mislabel Job Date as Billing Date or infer a billing date from it.
+- Finance/variance validation must use the currently accepted JPR dataset, existing import metadata, calculations, permissions, API, UI and exports. Preserve clear limitations around missing periods and unmatched finance records.
+- This decision does not authorize production source-data changes, import promotions or financial formula changes.
+
+### Workstreams and next actions
+| Workstream | Status | Next action / evidence |
+|---|---|---|
+| Baseline and existing production release | Completed and production-verified | Continue to preserve current live commit until final safe release |
+| Origin/destination multi-select | Completed and production-verified | PR #19 fix deployed; preserve OR-within-field / AND-across-fields behavior |
+| Operations last-five jobs / Job Owner | Implemented and production-verified | PR #26 deployed; authenticated live browser confirmation still outstanding |
+| Cross-LOB Customer 360 activity | Implemented and tested awaiting deployment | PR #29 merged; CI run 42647512306 SUCCESS; verify Railway deployment later |
+| Finance / variance audit on simple JPR | Pending | Audit formula parity, Job Date windows, current/prior/YoY/partial periods, zero/negative baselines, role access, drilldown and Excel export; do not seek charge-wise files |
+| Visual explanations / Calculation & records coverage | Pending | Synthetic inventory previously found 80 unverified calculations and 47 visuals without explanations; complete verified visual dictionary and explicit-action coverage without attaching unverified formulas |
+| Report Scheduler | Pending | Implement only after durable queue, permission-at-execution, approved recipients, freshness, idempotency, delivery evidence and failure/retry tests |
+| Integrated HTML Help & User Guide | Pending | Build in-app searchable guide and visual dictionary, synchronized with code/tests; no separate PDF/Word manual |
+| Authenticated browser, responsive and accessibility QA | Blocked pending authenticated browser session | Test 1920/1366/768/390 px, Operations View jobs, Customer 360, filters, explicit reconciliation, exports and keyboard/focus behavior |
+| Final release | Pending | Only after critical finance/security tests and browser/data QA; deploy a verified subset and confirm exact Railway commit/health |
+
+### Remaining work count
+- The previous outstanding charge-wise workbook reconciliation is removed from scope by the owner's explicit decision.
+- Five principal workstreams remain before release readiness: (1) simple-JPR finance/variance audit, (2) visual explanation/reconciliation coverage, (3) secure Report Scheduler, (4) integrated HTML Help/User Guide, and (5) authenticated browser/responsive/security QA.
+- Final merge/deployment verification is a release gate after those workstreams, not a substitute for them.
