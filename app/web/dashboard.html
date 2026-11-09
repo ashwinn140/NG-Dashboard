@@ -798,21 +798,24 @@ function pageCustomers() {
     }).catch(error=>{status.textContent=error.message;status.className='bad';});
   }
   const sel = S.sel[key] || new Set(), hasPrev = R.np > 0; const rows = []; for (let j = 0; j < sz; j++) if (cnt[j] > 0 || sel.has(j)) rows.push({j, cnt: cnt[j], air: air[j], sea: sea[j], share: totC ? cnt[j] / totC : 0, delta: hasPrev ? cnt[j] - pc[j] : 0, last: last[j], v: vol[j]});
+  const ownerByCustomer = new Map();
   const exportCust = async () => {
     const list = rows.slice().sort((a,b)=>b.cnt-a.cnt);
     try {
       const historyRows = [[HDR('Customer'),HDR('Company'),HDR('Job No.'),HDR('Job Date'),HDR('LOB'),HDR('Job Owner'),HDR('Owner status')]];
+      const lastOwners = new Map();
       for (let offset=0; offset<list.length; offset+=100) {
         const batch=list.slice(offset,offset+100);
         const histories=await loadRecentJobs(batch.map(r=>({customer:COLS.customer.d[r.j],companies:historyCompanies(r.j),lobs:historyLobs()})));
         histories.forEach(history=>{
           const jobs=history.jobs||[];
+          lastOwners.set(String(history.customer||'').trim().toLowerCase(),history.last_shipment_job_owner||'Owner unavailable');
           if (!jobs.length) historyRows.push([history.customer,'','','','','Owner unavailable','No JPR history returned']);
           else jobs.forEach(job=>historyRows.push([history.customer,job.company,job.job_no,job.job_date,job.lob,job.job_owner,job.owner_status]));
         });
       }
-      const customerRows=[['Customer','Shipments','Air chargeable weight (t)','Sea TEUs','Share of shipments','Change vs comparison (shipments)','Last shipment'].map(HDR)];
-      list.forEach(r=>customerRows.push([COLS.customer.d[r.j],{v:r.cnt,s:3},r.air?{v:+r.air.toFixed(3),s:4}:'',r.sea?{v:Math.round(r.sea),s:3}:'',{v:r.share,s:2},hasPrev?{v:r.delta,s:3}:'',r.last>0?{v:serial(r.last),s:5}:'']));
+      const customerRows=[['Customer','Shipments','Air chargeable weight (t)','Sea TEUs','Share of shipments','Change vs comparison (shipments)','Last shipment','Last shipment Job Owner'].map(HDR)];
+      list.forEach(r=>customerRows.push([COLS.customer.d[r.j],{v:r.cnt,s:3},r.air?{v:+r.air.toFixed(3),s:4}:'',r.sea?{v:Math.round(r.sea),s:3}:'',{v:r.share,s:2},hasPrev?{v:r.delta,s:3}:'',r.last>0?{v:serial(r.last),s:5}:'',lastOwners.get(COLS.customer.d[r.j].trim().toLowerCase())||'Owner unavailable']));
       downloadXlsx('customers_'+fIso(dDate(MAXDATE))+'.xlsx',[
         {name:'Customers',freeze:true,filter:true,cols:[42,12,18,12,18,18,16],rows:customerRows},
         {name:'Last 5 Jobs',freeze:true,filter:true,cols:[38,12,22,16,28,30,20],rows:historyRows},
@@ -821,14 +824,30 @@ function pageCustomers() {
     } catch(error) { alert('Customer export was not completed: '+error.message); }
   };
   const tbody = h('tbody'), note = h('p', {class: 'note'});
-  const cols = [{k: 'name', t: 'Customer'}, {k: 'cnt', t: 'Shipments', num: true}, {k: 'air', t: 'Air weight (t)', num: true}, {k: 'sea', t: 'Sea TEUs', num: true}, {k: 'share', t: 'Share', num: true}, {k: 'delta', t: 'Change vs previous', num: true}, {k: 'last', t: 'Last shipment', num: true}, {k:'history',t:'Last 5 jobs',sort:false}];
+  const cols = [{k: 'name', t: 'Customer'}, {k: 'cnt', t: 'Shipments', num: true}, {k: 'air', t: 'Air weight (t)', num: true}, {k: 'sea', t: 'Sea TEUs', num: true}, {k: 'share', t: 'Share', num: true}, {k: 'delta', t: 'Change vs previous', num: true}, {k: 'last', t: 'Last shipment', num: true}, {k:'owner',t:'Last shipment Job Owner',sort:false}, {k:'history',t:'Last 5 jobs',sort:false}];
   const thead = h('thead'); const draw = () => {
     const s = S.cust, f = s.sort === 'name' ? (a, b) => COLS.customer.d[a.j].localeCompare(COLS.customer.d[b.j]) : (a, b) => a[s.sort] - b[s.sort]; rows.sort((a, b) => f(a, b) * s.dir);
     thead.replaceChildren(sortHead(cols, s, draw)); const shown = rows.slice(0, S.def.tableRows);
     tbody.replaceChildren(...shown.map((r) => h('tr', {class: 'click' + (sel.has(r.j) ? ' on' : ''), onclick: () => toggle(key, r.j)}, h('td', null, COLS.customer.d[r.j]), h('td', {class: 'n'}, fInt(r.cnt)), h('td', {class: 'n'}, r.air ? f1(r.air) : '–'), h('td', {class: 'n'}, r.sea ? fInt(Math.round(r.sea)) : '–'),
-      h('td', {class: 'n'}, fS(r.share)), h('td', {class: 'n ' + (r.delta > 0 ? 'ok' : r.delta < 0 ? 'bad' : '')}, hasPrev ? (r.delta > 0 ? '+' : r.delta < 0 ? '−' : '') + fInt(Math.abs(r.delta)) : '–'), h('td', {class: 'n'}, r.last > 0 ? fDay(r.last) : '–'), h('td', null, h('button',{type:'button',class:'link',onclick:event=>{event.stopPropagation();showRecentJobs(COLS.customer.d[r.j],historyCompanies(r.j));}},'View jobs')))));
+      h('td', {class: 'n'}, fS(r.share)), h('td', {class: 'n ' + (r.delta > 0 ? 'ok' : r.delta < 0 ? 'bad' : '')}, hasPrev ? (r.delta > 0 ? '+' : r.delta < 0 ? '−' : '') + fInt(Math.abs(r.delta)) : '–'), h('td', {class: 'n'}, r.last > 0 ? fDay(r.last) : '–'), h('td', null, ownerByCustomer.get(r.j) || (r.last > 0 ? 'Loading…' : 'No shipment')), h('td', null, h('button',{type:'button',class:'link',onclick:event=>{event.stopPropagation();showRecentJobs(COLS.customer.d[r.j],historyCompanies(r.j));}},'View jobs')))));
     note.textContent = 'Showing ' + shown.length + ' of ' + fInt(rows.length) + ' customers. Click a row to filter; use View jobs to inspect the last five distinct JPR jobs. Job history uses Job Date and is independent of the dashboard date range. ' + (hasPrev ? 'Change = shipments minus the ' + cmpLabel() + '.' : 'No earlier period exists before this date range, so there is no change to show.'); };
   draw();
+  // Resolve the owner against the exact latest Shipment Date shown in this table.
+  // The backend only returns an owner for a unique, source-backed JPR match.
+  (async()=>{
+    const visible=rows.slice().sort((a,b)=>b.cnt-a.cnt).slice(0,S.def.tableRows).filter(r=>r.last>0);
+    for(let offset=0;offset<visible.length;offset+=100){
+      const batch=visible.slice(offset,offset+100);
+      try{
+        const histories=await loadRecentJobs(batch.map(r=>({customer:COLS.customer.d[r.j],companies:historyCompanies(r.j),lobs:historyLobs(),last_shipment_date:fIso(dDate(r.last))})));
+        histories.forEach(history=>{
+          const row=batch.find(r=>COLS.customer.d[r.j].trim().toLowerCase()===String(history.customer||'').trim().toLowerCase());
+          if(row) ownerByCustomer.set(row.j,history.last_shipment_job_owner||'Owner unavailable');
+        });
+      }catch(_){batch.forEach(r=>ownerByCustomer.set(r.j,'Owner unavailable'));}
+    }
+    draw();
+  })();
   // heatmap
   const topIds = rows.slice().sort((a, b) => b.v - a.v).slice(0, S.def.heatN).map((r) => r.j), months = d3.utcMonth.range(d3.utcMonth.floor(dDate(R.w.from)), dDate(R.w.to + 1)).map((d) => Math.round(+d / DMS)), mi = new Map(months.map((s, i) => [s, i]));
   const hm = new Map(topIds.map((j) => [j, new Float64Array(months.length)])); let hmax = 0;
