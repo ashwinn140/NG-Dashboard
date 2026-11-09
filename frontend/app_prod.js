@@ -193,11 +193,13 @@ function businessMeaning(label, note, metricExplanation) {
   const meaning = verified ? verified[0] : 'Shows ' + name.toLowerCase() + ' for the selected reporting scope.';
   const calculation = verified ? verified[1] : 'Calculation not yet verified against this visual\'s implemented data aggregation. Do not rely on a title-based formula.';
   const reportingWindow = R && R.w ? R.w : null;
+  const hasDashboardComparison = Boolean(S.compare && reportingWindow && reportingWindow.pfrom != null && reportingWindow.pto != null);
+  const dateBasis = S.group === 'profit' ? 'Job Profit Analysis job dates' : S.group === 'summary' || S.group === 'mine' ? 'Shipment-register dates for operational metrics and job dates for profit metrics' : 'Shipment-register dates for operational metrics; individual finance visuals may use job dates';
   return h('details', {class: 'business-explanation', style: 'margin-top:.55rem;font-size:.78rem'},
     h('summary', {style: 'cursor:pointer'}, 'Business meaning & calculation'),
     h('p', null, h('strong', null, 'What this means: '), meaning),
     h('p', null, h('strong', null, 'How it is calculated: '), calculation),
-    reportingWindow ? h('p', {class: 'meta'}, 'Dashboard date selection: ' + fRange({from:reportingWindow.from,to:reportingWindow.to}) + (S.compare && reportingWindow.pfrom != null && reportingWindow.pto != null ? '; comparison: ' + fRange({from:reportingWindow.pfrom,to:reportingWindow.pto}) : '') + '. Active filters apply where supported by this visual; visual-specific periods may differ.') : null,
+    reportingWindow ? h('p', {class: 'meta'}, 'Dashboard date selection: ' + fRange({from:reportingWindow.from,to:reportingWindow.to}) + (hasDashboardComparison ? '; dashboard comparison: ' + fRange({from:reportingWindow.pfrom,to:reportingWindow.pto}) : '; dashboard comparison: off') + '. Date basis: ' + dateBasis + '. Company, line-of-business and other selected filters apply only where supported by this visual. This is dashboard context, not certification of a visual-specific date or comparison calculation.') : null,
     note ? h('p', {class:'meta'}, 'Visual note: ' + note) : null);
 }
 function card(title, note, body, cls) { return h('article', {class: 'card ' + (cls || '')}, h('h2', {class: 'h'}, title), note ? h('p', {class: 'note'}, note) : null, body, businessMeaning(title, note)); }
