@@ -308,7 +308,7 @@ function businessMeaning(label, note, metricExplanation) {
 function traceExplanation(trace,title) {
  if(!trace)return null;
  const m=trace.metric,k=trace.dimension;
- if((k&&!COLS[k])||title==='Income against margin')return null;
+ if(k&&!COLS[k])return null;
  const ops={
   'ops.shipments':'shipment records','ops.air_weight':'air chargeable weight (tonnes)','ops.teu':'ocean TEUs',
   'ops.invoiced_share':'shipment-register rows with invoice references','ops.invoice_lag':'invoiced shipments with a parsed first invoice date',
@@ -341,8 +341,14 @@ function traceExplanation(trace,title) {
  if(rateOps[m])return [rateOps[m][0],rateOps[m][1]+' The drawer lists the exact contributing air-export source rows.'];
  if(fin[m]){
   const measure=fin[m],dim=k&&COLS[k]?COLS[k].l.toLowerCase():null;
-  const formula=m==='profit.gp'?'Sums Income less Expense (INR) across eligible Job Profit Analysis rows.':m==='profit.income'?'Sums Income (INR) across eligible Job Profit Analysis rows.':m==='profit.expense'?'Sums Expense (INR) across eligible Job Profit Analysis rows.':m==='profit.cost_not_booked_proxy'?'Counts distinct jobs with aggregated income > 0 and exactly zero recorded expense. Zero recorded expense does not prove that no cost was incurred.':m==='profit.loss_making'?'Counts distinct jobs where recorded expense exceeds income by more than INR 1, after the dashboard status precedence excludes higher-priority cost-booking categories.': 'For selected jobs with positive income and zero recorded expense, sums income multiplied by the same-LOB booked expense/income ratio; falls back to the overall authorized ratio, then zero if no benchmark exists. The benchmark uses all authorized loaded JPR jobs and ignores the selected date window. This is an estimate, not booked expense.';
-  return ['Shows '+measure+' for the visual and active filters.',formula+(dim?' Groups the eligible rows by '+dim+'.':'')+' The drawer lists the exact contributing job-summary rows.'];
+  const formula=title==='Income against margin'?'Each bubble represents one customer. Horizontal position is recorded income, vertical position is gross-profit margin (income less expense divided by income), and bubble area scales with the absolute value of gross profit; only the 60 highest-income customers with a defined margin are plotted.':
+   m==='profit.gp'?'Sums Income less Expense (INR) across eligible Job Profit Analysis rows.':
+   m==='profit.income'?'Sums Income (INR) across eligible Job Profit Analysis rows.':
+   m==='profit.expense'?'Sums Expense (INR) across eligible Job Profit Analysis rows.':
+   m==='profit.cost_not_booked_proxy'?'Counts distinct jobs with aggregated income > 0 and exactly zero recorded expense. Zero recorded expense does not prove that no cost was incurred.':
+   m==='profit.loss_making'?'Counts distinct jobs where recorded expense exceeds income by more than INR 1, after the dashboard status precedence excludes higher-priority cost-booking categories.':
+   'For selected jobs with positive income and zero recorded expense, sums income multiplied by the same-LOB booked expense/income ratio; falls back to the overall authorized ratio, then zero if no benchmark exists. The benchmark uses all authorized loaded JPR jobs and ignores the selected date window. This is an estimate, not booked expense.';
+  return ['Shows '+measure+' for the visual and active filters.',formula+(dim&&title!=='Income against margin'?' Groups the eligible rows by '+dim+'.':'')+' The drawer lists the exact contributing job-summary rows, including job number, company, branch, customer, job date, income, expense and profit.'];
  }
  return null;
 }
@@ -1107,10 +1113,10 @@ function ppOverview() {
     h('span', {class: 'track'}, h('span', {class: 'fill', style: 'width:' + (r.jobs / bmx * 100) + '%;background:' + (r.g === 0 ? 'var(--bad)' : r.g >= 5 ? 'var(--warn)' : '#4c78a8')})), h('span', {class: 'val'}, fInt(r.jobs) + ' jobs · ' + money(r.profit))))) : emptyNote();
   const bridge = bridgeChart([{l1: 'Income', v: t.inc, total: true, color: '#4c78a8'}, {l1: 'Expense', l2: 'booked', v: -t.exp, color: '#f58518'}, {l1: 'Profit', l2: 'as booked', v: t.profit, total: true, color: '#1a7f4b'}, {l1: 'Expected', l2: 'unbooked cost', v: -ex.est, color: '#f58518', est: true}, {l1: 'Estimated', l2: 'profit', v: t.profit - ex.est, total: true, color: '#1a7f4b', est: true}]);
   return h('div', null, banner, h('div', {class: 'kpis'}, kp), h('div', {class: 'grid'},
-    card('From income to profit', 'The pale bars are an estimate of costs still to be booked.', bridge), card('By company', 'Click a company to filter everything.', compTbl, null, {metric: 'profit.gp', dimension: 'company'}),
-    card('Income and expense by week', 'By ' + 'job date' + '. Click a week to zoom in.', weekChart(R.M), 'full'),
+    card('From income to profit', 'The pale bars are an estimate of costs still to be booked.', bridge, null, {metric:'profit.gp'}), card('By company', 'Click a company to filter everything.', compTbl, null, {metric: 'profit.gp', dimension: 'company'}),
+    card('Income and expense by week', 'By ' + 'job date' + '. Click a week to zoom in.', weekChart(R.M), 'full', {metric:'profit.gp'}),
     card('Top ' + S.def.topN + ' branches', 'Ranked by ' + S.rank + '. Click to filter.', pkeyRank('branch', {color: '#4c78a8'}), null, {metric: profitRankMetric(), dimension: 'branch'}), card('Top ' + S.def.topN + ' lines of business', 'Click to filter.', pkeyRank('p_lob', {color: '#54a24b'}), null, {metric: profitRankMetric(), dimension: 'p_lob'}),
-    card('Top ' + S.def.topN + ' customers', 'Click to filter.', pkeyRank('customer', {color: '#b279a2'}), null, {metric: profitRankMetric(), dimension: 'customer'}), card('Top ' + S.def.topN + ' sales people', 'Profit by the ERP Sales Person. Job report values take priority; a unique register match is a fallback for omitted columns. Click to filter.', pkeyRank('x_salesperson', {color: '#72b7b2'}), null, {metric: profitRankMetric(), dimension: 'x_salesperson'}), card('Top ' + S.def.topN + ' trade lanes', 'From the register. Click to filter.', pkeyRank('x_tradelanename', {color: '#e45756'}), null, {metric: profitRankMetric(), dimension: 'x_tradelanename'}), card('How healthy are the jobs?', 'Jobs by margin band. Click a band to filter.', bands)));
+    card('Top ' + S.def.topN + ' customers', 'Click to filter.', pkeyRank('customer', {color: '#b279a2'}), null, {metric: profitRankMetric(), dimension: 'customer'}), card('Top ' + S.def.topN + ' sales people', 'Profit by the ERP Sales Person. Job report values take priority; a unique register match is a fallback for omitted columns. Click to filter.', pkeyRank('x_salesperson', {color: '#72b7b2'}), null, {metric: profitRankMetric(), dimension: 'x_salesperson'}), card('Top ' + S.def.topN + ' trade lanes', 'From the register. Click to filter.', pkeyRank('x_tradelanename', {color: '#e45756'}), null, {metric: profitRankMetric(), dimension: 'x_tradelanename'}), card('How healthy are the jobs?', 'Jobs by margin band. Click a band to filter.', bands, null, {metric:'profit.gp',dimension:'jobstatus'})));
 }
 function ppBranches() {
   const m = maskP({skip: ['company', 'branch']}), NB = COLS.branch.d.length, rows = groupByP((i) => pco[i] * NB + COLS.branch.pc[i], m, 2 * NB, (g) => COLS.branch.d[g % NB]).map((r) => Object.assign(r, {co: Math.floor(r.g / NB), br: r.g % NB}));
@@ -1144,8 +1150,8 @@ function ppBranches() {
   const heat = h('div', {class: 'scroll'}, h('table', {class: 'tbl heat'}, h('thead', null, h('tr', null, h('th', null, 'Branch'), lUse.map((l) => h('th', {class: 'n'}, COLS.p_lob.d[l].replace('FFWD ', 'F ').replace('CCL ', 'C '))))),
     h('tbody', null, bUse.map((b) => h('tr', null, h('td', null, COLS.branch.d[b]), lUse.map((l) => { const r = hm.find((x) => x.g === b * NL + l); return h('td', {class: 'n hc', title: r ? COLS.branch.d[b] + ' · ' + COLS.p_lob.d[l] + ': profit ' + money(r.profit) + ', margin ' + fMargin(r.margin) : '', style: r ? 'background:' + colour(r.profit, hmx) : '', onclick: () => {if(r){setMany({branch:b,p_lob:l});}}}, r ? money(r.profit) : ''); }))))));
   return h('div', null, h('div', {class: 'grid'}, card('Profit by branch', 'Every branch of both companies. Profit is income minus the costs booked so far; the last column shows how many jobs have a cost booked (a low figure means the margin is flattering). Click a row or bar to filter.', h('div', null, h('div', {class: 'frow'}, dlButton('Download Excel', exportB)),
-      h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, h('thead', null, h('tr', null, ['Branch', 'Income', 'Expense', 'Profit', 'Margin', 'Jobs', 'Profit per job', 'Share of profit', 'Jobs with cost booked'].map((x, k) => h('th', {class: k ? 'n' : ''}, x)))), h('tbody', null, trs)))), 'full'),
-    card('New Globe against Neutral Consolidation', 'Profit by branch. Click a bar to filter to that company and branch.', chart), card('Branch by line of business', 'Profit in each combination. Click a cell to filter.', heat)));
+      h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, h('thead', null, h('tr', null, ['Branch', 'Income', 'Expense', 'Profit', 'Margin', 'Jobs', 'Profit per job', 'Share of profit', 'Jobs with cost booked'].map((x, k) => h('th', {class: k ? 'n' : ''}, x)))), h('tbody', null, trs)))), 'full', {metric:'profit.gp',dimension:'branch'}),
+    card('New Globe against Neutral Consolidation', 'Profit by branch. Click a bar to filter to that company and branch.', chart, null, {metric:'profit.gp',dimension:'branch'}), card('Branch by line of business', 'Profit in each combination. Click a cell to filter.', heat, null, {metric:'profit.gp',dimension:'branch'})));
 }
 function ppCustomers() {
   const m = maskP({skip: 'customer'}), rows = groupByP('customer', m), sel = S.sel.customer || new Set(), tot = d3.sum(rows, (r) => r.profit), st = S.pcust;
@@ -1294,7 +1300,7 @@ function ppExplorer() {
       .concat(list.map((r, i) => { const x = i + 2; return [r.label, {v: +r.inc.toFixed(2), s: 3}, {v: +r.exp.toFixed(2), s: 3}, {f: 'B' + x + '-C' + x, s: 3}, {f: 'IF(B' + x + '<=0,"",D' + x + '/B' + x + ')', s: 2}, {v: r.jobs, s: 3}, {f: 'IF(F' + x + '=0,"",D' + x + '/F' + x + ')', s: 3}, {f: 'IF(SUM(D$2:D$' + n + ')=0,"",D' + x + '/SUM(D$2:D$' + n + '))', s: 2}, {v: +r.airT.toFixed(3), s: 4}, {v: +r.airP.toFixed(2), s: 3}, {f: 'IF(I' + x + '=0,"",J' + x + '/I' + x + ')', s: 3}, {v: Math.round(r.seaT), s: 3}, {v: +r.seaP.toFixed(2), s: 3}, {f: 'IF(L' + x + '=0,"",M' + x + '/L' + x + ')', s: 3}]; }))
       .concat([[HDR('Total'), {f: 'SUM(B2:B' + n + ')', s: 3}, {f: 'SUM(C2:C' + n + ')', s: 3}, {f: 'SUM(D2:D' + n + ')', s: 3}, {f: 'IF(B' + tr + '<=0,"",D' + tr + '/B' + tr + ')', s: 2}, {f: 'SUM(F2:F' + n + ')', s: 3}]])}, settingsSheet([[HDR('Rows by'), d.l]])]); };
   root.append(h('div', {class: 'grid'}, card('Top ' + S.def.topN + ' by ' + S.rank, 'Ranked by ' + S.rank + '. Click a bar to filter everything.', prankList(rows, (r) => toggle(key, r.g), (r) => sel.has(r.g), {color: '#4c78a8'}), null, {metric: profitRankMetric(), dimension: key}),
-    card('All rows', 'Profit per air tonne and per sea TEU use only jobs matched to the register: air by chargeable tonnes, sea by TEUs (full-container loads).', h('div', null, h('div', {class: 'frow'}, dlButton('Download Excel', exportE)), note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody))), 'full')));
+    card('All rows', 'Profit per air tonne and per sea TEU use only jobs matched to the register: air by chargeable tonnes, sea by TEUs (full-container loads).', h('div', null, h('div', {class: 'frow'}, dlButton('Download Excel', exportE)), note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody))), 'full', {metric:'profit.gp',dimension:key})));
   return root;
 }
 // ================================================================ profit data status (with the register join)
