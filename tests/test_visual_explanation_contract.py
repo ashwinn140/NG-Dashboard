@@ -52,6 +52,13 @@ class VisualExplanationContract(unittest.TestCase):
         self.assertIn("businessMeaning(label, note)); };", APP)
         self.assertIn("businessMeaning(label, 'Current versus previous reporting period')); };", APP)
 
+    def test_shipment_formula_does_not_capture_invoice_metric(self):
+        self.assertIn('/^(shipments|air export shipments|sea export shipments|air import shipments|sea import shipments)$/', APP)
+        self.assertNotIn('/shipments|shipment count/.test(lower)', APP)
+
+    def test_weight_explanation_mentions_display_unit(self):
+        self.assertIn('converted to the displayed weight unit', APP)
+
     def test_no_demo_rows_generated(self):
         self.assertIn("const DEMO_KEEP = [0, 0.86, 0.72], demoSrc = [], demoK = []", APP)
 
