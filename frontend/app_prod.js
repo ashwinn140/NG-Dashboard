@@ -911,7 +911,7 @@ function pageCompare() {
     if (S.def.varMinPct > 0 && r.pct != null && Math.abs(r.pct) * 100 < S.def.varMinPct) return false; return true; };
   const rowsF = all.filter(passes), onPick = (d) => toggle(key, d.j);
   const gain = all.filter((r) => r.delta > 0).sort((a, b) => b.delta - a.delta).slice(0, S.def.topN), lose = all.filter((r) => r.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, S.def.topN);
-  root.append(h('div', {class: 'grid', style: 'margin-bottom:.9rem'}, card('Biggest increases by ' + COLS[key].l.toLowerCase(), 'What added most to the total. Click to filter everything.', deltaRows(gain, onPick, info)), card('Biggest decreases by ' + COLS[key].l.toLowerCase(), 'What took most away from the total. Click to filter everything.', deltaRows(lose, onPick, info))));
+  root.append(h('div', {class: 'grid', style: 'margin-bottom:.9rem'}, card('Biggest increases by ' + COLS[key].l.toLowerCase(), 'What added most to the total. Click to filter everything.', deltaRows(gain, onPick, info), null, {metric: opsVisualMetric(), dimension: key}), card('Biggest decreases by ' + COLS[key].l.toLowerCase(), 'What took most away from the total. Click to filter everything.', deltaRows(lose, onPick, info), null, {metric: opsVisualMetric(), dimension: key})));
 
   const dimSel = sel(cmpDims().map((k) => [k, COLS[k].l]), key, (v) => { c.dim = v; renderAll(); });
   const showSel = sel([['all', 'All changes'], ['up', 'Increases only'], ['down', 'Decreases only'], ['new', 'New only'], ['lost', 'Lost only']], c.show, (v) => { c.show = v; renderAll(); });
@@ -934,7 +934,7 @@ function pageCompare() {
   // Settings sheet rows: 1 as-of, 2 exported, 3 filters, 4 comparison, 5 current, 6 previous, 7 flat percent (read by the Trend formula)
   root.append(card('Variance by ' + COLS[key].l.toLowerCase(), 'Current against previous, in value and in percent.', h('div', null,
     h('div', {class: 'frow'}, h('label', {class: 'f'}, h('span', null, 'Rows by'), dimSel), h('label', {class: 'f'}, h('span', null, 'Show'), showSel), num('varMinPct', 'Change at least (%)', 'Hide rows whose percentage change is smaller than this. 0 shows all.'), num('varMinAbs', 'Change at least (value)', 'Hide rows whose change in value is smaller than this.'), num('varMinBase', 'Previous at least', 'Hide rows whose previous value is below this, so tiny bases do not give huge percentages.'), dlButton('Download Excel', exportXlsx, why)),
-    note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody))), 'full'));
+    note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody))), 'full', {metric: opsVisualMetric(), dimension: key}));
   root.append(h('p', {class: 'ng-foot', style: 'font-size:.78rem;color:var(--muted)'}, 'Percent change is the change divided by the previous value. Items with nothing in the previous period are shown as New, and items with nothing now as Lost, instead of an infinite percentage. Like for like (to date) compares the same number of elapsed days in each period.'));
   return root;
 }
