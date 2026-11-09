@@ -5,6 +5,7 @@ on:
       - 'app/phase2_*.py'
       - 'app/server.py'
       - 'app/web/opportunities.html'
+      - 'app/web/admin.html'
       - 'tests/test_phase2_*.py'
       - '.github/workflows/phase2-tests.yml'
   workflow_dispatch:
