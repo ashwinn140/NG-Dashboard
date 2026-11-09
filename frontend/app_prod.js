@@ -348,6 +348,7 @@ function traceExplanation(trace,title) {
    title==='Branch by line of business'?'Groups JPR job-summary income and expense by both Branch and Line of Business; profit is income minus expense. Select a heat-map cell to apply both dimensions, then open records for that exact intersection.':
    title==='New Globe against Neutral Consolidation'?'Groups booked gross profit by Branch and Company. The chart compares New Globe and Neutral Consolidation separately; select a bar to filter to that company and branch before opening the contributing jobs.':
    title==='All rows'?'Lists JPR job-summary records for the finance columns in this combined scorecard. Income, expense, profit, margin and job counts come from JPR by Job Date; shipment, volume and operational-lock columns are sourced separately and are not part of this finance evidence export.':
+   title==='Estimated against actual'?'Shows only JPR jobs uniquely matched to air-export shipment-register rows with usable buy and sell rates. Estimated freight margin is (Sell Rate − Buy Rate) × chargeable weight; actual profit is JPR income minus JPR expense across all job charges. Difference is actual job profit less estimated freight-only margin; these measures are not like-for-like.':
    m==='profit.gp'?'Sums Income less Expense (INR) across eligible Job Profit Analysis rows.':
    m==='profit.income'?'Sums Income (INR) across eligible Job Profit Analysis rows.':
    m==='profit.expense'?'Sums Expense (INR) across eligible Job Profit Analysis rows.':
