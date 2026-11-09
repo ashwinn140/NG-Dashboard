@@ -30,6 +30,12 @@ const requiredCards=['Trend','Top '+n.S.def.topN+' customers','Top '+n.S.def.top
 const buttons=[...w.document.querySelectorAll('#page .card button')].filter(b=>b.textContent.trim()==='Calculation & records');
 const byTitle=new Map(buttons.map(b=>[b.closest('.card')?.querySelector('h2')?.textContent.trim(),b]));
 for(const title of requiredCards)assert.ok(byTitle.has(title),'supported operational visual exposes explicit reconciliation: '+title);
+assert.ok(!byTitle.has('The two companies'),'company split has no unsupported single-metric action');
+assert.ok(!byTitle.has('Income against margin'),'scatter with multiple measures has no misleading single-metric action');
+const trend=byTitle.get('Trend');assert.ok(trend,'trend has an explicit evidence action');
+let trendPayload=null;w.NG.traceVisual('ops.shipments',null,'Trend');trendPayload=w.NG.traceVisual('ops.shipments',null,'Trend');
+assert.equal(trendPayload.displayed_value,n.opsFacts(n.mask()).n,'trend evidence total equals its selected shipment scope');
+
 let opened=null;w.MetricTrace={openWithRequest:q=>{opened=q;}};
 byTitle.get('Top '+n.S.def.topN+' customers').click();
 assert.equal(opened.metric,'ops.shipments');assert.equal(opened.context.segment.value,n.COLS.customer.d[n.COLS.customer.c[0]],'single selected customer gets item-level evidence');
