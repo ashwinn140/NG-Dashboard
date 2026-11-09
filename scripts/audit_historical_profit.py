@@ -42,9 +42,17 @@ def inspect(root: Path, year: int) -> dict:
                 if report.range_from is not None and report.range_to is not None:
                     continue
             issues = validate_profit(report)
+            # A report spanning calendar years must not be mistaken for
+            # a report containing only the requested year's jobs.
+            import pandas as pd
+            dates = pd.to_datetime(report.df.get("Job Date"), errors="coerce")
+            year_mask = dates.dt.year.eq(year)
+            year_rows = report.df.loc[year_mask]
             amounts = {}
+            year_amounts = {}
             for column in ("Income (INR)", "Expense (INR)", "Profit (INR)"):
                 amounts[column] = round(float(report.df[column].sum()), 2) if column in report.df else None
+                year_amounts[column] = round(float(year_rows[column].sum()), 2) if column in year_rows else None
             results.append({
                 "file": str(path.relative_to(root)),
                 "sha256": _hash_file(path),
@@ -53,7 +61,10 @@ def inspect(root: Path, year: int) -> dict:
                 "range_from": report.range_from.isoformat() if report.range_from else None,
                 "range_to": report.range_to.isoformat() if report.range_to else None,
                 "jobs": len(report.df),
+                "jobs_in_requested_year": len(year_rows),
                 "totals": amounts,
+                "totals_in_requested_year": year_amounts,
+                "requires_period_split": len(year_rows) != len(report.df),
                 "validation_issues": issues,
                 "eligible_for_manual_review": not issues,
             })
