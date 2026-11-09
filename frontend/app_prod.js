@@ -318,7 +318,7 @@ function traceExplanation(trace,title) {
   return ['Shows '+measure+' for the visual and active filters.',caveat+' '+grouping+' The drawer lists the exact contributing source rows for the selected reporting scope.'];
  }
  const specialOps={ 'ops.locked_no_invoice':['Locked shipments without an invoice','Counts only shipment-register records with an operations lock date and zero invoice references. The metric uses the latest loaded register state and ignores the dashboard Shipment Date range; active company, LOB and other scope filters still apply.'] };
- if(specialOps[m])return [specialOps[m][0],specialOps[m][1]+' The drawer returns only the exact locked, uninvoiced source records.'];
+ if(specialOps[m]){const dim=k&&COLS[k]?COLS[k].l.toLowerCase():null;return [specialOps[m][0],specialOps[m][1]+(dim?' The visual groups qualifying records by '+dim+'.':'')+' The drawer returns only the exact locked, uninvoiced source records.'];}
  const rateOps={
   'ops.rate_below_buy':['Air-export shipments priced below buy','Counts air-export records with usable buy and sell rates where Sell Rate is below Buy Rate; rate parsing and maximum-rate rules follow Definitions.'],
   'ops.rate_margin':['Estimated air-export freight margin','Sums (Sell Rate − Buy Rate) × Chargeable Weight for air-export records with usable rates. This is estimated freight margin, not booked job profit.'],
