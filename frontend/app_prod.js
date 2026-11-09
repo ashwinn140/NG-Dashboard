@@ -312,6 +312,7 @@ function traceExplanation(trace,title) {
  const ops={
   'ops.shipments':'shipment records','ops.air_weight':'air chargeable weight (tonnes)','ops.teu':'ocean TEUs',
   'ops.invoiced_count':'shipments invoiced by first invoice date','ops.invoiced_share':'shipment-register rows with invoice references','ops.invoice_lag':'invoiced shipments with a parsed first invoice date',
+  'ops.waiting_lock':'shipments awaiting operations lock','ops.financials_open':'operations-locked shipments awaiting financial lock','ops.old_open':'open shipments beyond the configured age limit','ops.oldest_open':'age of the oldest open shipment','ops.lock_lag':'days between operations and financial lock',
   'ops.lock_invoice_lag':'operations-locked shipments with a parsed first invoice date','ops.locked_no_invoice':'operations-locked shipments with no invoice reference',
   'ops.overdue_invoice':'operations-locked shipments with no invoice reference beyond the configured ageing threshold'
  };
@@ -324,6 +325,11 @@ function traceExplanation(trace,title) {
    'ops.air_weight':'Sums Chargeable Wt for air export and import records, expressed in tonnes.',
    'ops.teu':'Sums recorded TEUs for ocean export and import records.',
    'ops.invoiced_share':'Invoice reference means a parsed invoice in either Invoice No. & Date or Billing Details; it does not prove accounting settlement.',
+   'ops.waiting_lock':'Counts shipments whose operations-lock stage is still pending; uses all shipment dates.',
+   'ops.financials_open':'Counts shipments with operations locked but financials not yet locked; uses all shipment dates.',
+   'ops.old_open':'Counts shipments not fully closed whose age from Shipment Date exceeds the configured old-shipment threshold.',
+   'ops.oldest_open':'Maximum days since Shipment Date among shipments not fully closed.',
+   'ops.lock_lag':'Averages Financials Locked On minus Operations Locked On where both lock dates are present.',
    'ops.invoice_lag':'Averages first parsed invoice date minus Shipment Date for rows with an invoice reference and parsed date.',
    'ops.lock_invoice_lag':'Averages first parsed invoice date minus Operations Locked On for rows with both dates.',
    'ops.locked_no_invoice':'Counts rows with an Operations Locked On date and zero invoice references. The billing panel intentionally ignores the shipment-date filter for this all-open-work measure.',
@@ -602,6 +608,7 @@ function pageLanes() {
 function pageOps() {
   const M = mask({dates: 'none'}), st = COLS.stage.c, open = [];
   for (let i = 0; i < N; i++) if (M[i] && st[i] !== COLS.stage.d.indexOf('Closed')) open.push(i);
+  const withEvidence=(node,metric,label)=>{node.append(h('button',{type:'button',class:'mt-info','data-trace-metric':metric,title:'Inspect calculation and contributing records: '+label,onclick:(e)=>{e.stopPropagation();const q=window.NG?.traceVisual?.(metric,null,label);if(q)window.MetricTrace?.openWithRequest(q);}},'Calculation & records'));return node;};
   const age = (i) => OPS_MAX - date[i], pend = open.filter((i) => st[i] === STAGE_PEND).length, fin = open.filter((i) => st[i] === STAGE_FIN).length, old = open.filter((i) => age(i) > S.def.oldDays).length, oldest = open.reduce((m, i) => Math.max(m, age(i)), 0);
   const bl = bucketList(), buckets = []; { let lo = 0; bl.forEach((b) => { buckets.push([lo, b, lo + '–' + b + ' days']); lo = b + 1; }); buckets.push([lo, 1e9, 'Over ' + bl[bl.length - 1] + ' days']); }
   const bd = buckets.map(([lo, hi, l]) => { let p = 0, f = 0; open.forEach((i) => { const a = age(i); if (a >= lo && a <= hi) { if (st[i] === STAGE_PEND) p++; else f++; } }); return {l, p, f}; });
@@ -630,7 +637,7 @@ function pageOps() {
   q.addEventListener('input', () => { S.wl.q = q.value; draw(); }); draw();
   return h('div', null, h('p', {class: 'take'}, fInt(pend) + ' shipments still wait for an operations lock and ' + fInt(fin) + ' have operations locked but financials open; ' + fInt(old) + ' of these ' + fInt(pend + fin) + ' are more than ' + S.def.oldDays + ' days old.'),
     h('p', {class: 'meta'}, 'An open shipment has a blank operations lock or financials lock in the register. This page ignores the date range and follows every other filter. Age counts days from the shipment date to the latest shipment-register date, ' + fDay(OPS_MAX) + '.'),
-    h('div', {class: 'kpis'}, kpi('Waiting for operations lock', fInt(pend), null, 'Operations not locked yet'), kpi('Operations locked, financials open', fInt(fin), null, 'Financials not locked yet'), kpi('Open more than ' + S.def.oldDays + ' days', fInt(old), null, 'Either stage, from shipment date', undefined, undefined, ['Shows how many open shipments have been waiting longer than the age limit, currently {oldDays} days.', 'Counts shipments that are not fully closed (blank operations lock or blank financials lock) whose days from Shipment Date to the latest shipment-register date exceed the age limit, currently {oldDays} days (adjustable under Definitions; the default is 90). The shipment-date range is ignored.']), kpi('Oldest open shipment (days)', fInt(oldest), null, 'Days since shipment date'), kpi('Days from ops lock to financial lock', opsFacts(M).lag == null ? '–' : opsFacts(M).lag.toFixed(1), null, 'Average, where both are recorded')),
+    h('div', {class: 'kpis'}, withEvidence(kpi('Waiting for operations lock', fInt(pend), null, 'Operations not locked yet'),'ops.waiting_lock','Waiting for operations lock'), withEvidence(kpi('Operations locked, financials open', fInt(fin), null, 'Financials not locked yet'),'ops.financials_open','Operations locked, financials open'), withEvidence(kpi('Open more than ' + S.def.oldDays + ' days', fInt(old), null, 'Either stage, from shipment date', undefined, undefined, ['Shows how many open shipments have been waiting longer than the age limit, currently {oldDays} days.', 'Counts shipments that are not fully closed (blank operations lock or blank financials lock) whose days from Shipment Date to the latest shipment-register date exceed the age limit, currently {oldDays} days (adjustable under Definitions; the default is 90). The shipment-date range is ignored.']),'ops.old_open','Open more than '+S.def.oldDays+' days'), withEvidence(kpi('Oldest open shipment (days)', fInt(oldest), null, 'Days since shipment date'),'ops.oldest_open','Oldest open shipment'), withEvidence(kpi('Days from ops lock to financial lock', opsFacts(M).lag == null ? '–' : opsFacts(M).lag.toFixed(1), null, 'Average, where both are recorded'),'ops.lock_lag','Days from ops lock to financial lock')),
     h('div', {class: 'grid'}, card('How long shipments have been open', 'Open shipments by days since shipment date.', aging, null, openTrace), card('Open shipments by job owner', 'Click an owner to filter everything below.', otbl, null, openTrace),
       card('Worklist', null, h('div', null, h('div', {class: 'frow'}, q, h('div', {class: 'segs'}, stBtn('', 'All open'), stBtn('Pending ops lock', 'Waiting for ops lock'), stBtn('Financials open', 'Financials open')), dlButton('Download Excel', exportWl)), note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody))), 'full', openTrace)));
 }
