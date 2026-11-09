@@ -283,7 +283,7 @@ function businessMeaning(label, note, metricExplanation) {
   const key = name.toLowerCase().replace(/^top \d+ /, 'top n ').replace(/^variance by .+$/, 'variance by dimension')
     .replace(/^biggest (increases|decreases) by .+$/, 'biggest $1 by dimension').replace(/^period by period: .+$/, 'period by period: measure')
     .replace(/^variance: (?!change in value|shipments invoiced|estimated freight).+$/, 'variance: period comparison');
-  const verified = metricExplanation || VERIFIED_METRIC_EXPLANATIONS[S.group + '|' + key] || VERIFIED_METRIC_EXPLANATIONS[key];
+  const verified = VERIFIED_METRIC_EXPLANATIONS[S.group + '|' + key] || metricExplanation || VERIFIED_METRIC_EXPLANATIONS[key];
   const fill = (t) => String(t).replace(/\{lowMargin\}/g, S.def.lowMargin).replace(/\{oldDays\}/g, S.def.oldDays).replace(/\{unbilledDays\}/g, S.def.unbilledDays).replace(/\{activeMin\}/g, S.def.activeMin).replace(/\{topN\}/g, S.def.topN).replace(/\{tableRows\}/g, S.def.tableRows).replace(/\{autoDays\}/g, S.def.autoDays).replace(/\{wlRows\}/g, S.def.wlRows);
   const meaning = verified ? fill(verified[0]) : 'Shows ' + name.toLowerCase() + ' for the selected reporting scope.';
   const calculation = verified ? fill(verified[1]) : 'Calculation not yet verified against this visual\'s implemented data aggregation. Do not rely on a title-based formula.';
