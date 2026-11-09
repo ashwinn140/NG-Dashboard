@@ -60,20 +60,20 @@ def build_recent_jobs(rows, lobs=None, limit=5):
                 "company": company, "job_no": job_no, "job_date": job_date,
                 "lob": lob, "customer": customer, "owners": set([owner] if owner else []),
             }
-        elif owner:
-            item["owners"].add(owner)
+        else:
+            item["owners"].add(owner if owner else None)
 
     result = []
     for item in grouped.values():
         owners = item.pop("owners")
-        owner = next(iter(owners)) if len(owners) == 1 else ""
+        owner = next(iter(owners)) if len(owners) == 1 else None
         result.append({
             "company": item["company"],
             "job_no": item["job_no"],
             "job_date": item["job_date"],
             "lob": item["lob"],
             "job_owner": owner or "Owner unavailable",
-            "owner_status": "available" if len(owners) == 1 else "conflicting" if len(owners) > 1 else "missing",
+            "owner_status": "available" if len(owners) == 1 and owner else "conflicting" if len(owners) > 1 else "missing",
         })
     result.sort(key=lambda item: (
         item["job_date"], item["job_no"].casefold(),
