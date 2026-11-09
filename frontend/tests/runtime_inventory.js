@@ -49,10 +49,12 @@ console.log(JSON.stringify({role_page_visual_instances:rows.length,unique_page_t
  with_table:u.filter(r=>r.tables).length,with_chart:u.filter(r=>r.charts).length,
  with_reconciliation_action:u.filter(r=>r.has_reconciliation_action).length,
  without_reconciliation_action:u.filter(r=>!r.has_reconciliation_action).length,
+ reconciliation_action_with_unverified_calculation:u.filter(r=>r.has_reconciliation_action&&!r.calc_verified).length,
  no_explanation_block:u.filter(r=>!r.has_explanation).length,
  explanation_but_calc_unverified:u.filter(r=>r.has_explanation&&!r.calc_verified).length,
  calc_verified:u.filter(r=>r.calc_verified).length,
  registered_pages_not_visited:[...unvisited],errors:Object.keys(errors)},null,1));
+if(u.some(r=>r.has_reconciliation_action&&!r.calc_verified))throw Error('A reconciliation action is attached to a visual with an unverified calculation.');
 if(Object.keys(errors).length)throw Error('Runtime visual inventory found browser errors: '+JSON.stringify(errors));
 if(unvisited.size)throw Error('Runtime visual inventory did not visit registered pages: '+[...unvisited].join(', '));
 })().catch(e=>{console.error(e);process.exit(1)});
