@@ -371,7 +371,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         Owner/job identity only; no income, expense or profit values. Company
         and LOB scope are checked again on the server for every request.
         """
-        from .customer_history import build_recent_jobs
+        from .customer_history import build_recent_jobs, build_last_shipment_owners
         raw = await request.body()
         if len(raw) > 1_000_000: raise HTTPException(413, "Selection too large.")
         try:
@@ -419,6 +419,15 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                 for name, companies, _ in normalized:
                     if any((company, name.casefold()) not in visible for company in companies):
                         raise PermissionError("The customer is outside your visible operational scope for one or more selected companies.")
+                shipment_rows = conn.execute(select(
+                    shipments.c.company, shipments.c.report_type, shipments.c.shipment_no,
+                    shipments.c.shipment_date, shipments.c.customer
+                ).where(
+                    shipments.c.company.in_(sorted(all_companies)),
+                    shipments.c.report_type.in_(visible_report_types),
+                    shipments.c.to_import.is_(None),
+                    func.lower(func.trim(shipments.c.customer)).in_(sorted(all_names))
+                ).order_by(shipments.c.shipment_date.desc(), shipments.c.id.desc())).mappings().all()
                 source_rows = conn.execute(select(
                     profit_lines.c.id, profit_lines.c.company, profit_lines.c.job_no,
                     profit_lines.c.job_date, profit_lines.c.lob, profit_lines.c.customer,
@@ -432,12 +441,26 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             for row in source_rows:
                 key = " ".join(str(row["customer"] or "").split()).casefold()
                 by_customer.setdefault(key, []).append(dict(row))
+            shipments_by_customer = {}
+            for row in shipment_rows:
+                key = " ".join(str(row["customer"] or "").split()).casefold()
+                shipments_by_customer.setdefault(key, []).append(dict(row))
             histories = []
             for name, companies, lobs in normalized:
                 key = name.strip().casefold()
                 rows = [row for row in by_customer.get(key, []) if row["company"] in companies]
+                visible_shipments = [row for row in shipments_by_customer.get(key, []) if row["company"] in companies]
                 jobs = build_recent_jobs(rows, lobs=lobs, limit=5)
-                histories.append({"customer": name, "jobs": jobs, "job_count_returned": len(jobs)})
+                last_owner = build_last_shipment_owners(visible_shipments, rows, lobs=lobs).get(key)
+                histories.append({
+                    "customer": name,
+                    "jobs": jobs,
+                    "job_count_returned": len(jobs),
+                    "last_shipment_job_owner": last_owner["last_shipment_job_owner"] if last_owner else "No shipment record",
+                    "last_shipment_owner_status": last_owner["last_shipment_owner_status"] if last_owner else "no_shipment",
+                    "last_shipment_date": last_owner["last_shipment_date"] if last_owner else None,
+                    "last_shipment_numbers": last_owner["last_shipment_numbers"] if last_owner else [],
+                })
             return {"histories": histories, "basis": "Job Date", "source": "Current Job Profit Analysis Report"}
         except PermissionError as e:
             raise HTTPException(403, str(e))
