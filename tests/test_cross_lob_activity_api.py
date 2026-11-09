@@ -109,7 +109,7 @@ class CrossLobActivityApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         customer = response.json()["customers"][0]
         signal = customer["selected_lob_activity"]
-        self.assertEqual(signal["classification"], "inactive_in_selected_lob_active_elsewhere")
+        self.assertEqual(signal["classification"], "inactive_in_selected_lob_active_elsewhere", repr(signal))
         self.assertEqual(signal["active_elsewhere_lobs"], ["OI"])
         self.assertFalse(signal["company_wide_verified"])
         self.assertEqual(customer["identity_basis"], "exact source customer name, case/whitespace normalized")
@@ -124,7 +124,7 @@ class CrossLobActivityApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         customer = response.json()["customers"][0]
         signal = customer["selected_lob_activity"]
-        self.assertEqual(signal["classification"], "inactive_in_selected_lob_no_other_visible_activity")
+        self.assertEqual(signal["classification"], "inactive_in_selected_lob_no_other_visible_activity", repr(signal))
         self.assertEqual(signal["visible_lobs"], ["AE"])
         self.assertEqual(signal["active_elsewhere_lobs"], [])
         self.assertFalse(signal["company_wide_verified"])
