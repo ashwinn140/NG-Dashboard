@@ -167,7 +167,14 @@ const VERIFIED_METRIC_EXPLANATIONS = Object.freeze({
   'margin': ['Shows the share of recorded income retained as profit.', 'Divides selected job-summary Profit by Income and multiplies by 100; unavailable when Income is zero.'],
   'jobs': ['Shows how many job-summary records contribute to the metric.', 'Counts selected job-summary records after the active job-date and other filters.'],
   'profit per job': ['Shows average booked profit per selected job.', 'Divides selected total job-summary Profit by the selected job count, where the count is non-zero.'],
-  'shipments': ['Shows the number of shipment-register records in scope.', 'Counts selected shipment-register rows after the active shipment-date and other filters.']
+  'shipments': ['Shows the number of shipment-register records in scope.', 'Counts selected shipment-register rows after the active shipment-date and other filters.'],
+  'air chargeable weight (tonnes)': ['Shows total chargeable airfreight weight for the selected shipments.', 'Adds chargeable weight from selected air shipment-register records, in tonnes.'],
+  'sea teus': ['Shows total container volume in twenty-foot-equivalent units.', 'Adds TEUs from selected ocean shipment-register records; the displayed total is rounded to a whole TEU.'],
+  'active customers': ['Shows customers with sufficient shipment activity in the selected period.', 'Counts distinct selected customers with at least the configured minimum number of shipment records.'],
+  'jobs with cost booked': ['Shows what share of selected jobs have booked costs.', 'Divides jobs with booked expenses by all selected jobs, multiplied by 100; unavailable if no jobs are selected.'],
+  'profit after expected costs': ['Shows an estimated profit after allowing for costs not yet booked.', 'Subtracts estimated missing costs from currently booked profit. Missing costs are estimated using cost-to-income ratios from jobs with booked costs; this is an estimate, not actual booked profit.'],
+  'shipments invoiced': ['Shows the proportion of selected shipments with an invoice.', 'Divides selected shipments identified as invoiced by all selected shipments, multiplied by 100.'],
+  'jobs matched to the register': ['Shows the share of selected jobs linked to shipment-register entries.', 'Divides jobs matched to a shipment-register record by jobs considered for matching, multiplied by 100; customs-clearance and road jobs may have no register entry.']
 });
 function businessMeaning(label, note) {
   const name = String(label || '').trim();
