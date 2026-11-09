@@ -27,6 +27,12 @@ class VisualExplanationContract(unittest.TestCase):
         self.assertIn("reportingWindow.pfrom", APP)
         self.assertIn("reportingWindow.pto", APP)
 
+    def test_dashboard_period_is_not_claimed_as_visual_certification(self):
+        self.assertIn("dashboard comparison: off", APP)
+        self.assertIn("Date basis: ", APP)
+        self.assertIn("not certification of a visual-specific date", APP)
+        self.assertIn("hasDashboardComparison", APP)
+
     def test_exact_metric_registry_and_conservative_fallback(self):
         self.assertIn("VERIFIED_METRIC_EXPLANATIONS", APP)
         self.assertIn("Calculation not yet verified against this visual", APP)
