@@ -5,7 +5,7 @@ on:
     branches:
       - audit/followup-patch-release-2026-11-09
     paths:
-      - 'release/audit-patch-03.b64'
+      - 'release/audit-patch-04.b64'
 
 permissions:
   contents: write
