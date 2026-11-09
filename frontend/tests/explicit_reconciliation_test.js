@@ -1,0 +1,18 @@
+const fs=require('node:fs'),assert=require('node:assert/strict');
+const app=fs.readFileSync('frontend/app_prod.js','utf8'),trace=fs.readFileSync('app/web/metric_trace.js','utf8');
+assert.doesNotMatch(app,/MetricTrace\?\.(?:open|openCategory)\s*\(/,'ordinary KPI, rank and chart handlers must not call the reconciliation drawer');
+assert.doesNotMatch(app,/sp\.inspect\?\./,'custom visual points must not open reconciliation implicitly');
+assert.match(app,/function selectVisualSegment\(/,'custom visual points retain a selection interaction');
+assert.match(app,/next\[cfg\.dim\]=new Set\(\[res\.keys\[row\]\]\)/,'custom visual category selection applies the corresponding dashboard filter');
+assert.match(app,/S\.from=from;S\.to=to/,'supported custom visual time buckets retain date zoom');
+assert.match(app,/sp\.select\?\./,'chart points route to their normal selection behavior');
+assert.match(app,/Calculation & records/,'explicit reconciliation action remains available');
+assert.match(trace,/b\.textContent='Calculation & records'/,'KPI audit action is explicit and clearly labeled');
+assert.doesNotMatch(trace,/value\.onclick|value\.onkeydown/,'KPI values must not be assigned implicit drawer handlers');
+assert.doesNotMatch(trace,/openCategory:/,'category filter interactions cannot expose a drawer entry point');
+assert.doesNotMatch(trace,/window\.MetricTrace=\{[^}]*\bopen[,}:]/,'generic open method is not exposed to ordinary dashboard handlers');
+assert.match(trace,/aria-modal="true"/,'drawer retains modal semantics');
+assert.match(trace,/setBackgroundInert/,'background is inert while the drawer is open');
+assert.match(trace,/addEventListener\('keydown'/,'drawer supports keyboard focus handling');
+assert.match(trace,/@media\(max-width:600px\)/,'drawer has a full-screen mobile layout');
+console.log('PASS explicit-only interaction contract: ordinary handlers cannot open reconciliation; custom visuals filter/zoom; explicit audit controls and accessible drawer remain.');

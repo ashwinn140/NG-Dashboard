@@ -35,4 +35,5 @@ jobs:
           node frontend/tests/customer360_test.js
           node frontend/tests/metric_trace_test.js
           node frontend/tests/metric_drawer_test.js
+          node frontend/tests/explicit_reconciliation_test.js
           node frontend/tests/visual_trace_test.js
