@@ -534,3 +534,16 @@ The integrated HTML Help/User Guide is now complete enough for the first product
 - PR #37 (`feature/profit-compare-evidence-2026-11-09`) is open and not deployed. It corrects the Profit Compare evidence period-state mismatch, adds evidence actions to four Profit Compare visuals, verifies the seven previously unverified finance explanations, and corrects margin-band labels with edge tests. Latest CI run `42658738004` is queued after the first run caught a missing sort-state fixture in the new test; the fixture was corrected without changing product behavior.
 - The post-PR #34 artifact is now an historical baseline for explanation coverage; PR #35/#36 add five evidence actions. Regenerate the runtime inventory after PR #37 is merged/deployed before stating the new action-coverage counts.
 - The deployed source contract remains the simple job-level JPR, one row per job, Job Date. No Chargewise/charge-wise code or data source has been introduced.
+
+
+## Post-PR #37 visual inventory — full CI result
+
+- Workflow `42658738004` completed SUCCESS on PR #37 and generated artifact `ng-dashboard-visual-inventory` (artifact ID `13693871273`).
+- 414 role/page instances; 408 unique role/page/title entries; zero runtime errors; zero registered pages unvisited.
+- 379 role/page entries have explanations and all 379 are calculation-verified. The earlier 14 unverified entries are now zero.
+- The 35 role/page entries without explanations reduce to 16 shared wrapper/builder definitions (untitled containers and Build a visual); none is a missing business calculation.
+- Across 176 distinct group/page/kind/title definitions, 160 are substantive business visuals and all 160 now have verified explanations. The other 16 are wrappers/builders.
+- 117 of 160 substantive visuals expose Calculation & records. The remaining 43 must be classified individually; some are status/metadata cards, multi-measure/multi-source visuals, or already detailed record tables and should not receive an inaccurate single-metric action.
+- PR #35 and #36 added five actions (Operations Compare Running total/Period by period; Summary Top N customers/sales people/branches). PR #37 added four actions (Profit Compare Period by period, Biggest increases/decreases, Variance by branch) and fixed Profit Compare trace periods to use `S.pcmp` rather than Operations `S.cmp`.
+- PR #37 also completed verified explanations for all seven formerly unverified finance visuals and corrected margin-band labels for the actual rounding and negative-expense (>100% margin) behavior.
+- Next targeted candidates are one-measure compare cards and source-backed rankings. Do not add actions to mixed-source or dual-date visuals until the evidence request can represent all contributing measures/date bases accurately.
