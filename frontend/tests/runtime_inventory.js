@@ -15,7 +15,7 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 for(const role of ['admin','ops','finance']){
  const data=JSON.parse(fs.readFileSync('/tmp/ng-fixture-'+role+'.json','utf8')),errs=[],vc=new VirtualConsole();
  vc.on('jsdomError',e=>{if(!/navigation|CSS stylesheet/.test(e.message))errs.push(e.message)});
- const dom=new JSDOM(html,{url:'http://audit.test/',runScripts:'dangerously',pretendToBeVisual:true,virtualConsole:vc,beforeParse(w){w.SVGElement.prototype.getComputedTextLength=()=>30;w.Blob=global.Blob;w.URL.createObjectURL=()=>'blob:x';w.fetch=async u=>({ok:true,status:200,json:async()=>data,text:async()=>JSON.stringify(data),headers:{get:()=>null}});}});
+ const dom=new JSDOM(html,{url:'http://audit.test/',runScripts:'dangerously',pretendToBeVisual:true,virtualConsole:vc,beforeParse(w){w.matchMedia=()=>({matches:false,media:'',addListener(){},removeListener(){},addEventListener(){},removeEventListener(){},dispatchEvent(){return false}});w.scrollTo=()=>{};w.SVGElement.prototype.getComputedTextLength=()=>30;w.Blob=global.Blob;w.URL.createObjectURL=()=>'blob:x';w.fetch=async u=>({ok:true,status:200,json:async()=>data,text:async()=>JSON.stringify(data),headers:{get:()=>null}});}});
  const w=dom.window,d=w.document;for(let i=0;i<60&&!w.NG;i++)await sleep(100);
  if(!w.NG){errors[role]=['boot failed',...errs];continue}await sleep(200);w.eval(traceSrc);await sleep(50);const ng=w.NG;
  for(const [group,pages] of Object.entries(groups)){
@@ -53,4 +53,6 @@ console.log(JSON.stringify({role_page_visual_instances:rows.length,unique_page_t
  explanation_but_calc_unverified:u.filter(r=>r.has_explanation&&!r.calc_verified).length,
  calc_verified:u.filter(r=>r.calc_verified).length,
  registered_pages_not_visited:[...unvisited],errors:Object.keys(errors)},null,1));
+if(Object.keys(errors).length)throw Error('Runtime visual inventory found browser errors: '+JSON.stringify(errors));
+if(unvisited.size)throw Error('Runtime visual inventory did not visit registered pages: '+[...unvisited].join(', '));
 })().catch(e=>{console.error(e);process.exit(1)});
