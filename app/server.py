@@ -412,8 +412,8 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                     for company, customer in visible_rows
                 }
                 for name, companies, _ in normalized:
-                    if not any((company, name.casefold()) in visible for company in companies):
-                        raise PermissionError("The customer is outside your visible operational scope.")
+                    if any((company, name.casefold()) not in visible for company in companies):
+                        raise PermissionError("The customer is outside your visible operational scope for one or more selected companies.")
                 source_rows = conn.execute(select(
                     profit_lines.c.id, profit_lines.c.company, profit_lines.c.job_no,
                     profit_lines.c.job_date, profit_lines.c.lob, profit_lines.c.customer,
