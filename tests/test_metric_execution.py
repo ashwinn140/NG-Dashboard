@@ -79,7 +79,8 @@ class MetricExecutionTests(unittest.TestCase):
   d['user']['finance']=False
   r=X.execute(d,dict(metric='ops.locked_no_invoice',indices=[0]),M)
   self.assertEqual(r['records'][0]['jpr_match_status'],'not available in finance scope')
-  self.assertNotIn('matched_jpr_job_numbers',r['records'][0])
+  self.assertEqual(r['records'][0]['matched_jpr_job_count'],0)
+  self.assertEqual(r['records'][0]['matched_jpr_job_numbers'],'')
  def test_ops_does_not_include_money(self):
   r=X.execute(self.fixture(),dict(metric='ops.shipments',indices=[0,1]),M);self.assertEqual(r['current']['value'],2);self.assertNotIn('income',r['records'][0])
 if __name__=='__main__':unittest.main()
