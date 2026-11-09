@@ -12,8 +12,19 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.profit import is_profit_report, read_profit, validate_profit
+
+
+def _hash_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open('rb') as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def inspect(root: Path, year: int) -> dict:
@@ -36,7 +47,7 @@ def inspect(root: Path, year: int) -> dict:
                 amounts[column] = round(float(report.df[column].sum()), 2) if column in report.df else None
             results.append({
                 "file": str(path.relative_to(root)),
-                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                "sha256": _hash_file(path),
                 "company": report.company,
                 "basis": report.basis,
                 "range_from": report.range_from.isoformat() if report.range_from else None,
