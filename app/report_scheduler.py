@@ -276,3 +276,254 @@ def safe_excel_text(value):
     if isinstance(value, str) and value[:1] in ("=", "+", "-", "@", "\t", "\r"):
         return "'" + value
     return value
+
+# --------------------------------------------------------------------------- dataset -> workbook pilot
+from io import BytesIO
+from datetime import date as _date, timedelta as _timedelta
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.utils import get_column_letter
+
+EPOCH = _date(1970, 1, 1)
+MAX_EXPORT_ROWS = 100_000
+MAX_WORKBOOK_BYTES = 20 * 1024 * 1024
+
+
+def _day(value):
+    if value is None or value < 0:
+        return None
+    return EPOCH + _timedelta(days=int(value))
+
+
+def _column(D, key, index, profit=False):
+    entry = D.get("cols", {}).get(key)
+    if not entry:
+        return ""
+    codes = entry.get("pc" if profit else "c") or []
+    if index >= len(codes):
+        return ""
+    code = codes[index]
+    values = entry.get("d") or []
+    return values[code] if isinstance(code, int) and 0 <= code < len(values) else ""
+
+
+def _match_filters(row, filters):
+    for key, values in filters.items():
+        if values and str(row.get(key) or "").strip().casefold() not in {v.casefold() for v in values}:
+            return False
+    return True
+
+
+def _sort_rows(rows, definition):
+    key = definition["sort"]["field"]
+    reverse = definition["sort"]["direction"] == "desc"
+    return sorted(rows, key=lambda r: (r.get(key) is None, str(r.get(key) or "").casefold() if isinstance(r.get(key), str) else r.get(key)), reverse=reverse)
+
+
+def _shipment_rows(D, definition, start, end):
+    companies, lobs = set(definition["companies"]), set(definition["lobs"])
+    rows = []
+    for i, rep_index in enumerate(D.get("rep", [])):
+        company, lob = D["reps"][rep_index]
+        if company not in companies or lob not in lobs:
+            continue
+        shipment_date = _day(D["date"][i])
+        if shipment_date is None or not start <= shipment_date < end:
+            continue
+        mode = "Air" if lob.startswith("A") else "Ocean"
+        row = {
+            "company": company, "lob": lob, "shipment_no": D["no"][i],
+            "shipment_date": shipment_date,
+            "customer": _column(D, "customer", i),
+            "branch": _column(D, "branch", i),
+            "agent": _column(D, "agent", i),
+            "salesperson": _column(D, "x_salesperson", i) or _column(D, "salesperson", i),
+            "job_owner": _column(D, "job_owner", i),
+            "origin": _column(D, "origin", i),
+            "destination": _column(D, "destination", i),
+            "status": _column(D, "status", i),
+            "operations_locked_on": _day(D["ops"][i]),
+            "financials_locked_on": _day(D["fin"][i]),
+            "gross_weight_t": float(D["gross"][i] or 0),
+            "chargeable_weight_t": float(D["chg"][i] or 0),
+            "teus": float(D["teus"][i] or 0),
+            "volume_cbm": float(D["cbm"][i] or 0),
+            "_mode": mode,
+        }
+        if _match_filters(row, definition["filters"]):
+            rows.append(row)
+    return rows
+
+
+def _customer_rows(shipment_rows):
+    groups = {}
+    for r in shipment_rows:
+        key = (r["company"], r["customer"])
+        g = groups.setdefault(key, {
+            "company": r["company"], "customer": r["customer"], "shipments": 0,
+            "air_shipments": 0, "ocean_shipments": 0,
+            "air_chargeable_weight_t": 0.0, "ocean_teus": 0.0,
+            "lob_set": set(), "last_shipment_date": None,
+        })
+        g["shipments"] += 1
+        g["air_shipments"] += int(r["_mode"] == "Air")
+        g["ocean_shipments"] += int(r["_mode"] == "Ocean")
+        if r["_mode"] == "Air":
+            g["air_chargeable_weight_t"] += r["chargeable_weight_t"]
+        else:
+            g["ocean_teus"] += r["teus"]
+        g["lob_set"].add(r["lob"])
+        if g["last_shipment_date"] is None or r["shipment_date"] > g["last_shipment_date"]:
+            g["last_shipment_date"] = r["shipment_date"]
+    out = []
+    for g in groups.values():
+        g["lob_count"] = len(g.pop("lob_set"))
+        g.pop("_mode", None)
+        out.append(g)
+    return out
+
+
+def _job_rows(D, definition, start, end):
+    companies, lobs = set(definition["companies"]), set(definition["lobs"])
+    company_codes = ("NG", "NCS")
+    lob_map = {"Air Export": "AE", "Air Import": "AI", "Ocean Export": "OE", "Ocean Import": "OI",
+               "Sea Export": "OE", "Sea Import": "OI"}
+    P = D.get("p") or {}
+    rows = []
+    for i, co_code in enumerate(P.get("co", [])):
+        company = company_codes[int(co_code)] if int(co_code) in (0, 1) else ""
+        lob_label = _column(D, "p_lob", i, True)
+        lob = lob_map.get(str(lob_label), "")
+        if company not in companies or lob not in lobs:
+            continue
+        job_date = _day(P.get("jd", [])[i])
+        if job_date is None or not start <= job_date < end:
+            continue
+        income, expense = float(P["income"][i] or 0), float(P["expense"][i] or 0)
+        profit = income - expense
+        row = {
+            "company": company, "lob": lob,
+            "job_no": _column(D, "p_job", i, True),
+            "job_date": job_date,
+            "customer": _column(D, "customer", i, True),
+            "branch": _column(D, "branch", i, True),
+            "mode": _column(D, "p_mode", i, True),
+            "direction": _column(D, "p_direction", i, True),
+            "service": _column(D, "p_kind", i, True),
+            "salesperson": _column(D, "jp_sales_person", i, True),
+            "income": income, "expense": expense, "profit": profit,
+            "margin": profit / income if income > 0 else None,
+        }
+        if _match_filters(row, definition["filters"]):
+            rows.append(row)
+    return rows
+
+
+def _summary_rows(report_id, rows):
+    if report_id == "customer_performance":
+        return _customer_rows(rows)
+    if report_id == "shipment_register":
+        return _customer_rows(rows)
+    if report_id == "job_profitability":
+        groups = {}
+        for r in rows:
+            key = (r["company"], r["lob"], r["customer"], r["branch"])
+            g = groups.setdefault(key, {"company": r["company"], "lob": r["lob"], "customer": r["customer"],
+                                         "branch": r["branch"], "jobs": 0, "income": 0.0, "expense": 0.0})
+            g["jobs"] += 1
+            g["income"] += r["income"]
+            g["expense"] += r["expense"]
+        for g in groups.values():
+            g["profit"] = g["income"] - g["expense"]
+            g["margin"] = g["profit"] / g["income"] if g["income"] > 0 else None
+        return list(groups.values())
+    return rows
+
+
+def build_report_rows(D, definition, start, end):
+    """Build the pilot report rows from the already per-user-restricted dataset."""
+    report_id = definition["report_id"]
+    if report_id == "job_profitability":
+        rows = _job_rows(D, definition, start, end)
+    else:
+        rows = _shipment_rows(D, definition, start, end)
+        if report_id == "customer_performance":
+            rows = _customer_rows(rows)
+    if definition["summary_detail"] == "summary" and report_id != "customer_performance":
+        rows = _summary_rows(report_id, rows)
+    return _sort_rows(rows, definition)
+
+
+def build_report_workbook(D, definition, start, end, freshness, generated_at=None):
+    """Create a formatted, bounded XLSX attachment. No truncation is permitted."""
+    from datetime import datetime as _datetime
+    report = REPORT_CATALOG[definition["report_id"]]
+    generated_at = generated_at or _datetime.now(UTC)
+    rows = build_report_rows(D, definition, start, end)
+    if len(rows) > MAX_EXPORT_ROWS:
+        raise ScheduleValidationError("The report exceeds the 100,000-row pilot limit; narrow the filters or split the report.")
+    columns = definition["columns"]
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Report"
+    ws.sheet_view.showGridLines = False
+    ws.append([report["title"]])
+    ws.append(["Companies", ", ".join(definition["companies"]), "LOBs", ", ".join(definition["lobs"])])
+    ws.append(["Period", f"{start.isoformat()} to {(end - _timedelta(days=1)).isoformat()}", "Date basis", definition["date_basis"]])
+    ws.append(["Filters", json.dumps(definition["filters"], ensure_ascii=False, sort_keys=True)])
+    ws.append(["Freshness", json.dumps(freshness, ensure_ascii=False, sort_keys=True), "Generated UTC", generated_at.astimezone(UTC).isoformat(timespec="seconds")])
+    ws.append([columns_name for columns_name in columns])
+    header_row = 6
+    for row in rows:
+        ws.append([safe_excel_text(row.get(col)) for col in columns])
+    if definition.get("totals") and rows:
+        totals = []
+        for col in columns:
+            if col in ("income", "expense", "profit", "gross_weight_t", "chargeable_weight_t", "teus", "volume_cbm",
+                       "shipments", "air_shipments", "ocean_shipments", "jobs", "air_chargeable_weight_t", "ocean_teus"):
+                totals.append(sum(float(r.get(col) or 0) for r in rows))
+            elif col == "margin":
+                inc = sum(float(r.get("income") or 0) for r in rows)
+                gp = sum(float(r.get("profit") or 0) for r in rows)
+                totals.append(gp / inc if inc > 0 else None)
+            elif col in ("shipment_no", "job_no"):
+                totals.append(f"Rows: {len(rows)}")
+            else:
+                totals.append("TOTAL" if col == columns[0] else "")
+        ws.append(totals)
+
+    ws.freeze_panes = "A7"
+    last_col = get_column_letter(max(1, len(columns)))
+    if rows:
+        ws.auto_filter.ref = f"A{header_row}:{last_col}{header_row + len(rows)}"
+    ws["A1"].font = Font(bold=True, size=16, color="FFFFFF")
+    ws["A1"].fill = PatternFill("solid", fgColor="173142")
+    for cell in ws[header_row]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="087D79")
+        cell.alignment = Alignment(wrap_text=True, vertical="center")
+    ws.row_dimensions[header_row].height = 28
+    for col_idx, col in enumerate(columns, 1):
+        letter = get_column_letter(col_idx)
+        values = [str(ws.cell(row=r, column=col_idx).value or "") for r in range(1, min(ws.max_row, 50) + 1)]
+        ws.column_dimensions[letter].width = min(36, max(12, max((len(v) for v in values), default=12) + 2))
+        for row_idx in range(7, ws.max_row + 1):
+            cell = ws.cell(row=row_idx, column=col_idx)
+            if col in ("shipment_date", "job_date", "operations_locked_on", "financials_locked_on", "last_shipment_date") and cell.value:
+                cell.number_format = "dd-mmm-yyyy"
+            elif col in ("income", "expense", "profit"):
+                cell.number_format = '"₹"#,##0.00;[Red]-"₹"#,##0.00'
+            elif col == "margin":
+                cell.number_format = "0.0%"
+            elif col in ("gross_weight_t", "chargeable_weight_t", "air_chargeable_weight_t", "teus", "ocean_teus", "volume_cbm"):
+                cell.number_format = "#,##0.000"
+    for row_idx in range(7, ws.max_row + 1):
+        for cell in ws[row_idx]:
+            cell.alignment = Alignment(vertical="top")
+    output = BytesIO()
+    wb.save(output)
+    content = output.getvalue()
+    if len(content) > MAX_WORKBOOK_BYTES:
+        raise ScheduleValidationError("The generated workbook exceeds the 20 MB pilot limit; narrow the filters.")
+    return {"content": content, "filename": f"{definition['report_id']}_{start.isoformat()}_{(end - _timedelta(days=1)).isoformat()}.xlsx",
+            "row_count": len(rows), "file_size": len(content)}
