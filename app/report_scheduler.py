@@ -299,7 +299,7 @@ def safe_excel_text(value):
     """Escape untrusted text that Excel might interpret as a formula."""
     if value is None:
         return ""
-    if isinstance(value, str) and value[:1] in ("=", "+", "-", "@", "\t", "\r"):
+    if isinstance(value, str) and value.lstrip(" \t\r\n")[:1] in ("=", "+", "-", "@"):
         return "'" + value
     return value
 
