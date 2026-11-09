@@ -296,6 +296,11 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         if not auth.session_user(engine, request.cookies.get("ng_session")): return RedirectResponse("/login", 303)
         return page("customer360.html")
 
+    @app.get("/help", response_class=HTMLResponse)
+    def help_page(user: dict = Depends(me)):
+        """Authenticated, permission-aware in-app help and metric dictionary."""
+        return page("help.html")
+
     @app.get("/api/metrics/definitions")
     def api_metric_definitions(user: dict = Depends(me)):
         """Source-backed explanation metadata, without exposing restricted financial data."""
