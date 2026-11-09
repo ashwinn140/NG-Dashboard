@@ -170,11 +170,21 @@ const VERIFIED_METRIC_EXPLANATIONS = Object.freeze({
   'shipments': ['Shows the number of shipment-register records in scope.', 'Counts selected shipment-register rows after the active shipment-date and other filters.'],
   'air chargeable weight (tonnes)': ['Shows total chargeable airfreight weight for the selected shipments.', 'Adds chargeable weight from selected air shipment-register records, in tonnes.'],
   'sea teus': ['Shows total container volume in twenty-foot-equivalent units.', 'Adds TEUs from selected ocean shipment-register records; the displayed total is rounded to a whole TEU.'],
-  'active customers': ['Shows customers with sufficient shipment activity in the selected period.', 'Counts distinct selected customers with at least the configured minimum number of shipment records.'],
   'jobs with cost booked': ['Shows what share of selected jobs have booked costs.', 'Divides jobs with booked expenses by all selected jobs, multiplied by 100; unavailable if no jobs are selected.'],
   'profit after expected costs': ['Shows an estimated profit after allowing for costs not yet booked.', 'Subtracts estimated missing costs from currently booked profit. Missing costs are estimated using cost-to-income ratios from jobs with booked costs; this is an estimate, not actual booked profit.'],
   'shipments invoiced': ['Shows the proportion of selected shipments with an invoice.', 'Divides selected shipments identified as invoiced by all selected shipments, multiplied by 100.'],
-  'jobs matched to the register': ['Shows the share of selected jobs linked to shipment-register entries.', 'Divides jobs matched to a shipment-register record by jobs considered for matching, multiplied by 100; customs-clearance and road jobs may have no register entry.']
+  'jobs matched to the register': ['Shows the share of selected jobs linked to shipment-register entries.', 'Divides jobs matched to a shipment-register record by jobs considered for matching, multiplied by 100; customs-clearance and road jobs may have no register entry.'],
+  'customers making 80% of profit': ['Shows how concentrated positive customer profit is among the leading customers.', 'Counts the highest-profit customers required to reach 80% of the selected positive customer profit.'],
+  'loss-making customers': ['Shows how many customers generated negative booked profit.', 'Counts customer groups with total selected job-summary Profit below zero.'],
+  'air: profit per tonne': ['Shows booked profit earned per chargeable tonne on matched air jobs.', 'Divides profit on matched air jobs by their combined chargeable tonnes, where total tonnes are positive.'],
+  'sea: profit per teu': ['Shows booked profit earned per TEU on matched ocean jobs.', 'Divides profit on matched ocean jobs by their combined recorded TEUs, where total TEUs are positive.'],
+  'days from shipment to first invoice': ['Shows the average delay between shipment date and first invoice.', 'Adds elapsed days from shipment date to first invoice for eligible invoiced shipments, then divides by their count.'],
+  'days from ops lock to first invoice': ['Shows the average delay between operational closure and first invoice.', 'Adds elapsed days from operations lock to first invoice where both dates are recorded, then divides by eligible shipment count; negative values indicate earlier invoicing.'],
+  'average sell rate': ['Shows the weight-adjusted selling rate for eligible air exports.', 'Divides total eligible air-export selling value by total eligible chargeable weight.'],
+  'average buy rate': ['Shows the weight-adjusted buying rate for eligible air exports.', 'Divides total eligible air-export buying cost by total eligible chargeable weight.'],
+  'freight margin per kg': ['Shows estimated freight spread per kilogram on eligible air exports.', 'Divides eligible air-export selling value less buying cost by total eligible chargeable weight.'],
+  'estimated freight margin': ['Shows estimated air-export freight profit from usable rates.', 'Subtracts eligible air-export buy-rate cost from sell-rate value, with each rate weighted by chargeable weight.'],
+  'selling below buy': ['Shows how many eligible air-export shipments are priced below buying cost.', 'Counts eligible air-export shipments whose calculated selling value is less than calculated buying cost.']
 });
 function businessMeaning(label, note) {
   const name = String(label || '').trim();
