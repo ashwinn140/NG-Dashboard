@@ -346,3 +346,46 @@ Four principal workstreams remain:
 4. Complete authenticated browser, responsive, accessibility and production smoke QA; synthetic jsdom tests do not replace it.
 
 The integrated HTML Help/User Guide is now complete enough for the first production release and is no longer a remaining workstream. Final release readiness is still pending the four items above.
+
+
+## Production verification continuation — 9 November 2026, after PR #34
+
+### Current repository and deployment
+- Latest inspected main commit: `d1ffca38b2eba2d39693a89582daa5316e9323bc` (PR #34, verified visual explanations).
+- PR #34 is merged. It adds page-specific calculation explanations and a synthetic jsdom coverage test for high-value visuals. It does not change formulas, source data, permissions or evidence payloads.
+- Railway production deployment: `59faedfd-328b-4c7c-94be-2c5041c59aeb`, SUCCESS, exact main commit `d1ffca38`; NG-Dashboard Online, 1/1 replica. AI-Insights and Postgres are also online, each 1/1. Zero active warnings/criticals, zero recent failures, and no pending Railway work.
+- Production source remains `ashwinn140/NG-Dashboard` / `main`; Postgres and the persistent `/data` volume remain attached. No staged Railway changes.
+- Runtime HTTP log sample: 501 requests, 500 HTTP 200 and one HTTP 303 redirect; no HTTP 4xx/5xx in the sampled entries. This is service telemetry, not authenticated browser QA.
+- Current GitHub combined commit status surfaced the Railway deployment success. A distinct CI check/run for PR #34 was not independently surfaced by the available status query; retrieve the exact GitHub Actions run evidence before the next merge. PR #34's description says the new jsdom test is run in CI, but do not infer a successful run from the deployment status.
+
+### Production performance observations
+- In the sampled 500 HTTP events, `/api/dataset`: 89 calls, p50 522 ms, p90 1,643 ms, max 4,058 ms.
+- `/api/metrics/evidence`: 6 calls, p50 999 ms, max 10,963 ms.
+- Admin-only `/api/admin/phase2/source-readiness`: 5 calls, p50 4,909 ms, max 5,754 ms.
+- No HTTP errors were observed. The evidence and source-readiness endpoints are performance follow-ups, not correctness failures. Review query/data-copy costs and add targeted performance tests before optimizing; do not weaken scope checks or reduce audit detail.
+
+### Source and finance review
+- The simple JPR contract remains: `Job Profit Analysis Report`, one row per job, Basis: Job Date, required identity fields and report grand-total validation; booked GP is Income less Expense and source Profit is checked during import.
+- No Chargewise/charge-wise workbook is required or in scope. Do not seek those files or infer Billing Date from Job Date.
+- Prior sample reconciliation evidence remains historical and partial; it is not certification of the current live PostgreSQL snapshot. No production financial records were changed.
+- Metric evidence implementation is permission-scoped and validates record indices against the user's already restricted dataset. It derives job profit from Income less Expense and uses composite job identity. Variance percentages use the absolute prior value and return unavailable for zero baselines.
+- Authenticated live browser and current production data-to-UI/export reconciliation were not performed in this session. Do not claim them passed.
+
+### PR #34 visual-explanation scope
+- Added verified explanations for summary alerts/variance/trends, top customer/salesperson/branch rankings, scorecards, agent reports, profitability explorer, customer income-vs-margin, billing ageing/slow billing, invoice-month comparisons, finance variance, JPR status and register matching, plus visual builder/templates.
+- Added `frontend/tests/visual_explanation_coverage_test.js` covering 15 high-value visuals. This is focused synthetic coverage, not proof that all runtime visuals are verified.
+- Re-run the full synthetic runtime visual inventory after PR #34 and update the counts. The earlier 408-visual inventory (289 verified, 72 unverified, 47 missing explanations) predates PR #34 and is stale.
+
+### Updated remaining principal workstreams
+1. **Simple-JPR finance and variance audit:** verify all relevant formulas, Job Date windows, current/prior/YoY/partial periods, zero/negative baselines, permissions, drill-down evidence and Excel export parity. No charge-wise dependency.
+2. **Visual explanation and reconciliation coverage:** regenerate the runtime inventory after PR #34; verify each remaining calculation from implementation; attach explicit Calculation & records only where evidence is correctly mapped; classify unsupported/wrapper visuals without inventing explanations or evidence.
+3. **Secure Report Scheduler:** still not implemented. Design a durable queue, execution-time permission checks, approved recipients, freshness policy, idempotency, retries/restarts/concurrency and provider delivery states. Do not send real scheduled emails until security and delivery tests pass.
+4. **Authenticated browser/responsive/accessibility QA:** still blocked by lack of an authenticated browser session. Cover 1920/1366/768/390 px, Operations last-five jobs, Customer 360, filters, explicit reconciliation, exports, keyboard and focus behavior when a session becomes available.
+
+### Work performed in this continuation
+- Rechecked GitHub main, PR #34, Railway production configuration, service health, runtime HTTP telemetry and application source paths.
+- Reviewed JPR parsing/validation, metric evidence aggregation and source/date-basis declarations.
+- Identified the performance observations above for follow-up.
+- No source code, database schema, production business data, environment variables or Railway configuration changed.
+- Created continuation branch `audit/production-verification-2026-11-09` from the deployed main commit to preserve this checkpoint update without changing production.
+
