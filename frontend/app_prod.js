@@ -527,8 +527,8 @@ function pageCustomers() {
   return h('div', null, h('div', {class: 'grid'},
     card('Customers', null, h('div', null, h('div', {class: 'frow'}, dlButton('Download Excel', exportCust)), note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody))), 'full', {metric: 'ops.shipments', dimension: 'customer'}),
     card('Customer by month', 'Top ' + S.def.heatN + ' customers by ' + (R.useVol ? 'volume' : 'shipments') + '. Click a cell to focus that customer and month.', heat, 'full', {metric: opsVisualMetric(), dimension: 'customer'}),
-    card('Growing accounts', 'Biggest increase in shipments against the ' + cmpLabel() + '.', moverList(gain, 1)),
-    card('Declining accounts', 'Biggest fall in shipments against the ' + cmpLabel() + '.', moverList(lose, -1))));
+    card('Growing accounts', 'Biggest increase in shipments against the ' + cmpLabel() + '.', moverList(gain, 1), null, {metric: 'ops.shipments', dimension: 'customer'}),
+    card('Declining accounts', 'Biggest fall in shipments against the ' + cmpLabel() + '.', moverList(lose, -1), null, {metric: 'ops.shipments', dimension: 'customer'})));
 }
 function pageLanes() {
   const a = laneAgg(); a.rows.sort((x, y) => y.cnt - x.cnt); const shown = a.rows.slice(0, S.def.tableRows);

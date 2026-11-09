@@ -110,4 +110,19 @@ for(const title of ['Biggest increases by customer','Biggest decreases by custom
  assert.equal(q.context.date_basis,'Shipment Date');
 }
 
+
+n.setGroup('ops');n.S.page='customers';n.S.from=evidenceDay('2026-10-01');n.S.to=evidenceDay('2026-10-31');n.S.rel=null;n.S.compare=true;n.S.sel={};n.renderAll();
+for(const title of ['Growing accounts','Declining accounts']){
+ const c=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()===title);
+ assert.ok(c,'customer movement visual exists: '+title);
+ const b=c.querySelector('.mt-info');assert.ok(b,'Calculation & records action exists: '+title);
+ assert.equal(b.dataset.traceMetric,'ops.shipments');assert.equal(b.dataset.traceDimension,'customer');
+ const q=n.traceVisual('ops.shipments','customer',title);
+ assert.ok(q.indices.length>0,'current Shipment Date evidence rows supplied: '+title);
+ assert.ok(q.previous_indices.length>0,'previous Shipment Date evidence rows supplied: '+title);
+ assert.ok(q.indices.every(i=>D.date[i]>=evidenceDay('2026-10-01')&&D.date[i]<=evidenceDay('2026-10-31')),'current evidence follows customer dashboard period: '+title);
+ assert.ok(q.previous_indices.every(i=>D.date[i]>=evidenceDay('2026-09-01')&&D.date[i]<=evidenceDay('2026-09-30')),'previous evidence follows customer comparison period: '+title);
+ assert.equal(q.context.date_basis,'Shipment Date');
+}
+
 assert.deepEqual(errors,[]);w.close();console.log('PASS verified visual explanations: summary, scorecard, agent reports, profitability, billing, variance and source-status pages.');})().catch(e=>{console.error(e);dom.window.close();process.exit(1)});
