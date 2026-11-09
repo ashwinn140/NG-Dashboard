@@ -16,6 +16,9 @@ class Customer360Tests(unittest.TestCase):
   self.assertEqual(dec('origin_agent',0,'pc'),'Source Origin');self.assertEqual(dec('origin_agent',1,'pc'),'(blank)');self.assertEqual(dec('destination_agent',0,'pc'),'Dest A')
   self.assertNotIn('Generic overseas',ds['cols']['destination_agent']['d'])
   scoped=D.restrict(ds,dict(companies=['NG'],lobs=['AE'],finance=False));self.assertEqual(scoped['p']['income'],[]);self.assertEqual(scoped['cols']['origin_agent']['pc'],[])
+ def test_source_names_are_not_merged_by_punctuation_or_unicode(self):
+  f=self.f;r=f.register(customers=('A-B','AB','東京','大阪'));f.load(r);ds=D.build_full(f.engine)
+  c=ds['cols']['customer'];self.assertEqual([c['d'][i] for i in c['c']],['A-B','AB','東京','大阪'])
  def test_regular_user_route_and_saved_view_isolation(self):
   f=self.f;app=create_app(f.engine,f.tmp.name+'/up')
   try:

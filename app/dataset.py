@@ -120,9 +120,9 @@ def build_full(engine) -> dict:
     S = lambda col: A[col].fillna("").astype(str).str.strip().str.replace(r"\s+", " ", regex=True) if col in A.columns else pd.Series([""] * N)
 
     def canon(series):
-        key = series.map(norm); best = {}
-        for k, grp in series.groupby(key): best[k] = collections.Counter(grp).most_common(1)[0][0]
-        return key.map(best).where(series != "", "")
+        # Preserve ERP identity text. Punctuation/Unicode normalization belongs
+        # in search, not in destructive replacement of source organization names.
+        return series.fillna("").astype(str).str.strip().str.replace(r"\s+", " ", regex=True)
 
     def port(series):
         code = series.str.extract(r"^\(([A-Za-z0-9]{5})\)")[0]

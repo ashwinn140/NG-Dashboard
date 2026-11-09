@@ -1,0 +1,2146 @@
+[
+  {
+    "id": "profit.income",
+    "title": "Income",
+    "meaning": "Total income recorded in eligible JPR rows; this alone does not verify invoicing.",
+    "outcome": "Understand income recognized in the selected period.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Income (INR)",
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "Sum of Income (INR) for eligible job rows.",
+    "aggregation": "SUM; amounts in INR",
+    "exclusions": "Only rows surviving current user permissions, filters and reporting window.",
+    "caveat": "Current accepted job-summary reports use Job Date; billing date is unavailable and is not inferred.",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "INR",
+    "version": "2",
+    "database_fields": {
+      "Income (INR)": "profit_lines.income",
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Income\nWhat it means: Total income recorded in eligible JPR rows; this alone does not verify invoicing.\nWhy it matters: Understand income recognized in the selected period.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Income (INR), Job No., Job Date, LOB\nCalculation: Sum of Income (INR) for eligible job rows.\nAggregation: SUM; amounts in INR\nReporting date: Job Date\nExclusions and conditions: Only rows surviving current user permissions, filters and reporting window.\nImportant limitation: Current accepted job-summary reports use Job Date; billing date is unavailable and is not inferred.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Income (INR)': 'profit_lines.income', 'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "profit.expense",
+    "title": "Expense",
+    "meaning": "Total expense recorded for eligible JPR jobs.",
+    "outcome": "Understand booked costs in the selected period.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Expense (INR)",
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "Sum of Expense (INR) for eligible job rows.",
+    "aggregation": "SUM; amounts in INR",
+    "exclusions": "Only rows surviving current user permissions, filters and reporting window.",
+    "caveat": "",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "INR",
+    "version": "2",
+    "database_fields": {
+      "Expense (INR)": "profit_lines.expense",
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Expense\nWhat it means: Total expense recorded for eligible JPR jobs.\nWhy it matters: Understand booked costs in the selected period.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Expense (INR), Job No., Job Date, LOB\nCalculation: Sum of Expense (INR) for eligible job rows.\nAggregation: SUM; amounts in INR\nReporting date: Job Date\nExclusions and conditions: Only rows surviving current user permissions, filters and reporting window.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Expense (INR)': 'profit_lines.expense', 'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "profit.gp",
+    "title": "Gross profit",
+    "meaning": "Income less expense recorded for eligible JPR jobs.",
+    "outcome": "Assess job-level profitability from booked income and costs.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Income (INR)",
+      "Expense (INR)",
+      "Profit (INR)",
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "SUM(Income (INR) - Expense (INR)); JPR validates Profit (INR) equals Income minus Expense.",
+    "aggregation": "SUM; amounts in INR",
+    "exclusions": "Only eligible JPR rows; no estimation of unbooked costs.",
+    "caveat": "",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "INR",
+    "version": "2",
+    "database_fields": {
+      "Income (INR)": "profit_lines.income",
+      "Expense (INR)": "profit_lines.expense",
+      "Profit (INR)": "derived income - expense; source value validated on import",
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Gross profit\nWhat it means: Income less expense recorded for eligible JPR jobs.\nWhy it matters: Assess job-level profitability from booked income and costs.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Income (INR), Expense (INR), Profit (INR), Job No., Job Date, LOB\nCalculation: SUM(Income (INR) - Expense (INR)); JPR validates Profit (INR) equals Income minus Expense.\nAggregation: SUM; amounts in INR\nReporting date: Job Date\nExclusions and conditions: Only eligible JPR rows; no estimation of unbooked costs.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Income (INR)': 'profit_lines.income', 'Expense (INR)': 'profit_lines.expense', 'Profit (INR)': 'derived income - expense; source value validated on import', 'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "profit.jobs",
+    "title": "Jobs",
+    "meaning": "Distinct eligible jobs represented in the JPR.",
+    "outcome": "Measure job coverage without counting duplicate records as separate jobs.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "COUNT DISTINCT(company, LOB, Job No., Job Date)",
+    "aggregation": "COUNT DISTINCT",
+    "exclusions": "Only eligible JPR rows. Source rejects duplicate Job No. / Job Date / LOB within an import.",
+    "caveat": "Composite identity verified in canonical frontend/app_prod.js; source-level reconciliation remains pending.",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "count",
+    "version": "2",
+    "database_fields": {
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Jobs\nWhat it means: Distinct eligible jobs represented in the JPR.\nWhy it matters: Measure job coverage without counting duplicate records as separate jobs.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Job No., Job Date, LOB\nCalculation: COUNT DISTINCT(company, LOB, Job No., Job Date)\nAggregation: COUNT DISTINCT\nReporting date: Job Date\nExclusions and conditions: Only eligible JPR rows. Source rejects duplicate Job No. / Job Date / LOB within an import.\nImportant limitation: Composite identity verified in canonical frontend/app_prod.js; source-level reconciliation remains pending.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "profit.margin",
+    "title": "Gross profit margin",
+    "meaning": "Gross profit as a share of recorded income for the selected JPR jobs.",
+    "outcome": "Assess profitability relative to income.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Income (INR)",
+      "Expense (INR)",
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "If total income > 0: (total income - total expense) / total income; otherwise no percentage.",
+    "aggregation": "RATIO OF SUMS, not average of individual job margins",
+    "exclusions": "Eligible filtered rows only; the dashboard displays a dash when income is not positive.",
+    "caveat": "",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "ratio",
+    "version": "2",
+    "database_fields": {
+      "Income (INR)": "profit_lines.income",
+      "Expense (INR)": "profit_lines.expense",
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Gross profit margin\nWhat it means: Gross profit as a share of recorded income for the selected JPR jobs.\nWhy it matters: Assess profitability relative to income.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Income (INR), Expense (INR), Job No., Job Date, LOB\nCalculation: If total income > 0: (total income - total expense) / total income; otherwise no percentage.\nAggregation: RATIO OF SUMS, not average of individual job margins\nReporting date: Job Date\nExclusions and conditions: Eligible filtered rows only; the dashboard displays a dash when income is not positive.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Income (INR)': 'profit_lines.income', 'Expense (INR)': 'profit_lines.expense', 'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "profit.cost_not_booked_proxy",
+    "title": "No costs recorded",
+    "meaning": "Jobs with positive aggregated income and exactly zero aggregated expense.",
+    "outcome": "Find jobs where cost completeness needs investigation.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Income (INR)",
+      "Expense (INR)",
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "Per dashboard job: income > 0 and expense == 0; count qualifying jobs.",
+    "aggregation": "COUNT DISTINCT dashboard jobs",
+    "exclusions": "Uses the current frontend classification precedence.",
+    "caveat": "Zero recorded expense does not establish that no cost was incurred.",
+    "readiness": "business_validation_required",
+    "finance_required": true,
+    "unit": "count",
+    "version": "2",
+    "database_fields": {
+      "Income (INR)": "profit_lines.income",
+      "Expense (INR)": "profit_lines.expense",
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "No costs recorded\nWhat it means: Jobs with positive aggregated income and exactly zero aggregated expense.\nWhy it matters: Find jobs where cost completeness needs investigation.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Income (INR), Expense (INR), Job No., Job Date, LOB\nCalculation: Per dashboard job: income > 0 and expense == 0; count qualifying jobs.\nAggregation: COUNT DISTINCT dashboard jobs\nReporting date: Job Date\nExclusions and conditions: Uses the current frontend classification precedence.\nImportant limitation: Zero recorded expense does not establish that no cost was incurred.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Income (INR)': 'profit_lines.income', 'Expense (INR)': 'profit_lines.expense', 'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "profit.loss_making",
+    "title": "Loss-making jobs",
+    "meaning": "Jobs with recorded expense exceeding recorded income by more than INR 1.",
+    "outcome": "Identify recorded losses for review.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Income (INR)",
+      "Expense (INR)",
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "After higher-priority job-status categories: income - expense < -1; count classified jobs.",
+    "aggregation": "COUNT DISTINCT dashboard jobs",
+    "exclusions": "The current status classification checks no-cost and no-income conditions first.",
+    "caveat": "A job can have a negative calculated result yet be assigned a different status by the existing precedence.",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "count",
+    "version": "2",
+    "database_fields": {
+      "Income (INR)": "profit_lines.income",
+      "Expense (INR)": "profit_lines.expense",
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Loss-making jobs\nWhat it means: Jobs with recorded expense exceeding recorded income by more than INR 1.\nWhy it matters: Identify recorded losses for review.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Income (INR), Expense (INR), Job No., Job Date, LOB\nCalculation: After higher-priority job-status categories: income - expense < -1; count classified jobs.\nAggregation: COUNT DISTINCT dashboard jobs\nReporting date: Job Date\nExclusions and conditions: The current status classification checks no-cost and no-income conditions first.\nImportant limitation: A job can have a negative calculated result yet be assigned a different status by the existing precedence.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Income (INR)': 'profit_lines.income', 'Expense (INR)': 'profit_lines.expense', 'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "profit.billing_pending_proxy",
+    "title": "Costs booked, no income recorded",
+    "meaning": "Jobs whose JPR expense is positive while income is zero or negative.",
+    "outcome": "Identify jobs needing investigation of income recognition or billing.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Income (INR)",
+      "Expense (INR)",
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "For each dashboard job, if aggregated expense > 0 and aggregated income <= 0, classify as status 2; count qualifying jobs.",
+    "aggregation": "COUNT DISTINCT jobs",
+    "exclusions": "Current dashboard status precedence applies: cost-not-booked first, then this category.",
+    "caveat": "This financial proxy does NOT prove that an invoice has not been raised.",
+    "readiness": "business_validation_required",
+    "finance_required": true,
+    "unit": "count",
+    "version": "2",
+    "database_fields": {
+      "Income (INR)": "profit_lines.income",
+      "Expense (INR)": "profit_lines.expense",
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Costs booked, no income recorded\nWhat it means: Jobs whose JPR expense is positive while income is zero or negative.\nWhy it matters: Identify jobs needing investigation of income recognition or billing.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Income (INR), Expense (INR), Job No., Job Date, LOB\nCalculation: For each dashboard job, if aggregated expense > 0 and aggregated income <= 0, classify as status 2; count qualifying jobs.\nAggregation: COUNT DISTINCT jobs\nReporting date: Job Date\nExclusions and conditions: Current dashboard status precedence applies: cost-not-booked first, then this category.\nImportant limitation: This financial proxy does NOT prove that an invoice has not been raised.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Income (INR)': 'profit_lines.income', 'Expense (INR)': 'profit_lines.expense', 'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.shipments",
+    "title": "Shipments",
+    "meaning": "Operational measure from accepted Shipment Registers.",
+    "outcome": "Understand the selected operational activity.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Shipment No",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "Shipment Date",
+    "formula": "COUNT DISTINCT(company, department, Shipment No, Shipment Date)",
+    "aggregation": "COUNT DISTINCT",
+    "exclusions": "Authorized company and department scope; current filter and date window.",
+    "caveat": "Configured source mapping; actual upload header validation remains pending.",
+    "readiness": "code_verified",
+    "finance_required": false,
+    "unit": "count",
+    "version": "2",
+    "database_fields": {
+      "Shipment No": "shipments.shipment_no",
+      "Shipment Date": "shipments.shipment_date"
+    },
+    "identity": [
+      "company",
+      "report_type",
+      "shipment_no",
+      "shipment_date"
+    ],
+    "permissions": "Server-scoped company and LOB access",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Shipments\nWhat it means: Operational measure from accepted Shipment Registers.\nWhy it matters: Understand the selected operational activity.\nSource report: Shipment Register\nExact source columns: Shipment No, Shipment No, Shipment Date\nCalculation: COUNT DISTINCT(company, department, Shipment No, Shipment Date)\nAggregation: COUNT DISTINCT\nReporting date: Shipment Date\nExclusions and conditions: Authorized company and department scope; current filter and date window.\nImportant limitation: Configured source mapping; actual upload header validation remains pending.\nIdentity: company, report_type, shipment_no, shipment_date\nMapped database fields: {'Shipment No': 'shipments.shipment_no', 'Shipment Date': 'shipments.shipment_date'}\nAccess: Server-scoped company and LOB access\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.air_weight",
+    "title": "Air chargeable weight (tonnes)",
+    "meaning": "Operational measure from accepted Shipment Registers.",
+    "outcome": "Understand the selected operational activity.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Chargeable Wt",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "Shipment Date",
+    "formula": "SUM(Chargeable Wt / 1000) for Air Export and Air Import registers",
+    "aggregation": "SUM",
+    "exclusions": "Authorized company and department scope; current filter and date window.",
+    "caveat": "Configured source mapping; actual upload header validation remains pending.",
+    "readiness": "code_verified",
+    "finance_required": false,
+    "unit": "tonnes",
+    "version": "2",
+    "database_fields": {
+      "Chargeable Wt": "shipments.extra[\"Chargeable Wt\"]",
+      "Shipment No": "shipments.shipment_no",
+      "Shipment Date": "shipments.shipment_date"
+    },
+    "identity": [
+      "company",
+      "report_type",
+      "shipment_no",
+      "shipment_date"
+    ],
+    "permissions": "Server-scoped company and LOB access",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Air chargeable weight (tonnes)\nWhat it means: Operational measure from accepted Shipment Registers.\nWhy it matters: Understand the selected operational activity.\nSource report: Shipment Register\nExact source columns: Chargeable Wt, Shipment No, Shipment Date\nCalculation: SUM(Chargeable Wt / 1000) for Air Export and Air Import registers\nAggregation: SUM\nReporting date: Shipment Date\nExclusions and conditions: Authorized company and department scope; current filter and date window.\nImportant limitation: Configured source mapping; actual upload header validation remains pending.\nIdentity: company, report_type, shipment_no, shipment_date\nMapped database fields: {'Chargeable Wt': 'shipments.extra[\"Chargeable Wt\"]', 'Shipment No': 'shipments.shipment_no', 'Shipment Date': 'shipments.shipment_date'}\nAccess: Server-scoped company and LOB access\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.teu",
+    "title": "Ocean TEUs",
+    "meaning": "Operational measure from accepted Shipment Registers.",
+    "outcome": "Understand the selected operational activity.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "TEUs",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "Shipment Date",
+    "formula": "SUM(TEUs) for Ocean Export and Ocean Import registers",
+    "aggregation": "SUM",
+    "exclusions": "Authorized company and department scope; current filter and date window.",
+    "caveat": "Configured source mapping; actual upload header validation remains pending.",
+    "readiness": "code_verified",
+    "finance_required": false,
+    "unit": "TEU",
+    "version": "2",
+    "database_fields": {
+      "TEUs": "shipments.extra[\"TEUs\"]",
+      "Shipment No": "shipments.shipment_no",
+      "Shipment Date": "shipments.shipment_date"
+    },
+    "identity": [
+      "company",
+      "report_type",
+      "shipment_no",
+      "shipment_date"
+    ],
+    "permissions": "Server-scoped company and LOB access",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Ocean TEUs\nWhat it means: Operational measure from accepted Shipment Registers.\nWhy it matters: Understand the selected operational activity.\nSource report: Shipment Register\nExact source columns: TEUs, Shipment No, Shipment Date\nCalculation: SUM(TEUs) for Ocean Export and Ocean Import registers\nAggregation: SUM\nReporting date: Shipment Date\nExclusions and conditions: Authorized company and department scope; current filter and date window.\nImportant limitation: Configured source mapping; actual upload header validation remains pending.\nIdentity: company, report_type, shipment_no, shipment_date\nMapped database fields: {'TEUs': 'shipments.extra[\"TEUs\"]', 'Shipment No': 'shipments.shipment_no', 'Shipment Date': 'shipments.shipment_date'}\nAccess: Server-scoped company and LOB access\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.volume",
+    "title": "Volume (CBM)",
+    "meaning": "Operational measure from accepted Shipment Registers.",
+    "outcome": "Understand the selected operational activity.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Volume",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "Shipment Date",
+    "formula": "SUM(Volume) for eligible register rows",
+    "aggregation": "SUM",
+    "exclusions": "Authorized company and department scope; current filter and date window.",
+    "caveat": "Configured source mapping; actual upload header validation remains pending.",
+    "readiness": "code_verified",
+    "finance_required": false,
+    "unit": "CBM",
+    "version": "2",
+    "database_fields": {
+      "Volume": "shipments.extra[\"Volume\"]",
+      "Shipment No": "shipments.shipment_no",
+      "Shipment Date": "shipments.shipment_date"
+    },
+    "identity": [
+      "company",
+      "report_type",
+      "shipment_no",
+      "shipment_date"
+    ],
+    "permissions": "Server-scoped company and LOB access",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Volume (CBM)\nWhat it means: Operational measure from accepted Shipment Registers.\nWhy it matters: Understand the selected operational activity.\nSource report: Shipment Register\nExact source columns: Volume, Shipment No, Shipment Date\nCalculation: SUM(Volume) for eligible register rows\nAggregation: SUM\nReporting date: Shipment Date\nExclusions and conditions: Authorized company and department scope; current filter and date window.\nImportant limitation: Configured source mapping; actual upload header validation remains pending.\nIdentity: company, report_type, shipment_no, shipment_date\nMapped database fields: {'Volume': 'shipments.extra[\"Volume\"]', 'Shipment No': 'shipments.shipment_no', 'Shipment Date': 'shipments.shipment_date'}\nAccess: Server-scoped company and LOB access\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "profit.per_job",
+    "title": "Profit per job",
+    "meaning": "Booked gross profit divided by distinct jobs.",
+    "outcome": "Assess average booked profitability.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Income (INR)",
+      "Expense (INR)",
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "SUM(Income - Expense) / COUNT DISTINCT(company, LOB, Job No., Job Date)",
+    "aggregation": "RATIO OF SUMS",
+    "exclusions": "Authorized filtered JPR jobs; blank when no jobs.",
+    "caveat": "",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "INR",
+    "version": "2",
+    "database_fields": {
+      "Income (INR)": "profit_lines.income",
+      "Expense (INR)": "profit_lines.expense",
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Profit per job\nWhat it means: Booked gross profit divided by distinct jobs.\nWhy it matters: Assess average booked profitability.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Income (INR), Expense (INR), Job No., Job Date, LOB\nCalculation: SUM(Income - Expense) / COUNT DISTINCT(company, LOB, Job No., Job Date)\nAggregation: RATIO OF SUMS\nReporting date: Job Date\nExclusions and conditions: Authorized filtered JPR jobs; blank when no jobs.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Income (INR)': 'profit_lines.income', 'Expense (INR)': 'profit_lines.expense', 'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "profit.cost_coverage",
+    "title": "Jobs with cost booked",
+    "meaning": "Share of eligible jobs with positive recorded expenses.",
+    "outcome": "Assess recorded cost coverage.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Expense (INR)",
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "COUNT DISTINCT jobs with Expense > 0 / COUNT DISTINCT jobs",
+    "aggregation": "RATIO OF DISTINCT COUNTS",
+    "exclusions": "Zero and negative expenses are not counted as positive cost coverage.",
+    "caveat": "",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "ratio",
+    "version": "2",
+    "database_fields": {
+      "Expense (INR)": "profit_lines.expense",
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Jobs with cost booked\nWhat it means: Share of eligible jobs with positive recorded expenses.\nWhy it matters: Assess recorded cost coverage.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Expense (INR), Job No., Job Date, LOB\nCalculation: COUNT DISTINCT jobs with Expense > 0 / COUNT DISTINCT jobs\nAggregation: RATIO OF DISTINCT COUNTS\nReporting date: Job Date\nExclusions and conditions: Zero and negative expenses are not counted as positive cost coverage.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Expense (INR)': 'profit_lines.expense', 'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "profit.expected_adjusted",
+    "title": "Profit after expected costs",
+    "meaning": "Booked GP less modeled costs for positive-income jobs with exactly zero recorded expense.",
+    "outcome": "Estimate how profit could change as missing expenses are booked.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Income (INR)",
+      "Expense (INR)",
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "SUM(Income - Expense) - SUM(zero-expense positive job income * same-LOB benchmark expense/income ratio)",
+    "aggregation": "RATIO OF SUMS benchmark; SUM expected costs",
+    "exclusions": "Benchmark uses all authorized loaded positive-income/positive-expense jobs, ignoring selection dates; falls back to overall authorized ratio, then zero if no benchmark.",
+    "caveat": "An estimate, not confirmed GP. Partially booked costs are not estimated; benchmarks can combine authorized companies.",
+    "readiness": "code_verified_source_audit_pending",
+    "finance_required": true,
+    "unit": "INR",
+    "version": "2",
+    "database_fields": {
+      "Income (INR)": "profit_lines.income",
+      "Expense (INR)": "profit_lines.expense",
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Profit after expected costs\nWhat it means: Booked GP less modeled costs for positive-income jobs with exactly zero recorded expense.\nWhy it matters: Estimate how profit could change as missing expenses are booked.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Income (INR), Expense (INR), Job No., Job Date, LOB\nCalculation: SUM(Income - Expense) - SUM(zero-expense positive job income * same-LOB benchmark expense/income ratio)\nAggregation: RATIO OF SUMS benchmark; SUM expected costs\nReporting date: Job Date\nExclusions and conditions: Benchmark uses all authorized loaded positive-income/positive-expense jobs, ignoring selection dates; falls back to overall authorized ratio, then zero if no benchmark.\nImportant limitation: An estimate, not confirmed GP. Partially booked costs are not estimated; benchmarks can combine authorized companies.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Income (INR)': 'profit_lines.income', 'Expense (INR)': 'profit_lines.expense', 'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.active_customers",
+    "title": "Active customers",
+    "meaning": "Operational indicator from accepted Shipment Registers.",
+    "outcome": "Identify operational activity and records requiring review.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Customer",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "Shipment Date",
+    "formula": "Count distinct source customer names with at least the configured minimum number of selected shipments",
+    "aggregation": "COUNT / SUM / MEAN as defined",
+    "exclusions": "Preserves existing selected date scope or explicitly all-date scope; configured thresholds and latest-source aging date are disclosed.",
+    "caveat": "Source invoice references do not prove accounting settlement; missing optional fields remain unavailable.",
+    "readiness": "code_verified",
+    "finance_required": false,
+    "unit": "count",
+    "version": "2",
+    "database_fields": {
+      "Customer": "Source mapping pending validation",
+      "Shipment No": "shipments.shipment_no",
+      "Shipment Date": "shipments.shipment_date"
+    },
+    "identity": [
+      "company",
+      "report_type",
+      "shipment_no",
+      "shipment_date"
+    ],
+    "permissions": "Server-scoped company and LOB access",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Active customers\nWhat it means: Operational indicator from accepted Shipment Registers.\nWhy it matters: Identify operational activity and records requiring review.\nSource report: Shipment Register\nExact source columns: Customer, Shipment No, Shipment Date\nCalculation: Count distinct source customer names with at least the configured minimum number of selected shipments\nAggregation: COUNT / SUM / MEAN as defined\nReporting date: Shipment Date\nExclusions and conditions: Preserves existing selected date scope or explicitly all-date scope; configured thresholds and latest-source aging date are disclosed.\nImportant limitation: Source invoice references do not prove accounting settlement; missing optional fields remain unavailable.\nIdentity: company, report_type, shipment_no, shipment_date\nMapped database fields: {'Customer': 'Source mapping pending validation', 'Shipment No': 'shipments.shipment_no', 'Shipment Date': 'shipments.shipment_date'}\nAccess: Server-scoped company and LOB access\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.waiting_lock",
+    "title": "Waiting for operations lock",
+    "meaning": "Operational indicator from accepted Shipment Registers.",
+    "outcome": "Identify operational activity and records requiring review.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Operations Locked On",
+      "Financials Locked On",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "Shipment Date",
+    "formula": "Count shipments in Pending ops lock stage",
+    "aggregation": "COUNT / SUM / MEAN as defined",
+    "exclusions": "Preserves existing selected date scope or explicitly all-date scope; configured thresholds and latest-source aging date are disclosed.",
+    "caveat": "Source invoice references do not prove accounting settlement; missing optional fields remain unavailable.",
+    "readiness": "code_verified",
+    "finance_required": false,
+    "unit": "count",
+    "version": "2",
+    "database_fields": {
+      "Operations Locked On": "Source mapping pending validation",
+      "Financials Locked On": "Source mapping pending validation",
+      "Shipment No": "shipments.shipment_no",
+      "Shipment Date": "shipments.shipment_date"
+    },
+    "identity": [
+      "company",
+      "report_type",
+      "shipment_no",
+      "shipment_date"
+    ],
+    "permissions": "Server-scoped company and LOB access",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Waiting for operations lock\nWhat it means: Operational indicator from accepted Shipment Registers.\nWhy it matters: Identify operational activity and records requiring review.\nSource report: Shipment Register\nExact source columns: Operations Locked On, Financials Locked On, Shipment No, Shipment Date\nCalculation: Count shipments in Pending ops lock stage\nAggregation: COUNT / SUM / MEAN as defined\nReporting date: Shipment Date\nExclusions and conditions: Preserves existing selected date scope or explicitly all-date scope; configured thresholds and latest-source aging date are disclosed.\nImportant limitation: Source invoice references do not prove accounting settlement; missing optional fields remain unavailable.\nIdentity: company, report_type, shipment_no, shipment_date\nMapped database fields: {'Operations Locked On': 'Source mapping pending validation', 'Financials Locked On': 'Source mapping pending validation', 'Shipment No': 'shipments.shipment_no', 'Shipment Date': 'shipments.shipment_date'}\nAccess: Server-scoped company and LOB access\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.financials_open",
+    "title": "Operations locked, financials open",
+    "meaning": "Operational indicator from accepted Shipment Registers.",
+    "outcome": "Identify operational activity and records requiring review.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Operations Locked On",
+      "Financials Locked On",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "Shipment Date",
+    "formula": "Count shipments in Financials open stage",
+    "aggregation": "COUNT / SUM / MEAN as defined",
+    "exclusions": "Preserves existing selected date scope or explicitly all-date scope; configured thresholds and latest-source aging date are disclosed.",
+    "caveat": "Source invoice references do not prove accounting settlement; missing optional fields remain unavailable.",
+    "readiness": "code_verified",
+    "finance_required": false,
+    "unit": "count",
+    "version": "2",
+    "database_fields": {
+      "Operations Locked On": "Source mapping pending validation",
+      "Financials Locked On": "Source mapping pending validation",
+      "Shipment No": "shipments.shipment_no",
+      "Shipment Date": "shipments.shipment_date"
+    },
+    "identity": [
+      "company",
+      "report_type",
+      "shipment_no",
+      "shipment_date"
+    ],
+    "permissions": "Server-scoped company and LOB access",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Operations locked, financials open\nWhat it means: Operational indicator from accepted Shipment Registers.\nWhy it matters: Identify operational activity and records requiring review.\nSource report: Shipment Register\nExact source columns: Operations Locked On, Financials Locked On, Shipment No, Shipment Date\nCalculation: Count shipments in Financials open stage\nAggregation: COUNT / SUM / MEAN as defined\nReporting date: Shipment Date\nExclusions and conditions: Preserves existing selected date scope or explicitly all-date scope; configured thresholds and latest-source aging date are disclosed.\nImportant limitation: Source invoice references do not prove accounting settlement; missing optional fields remain unavailable.\nIdentity: company, report_type, shipment_no, shipment_date\nMapped database fields: {'Operations Locked On': 'Source mapping pending validation', 'Financials Locked On': 'Source mapping pending validation', 'Shipment No': 'shipments.shipment_no', 'Shipment Date': 'shipments.shipment_date'}\nAccess: Server-scoped company and LOB access\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.old_open",
+    "title": "Old open shipments",
+    "meaning": "Operational indicator from accepted Shipment Registers.",
+    "outcome": "Identify operational activity and records requiring review.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Shipment Date",
+      "Operations Locked On",
+      "Financials Locked On",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "Shipment Date",
+    "formula": "Count non-closed shipments older than configured oldDays, using the latest available operational date",
+    "aggregation": "COUNT / SUM / MEAN as defined",
+    "exclusions": "Preserves existing selected date scope or explicitly all-date scope; configured thresholds and latest-source aging date are disclosed.",
+    "caveat": "Source invoice references do not prove accounting settlement; missing optional fields remain unavailable.",
+    "readiness": "code_verified",
+    "finance_required": false,
+    "unit": "count",
+    "version": "2",
+    "database_fields": {
+      "Shipment Date": "shipments.shipment_date",
+      "Operations Locked On": "Source mapping pending validation",
+      "Financials Locked On": "Source mapping pending validation",
+      "Shipment No": "shipments.shipment_no"
+    },
+    "identity": [
+      "company",
+      "report_type",
+      "shipment_no",
+      "shipment_date"
+    ],
+    "permissions": "Server-scoped company and LOB access",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Old open shipments\nWhat it means: Operational indicator from accepted Shipment Registers.\nWhy it matters: Identify operational activity and records requiring review.\nSource report: Shipment Register\nExact source columns: Shipment Date, Operations Locked On, Financials Locked On, Shipment No, Shipment Date\nCalculation: Count non-closed shipments older than configured oldDays, using the latest available operational date\nAggregation: COUNT / SUM / MEAN as defined\nReporting date: Shipment Date\nExclusions and conditions: Preserves existing selected date scope or explicitly all-date scope; configured thresholds and latest-source aging date are disclosed.\nImportant limitation: Source invoice references do not prove accounting settlement; missing optional fields remain unavailable.\nIdentity: company, report_type, shipment_no, shipment_date\nMapped database fields: {'Shipment Date': 'shipments.shipment_date', 'Operations Locked On': 'Source mapping pending validation', 'Financials Locked On': 'Source mapping pending validation', 'Shipment No': 'shipments.shipment_no'}\nAccess: Server-scoped company and LOB access\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.oldest_open",
+    "title": "Oldest open shipment (days)",
+    "meaning": "Operational indicator from accepted Shipment Registers.",
+    "outcome": "Identify operational activity and records requiring review.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Shipment Date",
+      "Operations Locked On",
+      "Financials Locked On",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "Shipment Date",
+    "formula": "MAX(latest operational date - Shipment Date) for non-closed shipments; zero if no open shipments",
+    "aggregation": "COUNT / SUM / MEAN as defined",
+    "exclusions": "Preserves existing selected date scope or explicitly all-date scope; configured thresholds and latest-source aging date are disclosed.",
+    "caveat": "Source invoice references do not prove accounting settlement; missing optional fields remain unavailable.",
+    "readiness": "code_verified",
+    "finance_required": false,
+    "unit": "days",
+    "version": "2",
+    "database_fields": {
+      "Shipment Date": "shipments.shipment_date",
+      "Operations Locked On": "Source mapping pending validation",
+      "Financials Locked On": "Source mapping pending validation",
+      "Shipment No": "shipments.shipment_no"
+    },
+    "identity": [
+      "company",
+      "report_type",
+      "shipment_no",
+      "shipment_date"
+    ],
+    "permissions": "Server-scoped company and LOB access",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Oldest open shipment (days)\nWhat it means: Operational indicator from accepted Shipment Registers.\nWhy it matters: Identify operational activity and records requiring review.\nSource report: Shipment Register\nExact source columns: Shipment Date, Operations Locked On, Financials Locked On, Shipment No, Shipment Date\nCalculation: MAX(latest operational date - Shipment Date) for non-closed shipments; zero if no open shipments\nAggregation: COUNT / SUM / MEAN as defined\nReporting date: Shipment Date\nExclusions and conditions: Preserves existing selected date scope or explicitly all-date scope; configured thresholds and latest-source aging date are disclosed.\nImportant limitation: Source invoice references do not prove accounting settlement; missing optional fields remain unavailable.\nIdentity: company, report_type, shipment_no, shipment_date\nMapped database fields: {'Shipment Date': 'shipments.shipment_date', 'Operations Locked On': 'Source mapping pending validation', 'Financials Locked On': 'Source mapping pending validation', 'Shipment No': 'shipments.shipment_no'}\nAccess: Server-scoped company and LOB access\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.lock_lag",
+    "title": "Days from ops lock to financial lock",
+    "meaning": "Operational indicator from accepted Shipment Registers.",
+    "outcome": "Identify operational activity and records requiring review.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Operations Locked On",
+      "Financials Locked On",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "Shipment Date",
+    "formula": "Average(Financials Locked On - Operations Locked On) where both dates are recorded",
+    "aggregation": "COUNT / SUM / MEAN as defined",
+    "exclusions": "Preserves existing selected date scope or explicitly all-date scope; configured thresholds and latest-source aging date are disclosed.",
+    "caveat": "Source invoice references do not prove accounting settlement; missing optional fields remain unavailable.",
+    "readiness": "code_verified",
+    "finance_required": false,
+    "unit": "days",
+    "version": "2",
+    "database_fields": {
+      "Operations Locked On": "Source mapping pending validation",
+      "Financials Locked On": "Source mapping pending validation",
+      "Shipment No": "shipments.shipment_no",
+      "Shipment Date": "shipments.shipment_date"
+    },
+    "identity": [
+      "company",
+      "report_type",
+      "shipment_no",
+      "shipment_date"
+    ],
+    "permissions": "Server-scoped company and LOB access",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Days from ops lock to financial lock\nWhat it means: Operational indicator from accepted Shipment Registers.\nWhy it matters: Identify operational activity and records requiring review.\nSource report: Shipment Register\nExact source columns: Operations Locked On, Financials Locked On, Shipment No, Shipment Date\nCalculation: Average(Financials Locked On - Operations Locked On) where both dates are recorded\nAggregation: COUNT / SUM / MEAN as defined\nReporting date: Shipment Date\nExclusions and conditions: Preserves existing selected date scope or explicitly all-date scope; configured thresholds and latest-source aging date are disclosed.\nImportant limitation: Source invoice references do not prove accounting settlement; missing optional fields remain unavailable.\nIdentity: company, report_type, shipment_no, shipment_date\nMapped database fields: {'Operations Locked On': 'Source mapping pending validation', 'Financials Locked On': 'Source mapping pending validation', 'Shipment No': 'shipments.shipment_no', 'Shipment Date': 'shipments.shipment_date'}\nAccess: Server-scoped company and LOB access\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.invoiced_share",
+    "title": "Shipments invoiced",
+    "meaning": "Operational indicator from accepted Shipment Registers.",
+    "outcome": "Identify operational activity and records requiring review.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Invoice No. & Date",
+      "Billing Details",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "Shipment Date",
+    "formula": "Count selected shipments with an invoice/billing reference / selected shipments",
+    "aggregation": "COUNT / SUM / MEAN as defined",
+    "exclusions": "Preserves existing selected date scope or explicitly all-date scope; configured thresholds and latest-source aging date are disclosed.",
+    "caveat": "Source invoice references do not prove accounting settlement; missing optional fields remain unavailable.",
+    "readiness": "code_verified",
+    "finance_required": false,
+    "unit": "ratio",
+    "version": "2",
+    "database_fields": {
+      "Invoice No. & Date": "Source mapping pending validation",
+      "Billing Details": "Source mapping pending validation",
+      "Shipment No": "shipments.shipment_no",
+      "Shipment Date": "shipments.shipment_date"
+    },
+    "identity": [
+      "company",
+      "report_type",
+      "shipment_no",
+      "shipment_date"
+    ],
+    "permissions": "Server-scoped company and LOB access",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Shipments invoiced\nWhat it means: Operational indicator from accepted Shipment Registers.\nWhy it matters: Identify operational activity and records requiring review.\nSource report: Shipment Register\nExact source columns: Invoice No. & Date, Billing Details, Shipment No, Shipment Date\nCalculation: Count selected shipments with an invoice/billing reference / selected shipments\nAggregation: COUNT / SUM / MEAN as defined\nReporting date: Shipment Date\nExclusions and conditions: Preserves existing selected date scope or explicitly all-date scope; configured thresholds and latest-source aging date are disclosed.\nImportant limitation: Source invoice references do not prove accounting settlement; missing optional fields remain unavailable.\nIdentity: company, report_type, shipment_no, shipment_date\nMapped database fields: {'Invoice No. & Date': 'Source mapping pending validation', 'Billing Details': 'Source mapping pending validation', 'Shipment No': 'shipments.shipment_no', 'Shipment Date': 'shipments.shipment_date'}\nAccess: Server-scoped company and LOB access\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.invoice_lag",
+    "title": "Days from shipment to first invoice",
+    "meaning": "Operational indicator from accepted Shipment Registers.",
+    "outcome": "Identify operational activity and records requiring review.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Invoice No. & Date",
+      "Billing Details",
+      "Shipment Date",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "Shipment Date",
+    "formula": "Average(first parsed invoice date - Shipment Date) where the invoice date is available",
+    "aggregation": "COUNT / SUM / MEAN as defined",
+    "exclusions": "Preserves existing selected date scope or explicitly all-date scope; configured thresholds and latest-source aging date are disclosed.",
+    "caveat": "Source invoice references do not prove accounting settlement; missing optional fields remain unavailable.",
+    "readiness": "code_verified",
+    "finance_required": false,
+    "unit": "days",
+    "version": "2",
+    "database_fields": {
+      "Invoice No. & Date": "Source mapping pending validation",
+      "Billing Details": "Source mapping pending validation",
+      "Shipment Date": "shipments.shipment_date",
+      "Shipment No": "shipments.shipment_no"
+    },
+    "identity": [
+      "company",
+      "report_type",
+      "shipment_no",
+      "shipment_date"
+    ],
+    "permissions": "Server-scoped company and LOB access",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Days from shipment to first invoice\nWhat it means: Operational indicator from accepted Shipment Registers.\nWhy it matters: Identify operational activity and records requiring review.\nSource report: Shipment Register\nExact source columns: Invoice No. & Date, Billing Details, Shipment Date, Shipment No, Shipment Date\nCalculation: Average(first parsed invoice date - Shipment Date) where the invoice date is available\nAggregation: COUNT / SUM / MEAN as defined\nReporting date: Shipment Date\nExclusions and conditions: Preserves existing selected date scope or explicitly all-date scope; configured thresholds and latest-source aging date are disclosed.\nImportant limitation: Source invoice references do not prove accounting settlement; missing optional fields remain unavailable.\nIdentity: company, report_type, shipment_no, shipment_date\nMapped database fields: {'Invoice No. & Date': 'Source mapping pending validation', 'Billing Details': 'Source mapping pending validation', 'Shipment Date': 'shipments.shipment_date', 'Shipment No': 'shipments.shipment_no'}\nAccess: Server-scoped company and LOB access\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.lock_invoice_lag",
+    "title": "Days from ops lock to first invoice",
+    "meaning": "Operational indicator from accepted Shipment Registers.",
+    "outcome": "Identify operational activity and records requiring review.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Invoice No. & Date",
+      "Billing Details",
+      "Operations Locked On",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "Shipment Date",
+    "formula": "Average(first parsed invoice date - Operations Locked On) where both dates are available",
+    "aggregation": "COUNT / SUM / MEAN as defined",
+    "exclusions": "Preserves existing selected date scope or explicitly all-date scope; configured thresholds and latest-source aging date are disclosed.",
+    "caveat": "Source invoice references do not prove accounting settlement; missing optional fields remain unavailable.",
+    "readiness": "code_verified",
+    "finance_required": false,
+    "unit": "days",
+    "version": "2",
+    "database_fields": {
+      "Invoice No. & Date": "Source mapping pending validation",
+      "Billing Details": "Source mapping pending validation",
+      "Operations Locked On": "Source mapping pending validation",
+      "Shipment No": "shipments.shipment_no",
+      "Shipment Date": "shipments.shipment_date"
+    },
+    "identity": [
+      "company",
+      "report_type",
+      "shipment_no",
+      "shipment_date"
+    ],
+    "permissions": "Server-scoped company and LOB access",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Days from ops lock to first invoice\nWhat it means: Operational indicator from accepted Shipment Registers.\nWhy it matters: Identify operational activity and records requiring review.\nSource report: Shipment Register\nExact source columns: Invoice No. & Date, Billing Details, Operations Locked On, Shipment No, Shipment Date\nCalculation: Average(first parsed invoice date - Operations Locked On) where both dates are available\nAggregation: COUNT / SUM / MEAN as defined\nReporting date: Shipment Date\nExclusions and conditions: Preserves existing selected date scope or explicitly all-date scope; configured thresholds and latest-source aging date are disclosed.\nImportant limitation: Source invoice references do not prove accounting settlement; missing optional fields remain unavailable.\nIdentity: company, report_type, shipment_no, shipment_date\nMapped database fields: {'Invoice No. & Date': 'Source mapping pending validation', 'Billing Details': 'Source mapping pending validation', 'Operations Locked On': 'Source mapping pending validation', 'Shipment No': 'shipments.shipment_no', 'Shipment Date': 'shipments.shipment_date'}\nAccess: Server-scoped company and LOB access\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.locked_no_invoice",
+    "title": "Locked but not invoiced",
+    "meaning": "Operational indicator from accepted Shipment Registers.",
+    "outcome": "Identify operational activity and records requiring review.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Invoice No. & Date",
+      "Billing Details",
+      "Operations Locked On",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "Shipment Date",
+    "formula": "Count operations-locked shipments without an invoice/billing reference",
+    "aggregation": "COUNT / SUM / MEAN as defined",
+    "exclusions": "Preserves existing selected date scope or explicitly all-date scope; configured thresholds and latest-source aging date are disclosed.",
+    "caveat": "Source invoice references do not prove accounting settlement; missing optional fields remain unavailable.",
+    "readiness": "code_verified",
+    "finance_required": false,
+    "unit": "count",
+    "version": "2",
+    "database_fields": {
+      "Invoice No. & Date": "Source mapping pending validation",
+      "Billing Details": "Source mapping pending validation",
+      "Operations Locked On": "Source mapping pending validation",
+      "Shipment No": "shipments.shipment_no",
+      "Shipment Date": "shipments.shipment_date"
+    },
+    "identity": [
+      "company",
+      "report_type",
+      "shipment_no",
+      "shipment_date"
+    ],
+    "permissions": "Server-scoped company and LOB access",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Locked but not invoiced\nWhat it means: Operational indicator from accepted Shipment Registers.\nWhy it matters: Identify operational activity and records requiring review.\nSource report: Shipment Register\nExact source columns: Invoice No. & Date, Billing Details, Operations Locked On, Shipment No, Shipment Date\nCalculation: Count operations-locked shipments without an invoice/billing reference\nAggregation: COUNT / SUM / MEAN as defined\nReporting date: Shipment Date\nExclusions and conditions: Preserves existing selected date scope or explicitly all-date scope; configured thresholds and latest-source aging date are disclosed.\nImportant limitation: Source invoice references do not prove accounting settlement; missing optional fields remain unavailable.\nIdentity: company, report_type, shipment_no, shipment_date\nMapped database fields: {'Invoice No. & Date': 'Source mapping pending validation', 'Billing Details': 'Source mapping pending validation', 'Operations Locked On': 'Source mapping pending validation', 'Shipment No': 'shipments.shipment_no', 'Shipment Date': 'shipments.shipment_date'}\nAccess: Server-scoped company and LOB access\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.overdue_invoice",
+    "title": "Old locked shipments without invoice reference",
+    "meaning": "Operational indicator from accepted Shipment Registers.",
+    "outcome": "Identify operational activity and records requiring review.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Invoice No. & Date",
+      "Billing Details",
+      "Operations Locked On",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "Shipment Date",
+    "formula": "Count operations-locked shipments without invoice references beyond configured unbilledDays",
+    "aggregation": "COUNT / SUM / MEAN as defined",
+    "exclusions": "Preserves existing selected date scope or explicitly all-date scope; configured thresholds and latest-source aging date are disclosed.",
+    "caveat": "Source invoice references do not prove accounting settlement; missing optional fields remain unavailable.",
+    "readiness": "code_verified",
+    "finance_required": false,
+    "unit": "count",
+    "version": "2",
+    "database_fields": {
+      "Invoice No. & Date": "Source mapping pending validation",
+      "Billing Details": "Source mapping pending validation",
+      "Operations Locked On": "Source mapping pending validation",
+      "Shipment No": "shipments.shipment_no",
+      "Shipment Date": "shipments.shipment_date"
+    },
+    "identity": [
+      "company",
+      "report_type",
+      "shipment_no",
+      "shipment_date"
+    ],
+    "permissions": "Server-scoped company and LOB access",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Old locked shipments without invoice reference\nWhat it means: Operational indicator from accepted Shipment Registers.\nWhy it matters: Identify operational activity and records requiring review.\nSource report: Shipment Register\nExact source columns: Invoice No. & Date, Billing Details, Operations Locked On, Shipment No, Shipment Date\nCalculation: Count operations-locked shipments without invoice references beyond configured unbilledDays\nAggregation: COUNT / SUM / MEAN as defined\nReporting date: Shipment Date\nExclusions and conditions: Preserves existing selected date scope or explicitly all-date scope; configured thresholds and latest-source aging date are disclosed.\nImportant limitation: Source invoice references do not prove accounting settlement; missing optional fields remain unavailable.\nIdentity: company, report_type, shipment_no, shipment_date\nMapped database fields: {'Invoice No. & Date': 'Source mapping pending validation', 'Billing Details': 'Source mapping pending validation', 'Operations Locked On': 'Source mapping pending validation', 'Shipment No': 'shipments.shipment_no', 'Shipment Date': 'shipments.shipment_date'}\nAccess: Server-scoped company and LOB access\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "profit.customers",
+    "title": "Customers",
+    "meaning": "Customer-level grouping of recorded Job Profit Analysis amounts.",
+    "outcome": "Assess customer concentration and profitability.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Organization",
+      "Income (INR)",
+      "Expense (INR)",
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "COUNT DISTINCT source Organization names in eligible JPR rows",
+    "aggregation": "GROUP BY source Organization name",
+    "exclusions": "Customer rank page deliberately skips its own customer selection, retaining other filters.",
+    "caveat": "Source names are the available identity; verified ERP customer codes are unavailable in the inspected JPR headers.",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "count",
+    "version": "2",
+    "database_fields": {
+      "Organization": "Source mapping pending validation",
+      "Income (INR)": "profit_lines.income",
+      "Expense (INR)": "profit_lines.expense",
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Customers\nWhat it means: Customer-level grouping of recorded Job Profit Analysis amounts.\nWhy it matters: Assess customer concentration and profitability.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Organization, Income (INR), Expense (INR), Job No., Job Date, LOB\nCalculation: COUNT DISTINCT source Organization names in eligible JPR rows\nAggregation: GROUP BY source Organization name\nReporting date: Job Date\nExclusions and conditions: Customer rank page deliberately skips its own customer selection, retaining other filters.\nImportant limitation: Source names are the available identity; verified ERP customer codes are unavailable in the inspected JPR headers.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Organization': 'Source mapping pending validation', 'Income (INR)': 'profit_lines.income', 'Expense (INR)': 'profit_lines.expense', 'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "profit.customers_80",
+    "title": "Customers making 80% of profit",
+    "meaning": "Customer-level grouping of recorded Job Profit Analysis amounts.",
+    "outcome": "Assess customer concentration and profitability.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Organization",
+      "Income (INR)",
+      "Expense (INR)",
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "Count largest positive-profit customers until cumulative positive GP reaches 80% of all positive customer GP",
+    "aggregation": "GROUP BY source Organization name",
+    "exclusions": "Customer rank page deliberately skips its own customer selection, retaining other filters.",
+    "caveat": "Source names are the available identity; verified ERP customer codes are unavailable in the inspected JPR headers.",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "count",
+    "version": "2",
+    "database_fields": {
+      "Organization": "Source mapping pending validation",
+      "Income (INR)": "profit_lines.income",
+      "Expense (INR)": "profit_lines.expense",
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Customers making 80% of profit\nWhat it means: Customer-level grouping of recorded Job Profit Analysis amounts.\nWhy it matters: Assess customer concentration and profitability.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Organization, Income (INR), Expense (INR), Job No., Job Date, LOB\nCalculation: Count largest positive-profit customers until cumulative positive GP reaches 80% of all positive customer GP\nAggregation: GROUP BY source Organization name\nReporting date: Job Date\nExclusions and conditions: Customer rank page deliberately skips its own customer selection, retaining other filters.\nImportant limitation: Source names are the available identity; verified ERP customer codes are unavailable in the inspected JPR headers.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Organization': 'Source mapping pending validation', 'Income (INR)': 'profit_lines.income', 'Expense (INR)': 'profit_lines.expense', 'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "profit.biggest_customer",
+    "title": "Biggest customer share",
+    "meaning": "Customer-level grouping of recorded Job Profit Analysis amounts.",
+    "outcome": "Assess customer concentration and profitability.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Organization",
+      "Income (INR)",
+      "Expense (INR)",
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "Largest customer GP / total GP; existing UI denominator fallback to 1 when total GP equals zero",
+    "aggregation": "GROUP BY source Organization name",
+    "exclusions": "Customer rank page deliberately skips its own customer selection, retaining other filters.",
+    "caveat": "Source names are the available identity; verified ERP customer codes are unavailable in the inspected JPR headers.",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "ratio",
+    "version": "2",
+    "database_fields": {
+      "Organization": "Source mapping pending validation",
+      "Income (INR)": "profit_lines.income",
+      "Expense (INR)": "profit_lines.expense",
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Biggest customer share\nWhat it means: Customer-level grouping of recorded Job Profit Analysis amounts.\nWhy it matters: Assess customer concentration and profitability.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Organization, Income (INR), Expense (INR), Job No., Job Date, LOB\nCalculation: Largest customer GP / total GP; existing UI denominator fallback to 1 when total GP equals zero\nAggregation: GROUP BY source Organization name\nReporting date: Job Date\nExclusions and conditions: Customer rank page deliberately skips its own customer selection, retaining other filters.\nImportant limitation: Source names are the available identity; verified ERP customer codes are unavailable in the inspected JPR headers.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Organization': 'Source mapping pending validation', 'Income (INR)': 'profit_lines.income', 'Expense (INR)': 'profit_lines.expense', 'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "profit.loss_customers",
+    "title": "Loss-making customers",
+    "meaning": "Customer-level grouping of recorded Job Profit Analysis amounts.",
+    "outcome": "Assess customer concentration and profitability.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Organization",
+      "Income (INR)",
+      "Expense (INR)",
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "Count customers with aggregate GP < 0",
+    "aggregation": "GROUP BY source Organization name",
+    "exclusions": "Customer rank page deliberately skips its own customer selection, retaining other filters.",
+    "caveat": "Source names are the available identity; verified ERP customer codes are unavailable in the inspected JPR headers.",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "count",
+    "version": "2",
+    "database_fields": {
+      "Organization": "Source mapping pending validation",
+      "Income (INR)": "profit_lines.income",
+      "Expense (INR)": "profit_lines.expense",
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Loss-making customers\nWhat it means: Customer-level grouping of recorded Job Profit Analysis amounts.\nWhy it matters: Assess customer concentration and profitability.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Organization, Income (INR), Expense (INR), Job No., Job Date, LOB\nCalculation: Count customers with aggregate GP < 0\nAggregation: GROUP BY source Organization name\nReporting date: Job Date\nExclusions and conditions: Customer rank page deliberately skips its own customer selection, retaining other filters.\nImportant limitation: Source names are the available identity; verified ERP customer codes are unavailable in the inspected JPR headers.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Organization': 'Source mapping pending validation', 'Income (INR)': 'profit_lines.income', 'Expense (INR)': 'profit_lines.expense', 'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "profit.air_yield",
+    "title": "Air: profit per tonne",
+    "meaning": "Source-linked financial measure over eligible JPR jobs.",
+    "outcome": "Inspect the source records and their recorded operational basis.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Income (INR)",
+      "Expense (INR)",
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "GP of matched air jobs / matched air chargeable tonnes",
+    "aggregation": "SUM / DISTINCT COUNT / RATIO as defined",
+    "exclusions": "Only unique company/LOB/date/job register matches; applicable selected dimension and rate policy.",
+    "caveat": "Operational denominators come from matched registers; unmatched finance remains in general GP, not volume yields. Freight estimates exclude other charges.",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "INR per tonne",
+    "version": "2",
+    "database_fields": {
+      "Income (INR)": "profit_lines.income",
+      "Expense (INR)": "profit_lines.expense",
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Air: profit per tonne\nWhat it means: Source-linked financial measure over eligible JPR jobs.\nWhy it matters: Inspect the source records and their recorded operational basis.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Income (INR), Expense (INR), Job No., Job Date, LOB\nCalculation: GP of matched air jobs / matched air chargeable tonnes\nAggregation: SUM / DISTINCT COUNT / RATIO as defined\nReporting date: Job Date\nExclusions and conditions: Only unique company/LOB/date/job register matches; applicable selected dimension and rate policy.\nImportant limitation: Operational denominators come from matched registers; unmatched finance remains in general GP, not volume yields. Freight estimates exclude other charges.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Income (INR)': 'profit_lines.income', 'Expense (INR)': 'profit_lines.expense', 'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "profit.ocean_yield",
+    "title": "Sea: profit per TEU",
+    "meaning": "Source-linked financial measure over eligible JPR jobs.",
+    "outcome": "Inspect the source records and their recorded operational basis.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Income (INR)",
+      "Expense (INR)",
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "GP of matched ocean jobs / matched ocean TEUs",
+    "aggregation": "SUM / DISTINCT COUNT / RATIO as defined",
+    "exclusions": "Only unique company/LOB/date/job register matches; applicable selected dimension and rate policy.",
+    "caveat": "Operational denominators come from matched registers; unmatched finance remains in general GP, not volume yields. Freight estimates exclude other charges.",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "INR per TEU",
+    "version": "2",
+    "database_fields": {
+      "Income (INR)": "profit_lines.income",
+      "Expense (INR)": "profit_lines.expense",
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Sea: profit per TEU\nWhat it means: Source-linked financial measure over eligible JPR jobs.\nWhy it matters: Inspect the source records and their recorded operational basis.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Income (INR), Expense (INR), Job No., Job Date, LOB\nCalculation: GP of matched ocean jobs / matched ocean TEUs\nAggregation: SUM / DISTINCT COUNT / RATIO as defined\nReporting date: Job Date\nExclusions and conditions: Only unique company/LOB/date/job register matches; applicable selected dimension and rate policy.\nImportant limitation: Operational denominators come from matched registers; unmatched finance remains in general GP, not volume yields. Freight estimates exclude other charges.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Income (INR)': 'profit_lines.income', 'Expense (INR)': 'profit_lines.expense', 'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "profit.matched_share",
+    "title": "Jobs matched to the register",
+    "meaning": "Source-linked financial measure over eligible JPR jobs.",
+    "outcome": "Inspect the source records and their recorded operational basis.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Income (INR)",
+      "Expense (INR)",
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "Distinct matched JPR jobs / distinct eligible JPR jobs",
+    "aggregation": "SUM / DISTINCT COUNT / RATIO as defined",
+    "exclusions": "Only unique company/LOB/date/job register matches; applicable selected dimension and rate policy.",
+    "caveat": "Operational denominators come from matched registers; unmatched finance remains in general GP, not volume yields. Freight estimates exclude other charges.",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "ratio",
+    "version": "2",
+    "database_fields": {
+      "Income (INR)": "profit_lines.income",
+      "Expense (INR)": "profit_lines.expense",
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Jobs matched to the register\nWhat it means: Source-linked financial measure over eligible JPR jobs.\nWhy it matters: Inspect the source records and their recorded operational basis.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Income (INR), Expense (INR), Job No., Job Date, LOB\nCalculation: Distinct matched JPR jobs / distinct eligible JPR jobs\nAggregation: SUM / DISTINCT COUNT / RATIO as defined\nReporting date: Job Date\nExclusions and conditions: Only unique company/LOB/date/job register matches; applicable selected dimension and rate policy.\nImportant limitation: Operational denominators come from matched registers; unmatched finance remains in general GP, not volume yields. Freight estimates exclude other charges.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Income (INR)': 'profit_lines.income', 'Expense (INR)': 'profit_lines.expense', 'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "profit.best_dimension",
+    "title": "Best selected dimension",
+    "meaning": "Source-linked financial measure over eligible JPR jobs.",
+    "outcome": "Inspect the source records and their recorded operational basis.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Income (INR)",
+      "Expense (INR)",
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "Largest positive GP grouped by the selected verified source dimension",
+    "aggregation": "SUM / DISTINCT COUNT / RATIO as defined",
+    "exclusions": "Only unique company/LOB/date/job register matches; applicable selected dimension and rate policy.",
+    "caveat": "Operational denominators come from matched registers; unmatched finance remains in general GP, not volume yields. Freight estimates exclude other charges.",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "INR",
+    "version": "2",
+    "database_fields": {
+      "Income (INR)": "profit_lines.income",
+      "Expense (INR)": "profit_lines.expense",
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Best selected dimension\nWhat it means: Source-linked financial measure over eligible JPR jobs.\nWhy it matters: Inspect the source records and their recorded operational basis.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Income (INR), Expense (INR), Job No., Job Date, LOB\nCalculation: Largest positive GP grouped by the selected verified source dimension\nAggregation: SUM / DISTINCT COUNT / RATIO as defined\nReporting date: Job Date\nExclusions and conditions: Only unique company/LOB/date/job register matches; applicable selected dimension and rate policy.\nImportant limitation: Operational denominators come from matched registers; unmatched finance remains in general GP, not volume yields. Freight estimates exclude other charges.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Income (INR)': 'profit_lines.income', 'Expense (INR)': 'profit_lines.expense', 'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "profit.rate_matched_count",
+    "title": "Jobs compared",
+    "meaning": "Source-linked financial measure over eligible JPR jobs.",
+    "outcome": "Inspect the source records and their recorded operational basis.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Income (INR)",
+      "Expense (INR)",
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "Count JPR jobs matched to air-export register records with usable rates",
+    "aggregation": "SUM / DISTINCT COUNT / RATIO as defined",
+    "exclusions": "Only unique company/LOB/date/job register matches; applicable selected dimension and rate policy.",
+    "caveat": "Operational denominators come from matched registers; unmatched finance remains in general GP, not volume yields. Freight estimates exclude other charges.",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "count",
+    "version": "2",
+    "database_fields": {
+      "Income (INR)": "profit_lines.income",
+      "Expense (INR)": "profit_lines.expense",
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Jobs compared\nWhat it means: Source-linked financial measure over eligible JPR jobs.\nWhy it matters: Inspect the source records and their recorded operational basis.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Income (INR), Expense (INR), Job No., Job Date, LOB\nCalculation: Count JPR jobs matched to air-export register records with usable rates\nAggregation: SUM / DISTINCT COUNT / RATIO as defined\nReporting date: Job Date\nExclusions and conditions: Only unique company/LOB/date/job register matches; applicable selected dimension and rate policy.\nImportant limitation: Operational denominators come from matched registers; unmatched finance remains in general GP, not volume yields. Freight estimates exclude other charges.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Income (INR)': 'profit_lines.income', 'Expense (INR)': 'profit_lines.expense', 'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "profit.rate_matched_estimate",
+    "title": "Estimated freight margin on matched jobs",
+    "meaning": "Source-linked financial measure over eligible JPR jobs.",
+    "outcome": "Inspect the source records and their recorded operational basis.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Income (INR)",
+      "Expense (INR)",
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "Sum((Sell Rate - Buy Rate) * Chargeable Wt) once per matched JPR job",
+    "aggregation": "SUM / DISTINCT COUNT / RATIO as defined",
+    "exclusions": "Only unique company/LOB/date/job register matches; applicable selected dimension and rate policy.",
+    "caveat": "Operational denominators come from matched registers; unmatched finance remains in general GP, not volume yields. Freight estimates exclude other charges.",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "INR",
+    "version": "2",
+    "database_fields": {
+      "Income (INR)": "profit_lines.income",
+      "Expense (INR)": "profit_lines.expense",
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Estimated freight margin on matched jobs\nWhat it means: Source-linked financial measure over eligible JPR jobs.\nWhy it matters: Inspect the source records and their recorded operational basis.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Income (INR), Expense (INR), Job No., Job Date, LOB\nCalculation: Sum((Sell Rate - Buy Rate) * Chargeable Wt) once per matched JPR job\nAggregation: SUM / DISTINCT COUNT / RATIO as defined\nReporting date: Job Date\nExclusions and conditions: Only unique company/LOB/date/job register matches; applicable selected dimension and rate policy.\nImportant limitation: Operational denominators come from matched registers; unmatched finance remains in general GP, not volume yields. Freight estimates exclude other charges.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Income (INR)': 'profit_lines.income', 'Expense (INR)': 'profit_lines.expense', 'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "profit.rate_matched_actual",
+    "title": "Actual profit on matched jobs",
+    "meaning": "Source-linked financial measure over eligible JPR jobs.",
+    "outcome": "Inspect the source records and their recorded operational basis.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Income (INR)",
+      "Expense (INR)",
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "Sum recorded income - expense on JPR jobs matched to air-export records with usable rates",
+    "aggregation": "SUM / DISTINCT COUNT / RATIO as defined",
+    "exclusions": "Only unique company/LOB/date/job register matches; applicable selected dimension and rate policy.",
+    "caveat": "Operational denominators come from matched registers; unmatched finance remains in general GP, not volume yields. Freight estimates exclude other charges.",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "INR",
+    "version": "2",
+    "database_fields": {
+      "Income (INR)": "profit_lines.income",
+      "Expense (INR)": "profit_lines.expense",
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Actual profit on matched jobs\nWhat it means: Source-linked financial measure over eligible JPR jobs.\nWhy it matters: Inspect the source records and their recorded operational basis.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Income (INR), Expense (INR), Job No., Job Date, LOB\nCalculation: Sum recorded income - expense on JPR jobs matched to air-export records with usable rates\nAggregation: SUM / DISTINCT COUNT / RATIO as defined\nReporting date: Job Date\nExclusions and conditions: Only unique company/LOB/date/job register matches; applicable selected dimension and rate policy.\nImportant limitation: Operational denominators come from matched registers; unmatched finance remains in general GP, not volume yields. Freight estimates exclude other charges.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Income (INR)': 'profit_lines.income', 'Expense (INR)': 'profit_lines.expense', 'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "profit.rate_matched_difference",
+    "title": "Actual minus estimated freight margin",
+    "meaning": "Source-linked financial measure over eligible JPR jobs.",
+    "outcome": "Inspect the source records and their recorded operational basis.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Income (INR)",
+      "Expense (INR)",
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "Matched JPR GP - matched register freight-margin estimate",
+    "aggregation": "SUM / DISTINCT COUNT / RATIO as defined",
+    "exclusions": "Only unique company/LOB/date/job register matches; applicable selected dimension and rate policy.",
+    "caveat": "Operational denominators come from matched registers; unmatched finance remains in general GP, not volume yields. Freight estimates exclude other charges.",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "INR",
+    "version": "2",
+    "database_fields": {
+      "Income (INR)": "profit_lines.income",
+      "Expense (INR)": "profit_lines.expense",
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Actual minus estimated freight margin\nWhat it means: Source-linked financial measure over eligible JPR jobs.\nWhy it matters: Inspect the source records and their recorded operational basis.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Income (INR), Expense (INR), Job No., Job Date, LOB\nCalculation: Matched JPR GP - matched register freight-margin estimate\nAggregation: SUM / DISTINCT COUNT / RATIO as defined\nReporting date: Job Date\nExclusions and conditions: Only unique company/LOB/date/job register matches; applicable selected dimension and rate policy.\nImportant limitation: Operational denominators come from matched registers; unmatched finance remains in general GP, not volume yields. Freight estimates exclude other charges.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Income (INR)': 'profit_lines.income', 'Expense (INR)': 'profit_lines.expense', 'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.rate_air_exports",
+    "title": "Air export shipments",
+    "meaning": "Estimated air-export freight economics from usable register rates.",
+    "outcome": "Review pricing independently of booked JPR profit.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Buy Rate (UDF)",
+      "Sell Rate (UDF)",
+      "Chargeable Wt",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "Shipment Date",
+    "formula": "Count air-export register records",
+    "aggregation": "COUNT / RATIO OF SUMS / SUM as defined",
+    "exclusions": "Positive weight and positive recognized INR rates within configured maximum; clean/text policy retained; foreign-currency/blank/lump values excluded.",
+    "caveat": "Estimated freight only; financial permission required. Source rate text parsing is documented by the importer.",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "count",
+    "version": "2",
+    "database_fields": {
+      "Buy Rate (UDF)": "Source mapping pending validation",
+      "Sell Rate (UDF)": "Source mapping pending validation",
+      "Chargeable Wt": "shipments.extra[\"Chargeable Wt\"]",
+      "Shipment No": "shipments.shipment_no",
+      "Shipment Date": "shipments.shipment_date"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Air export shipments\nWhat it means: Estimated air-export freight economics from usable register rates.\nWhy it matters: Review pricing independently of booked JPR profit.\nSource report: Shipment Register\nExact source columns: Buy Rate (UDF), Sell Rate (UDF), Chargeable Wt, Shipment No, Shipment Date\nCalculation: Count air-export register records\nAggregation: COUNT / RATIO OF SUMS / SUM as defined\nReporting date: Shipment Date\nExclusions and conditions: Positive weight and positive recognized INR rates within configured maximum; clean/text policy retained; foreign-currency/blank/lump values excluded.\nImportant limitation: Estimated freight only; financial permission required. Source rate text parsing is documented by the importer.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Buy Rate (UDF)': 'Source mapping pending validation', 'Sell Rate (UDF)': 'Source mapping pending validation', 'Chargeable Wt': 'shipments.extra[\"Chargeable Wt\"]', 'Shipment No': 'shipments.shipment_no', 'Shipment Date': 'shipments.shipment_date'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.rate_usable",
+    "title": "With usable rates",
+    "meaning": "Estimated air-export freight economics from usable register rates.",
+    "outcome": "Review pricing independently of booked JPR profit.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Buy Rate (UDF)",
+      "Sell Rate (UDF)",
+      "Chargeable Wt",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "Shipment Date",
+    "formula": "Usable-rate air-export records / all selected air-export records",
+    "aggregation": "COUNT / RATIO OF SUMS / SUM as defined",
+    "exclusions": "Positive weight and positive recognized INR rates within configured maximum; clean/text policy retained; foreign-currency/blank/lump values excluded.",
+    "caveat": "Estimated freight only; financial permission required. Source rate text parsing is documented by the importer.",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "ratio",
+    "version": "2",
+    "database_fields": {
+      "Buy Rate (UDF)": "Source mapping pending validation",
+      "Sell Rate (UDF)": "Source mapping pending validation",
+      "Chargeable Wt": "shipments.extra[\"Chargeable Wt\"]",
+      "Shipment No": "shipments.shipment_no",
+      "Shipment Date": "shipments.shipment_date"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "With usable rates\nWhat it means: Estimated air-export freight economics from usable register rates.\nWhy it matters: Review pricing independently of booked JPR profit.\nSource report: Shipment Register\nExact source columns: Buy Rate (UDF), Sell Rate (UDF), Chargeable Wt, Shipment No, Shipment Date\nCalculation: Usable-rate air-export records / all selected air-export records\nAggregation: COUNT / RATIO OF SUMS / SUM as defined\nReporting date: Shipment Date\nExclusions and conditions: Positive weight and positive recognized INR rates within configured maximum; clean/text policy retained; foreign-currency/blank/lump values excluded.\nImportant limitation: Estimated freight only; financial permission required. Source rate text parsing is documented by the importer.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Buy Rate (UDF)': 'Source mapping pending validation', 'Sell Rate (UDF)': 'Source mapping pending validation', 'Chargeable Wt': 'shipments.extra[\"Chargeable Wt\"]', 'Shipment No': 'shipments.shipment_no', 'Shipment Date': 'shipments.shipment_date'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.rate_sell",
+    "title": "Average sell rate",
+    "meaning": "Estimated air-export freight economics from usable register rates.",
+    "outcome": "Review pricing independently of booked JPR profit.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Buy Rate (UDF)",
+      "Sell Rate (UDF)",
+      "Chargeable Wt",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "Shipment Date",
+    "formula": "SUM(Sell Rate * Chargeable Wt) / SUM(Chargeable Wt) for usable-rate air exports",
+    "aggregation": "COUNT / RATIO OF SUMS / SUM as defined",
+    "exclusions": "Positive weight and positive recognized INR rates within configured maximum; clean/text policy retained; foreign-currency/blank/lump values excluded.",
+    "caveat": "Estimated freight only; financial permission required. Source rate text parsing is documented by the importer.",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "INR per kg",
+    "version": "2",
+    "database_fields": {
+      "Buy Rate (UDF)": "Source mapping pending validation",
+      "Sell Rate (UDF)": "Source mapping pending validation",
+      "Chargeable Wt": "shipments.extra[\"Chargeable Wt\"]",
+      "Shipment No": "shipments.shipment_no",
+      "Shipment Date": "shipments.shipment_date"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Average sell rate\nWhat it means: Estimated air-export freight economics from usable register rates.\nWhy it matters: Review pricing independently of booked JPR profit.\nSource report: Shipment Register\nExact source columns: Buy Rate (UDF), Sell Rate (UDF), Chargeable Wt, Shipment No, Shipment Date\nCalculation: SUM(Sell Rate * Chargeable Wt) / SUM(Chargeable Wt) for usable-rate air exports\nAggregation: COUNT / RATIO OF SUMS / SUM as defined\nReporting date: Shipment Date\nExclusions and conditions: Positive weight and positive recognized INR rates within configured maximum; clean/text policy retained; foreign-currency/blank/lump values excluded.\nImportant limitation: Estimated freight only; financial permission required. Source rate text parsing is documented by the importer.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Buy Rate (UDF)': 'Source mapping pending validation', 'Sell Rate (UDF)': 'Source mapping pending validation', 'Chargeable Wt': 'shipments.extra[\"Chargeable Wt\"]', 'Shipment No': 'shipments.shipment_no', 'Shipment Date': 'shipments.shipment_date'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.rate_buy",
+    "title": "Average buy rate",
+    "meaning": "Estimated air-export freight economics from usable register rates.",
+    "outcome": "Review pricing independently of booked JPR profit.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Buy Rate (UDF)",
+      "Sell Rate (UDF)",
+      "Chargeable Wt",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "Shipment Date",
+    "formula": "SUM(Buy Rate * Chargeable Wt) / SUM(Chargeable Wt) for usable-rate air exports",
+    "aggregation": "COUNT / RATIO OF SUMS / SUM as defined",
+    "exclusions": "Positive weight and positive recognized INR rates within configured maximum; clean/text policy retained; foreign-currency/blank/lump values excluded.",
+    "caveat": "Estimated freight only; financial permission required. Source rate text parsing is documented by the importer.",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "INR per kg",
+    "version": "2",
+    "database_fields": {
+      "Buy Rate (UDF)": "Source mapping pending validation",
+      "Sell Rate (UDF)": "Source mapping pending validation",
+      "Chargeable Wt": "shipments.extra[\"Chargeable Wt\"]",
+      "Shipment No": "shipments.shipment_no",
+      "Shipment Date": "shipments.shipment_date"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Average buy rate\nWhat it means: Estimated air-export freight economics from usable register rates.\nWhy it matters: Review pricing independently of booked JPR profit.\nSource report: Shipment Register\nExact source columns: Buy Rate (UDF), Sell Rate (UDF), Chargeable Wt, Shipment No, Shipment Date\nCalculation: SUM(Buy Rate * Chargeable Wt) / SUM(Chargeable Wt) for usable-rate air exports\nAggregation: COUNT / RATIO OF SUMS / SUM as defined\nReporting date: Shipment Date\nExclusions and conditions: Positive weight and positive recognized INR rates within configured maximum; clean/text policy retained; foreign-currency/blank/lump values excluded.\nImportant limitation: Estimated freight only; financial permission required. Source rate text parsing is documented by the importer.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Buy Rate (UDF)': 'Source mapping pending validation', 'Sell Rate (UDF)': 'Source mapping pending validation', 'Chargeable Wt': 'shipments.extra[\"Chargeable Wt\"]', 'Shipment No': 'shipments.shipment_no', 'Shipment Date': 'shipments.shipment_date'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.rate_margin_kg",
+    "title": "Freight margin per kg",
+    "meaning": "Estimated air-export freight economics from usable register rates.",
+    "outcome": "Review pricing independently of booked JPR profit.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Buy Rate (UDF)",
+      "Sell Rate (UDF)",
+      "Chargeable Wt",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "Shipment Date",
+    "formula": "SUM((Sell Rate - Buy Rate) * Chargeable Wt) / SUM(Chargeable Wt)",
+    "aggregation": "COUNT / RATIO OF SUMS / SUM as defined",
+    "exclusions": "Positive weight and positive recognized INR rates within configured maximum; clean/text policy retained; foreign-currency/blank/lump values excluded.",
+    "caveat": "Estimated freight only; financial permission required. Source rate text parsing is documented by the importer.",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "INR per kg",
+    "version": "2",
+    "database_fields": {
+      "Buy Rate (UDF)": "Source mapping pending validation",
+      "Sell Rate (UDF)": "Source mapping pending validation",
+      "Chargeable Wt": "shipments.extra[\"Chargeable Wt\"]",
+      "Shipment No": "shipments.shipment_no",
+      "Shipment Date": "shipments.shipment_date"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Freight margin per kg\nWhat it means: Estimated air-export freight economics from usable register rates.\nWhy it matters: Review pricing independently of booked JPR profit.\nSource report: Shipment Register\nExact source columns: Buy Rate (UDF), Sell Rate (UDF), Chargeable Wt, Shipment No, Shipment Date\nCalculation: SUM((Sell Rate - Buy Rate) * Chargeable Wt) / SUM(Chargeable Wt)\nAggregation: COUNT / RATIO OF SUMS / SUM as defined\nReporting date: Shipment Date\nExclusions and conditions: Positive weight and positive recognized INR rates within configured maximum; clean/text policy retained; foreign-currency/blank/lump values excluded.\nImportant limitation: Estimated freight only; financial permission required. Source rate text parsing is documented by the importer.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Buy Rate (UDF)': 'Source mapping pending validation', 'Sell Rate (UDF)': 'Source mapping pending validation', 'Chargeable Wt': 'shipments.extra[\"Chargeable Wt\"]', 'Shipment No': 'shipments.shipment_no', 'Shipment Date': 'shipments.shipment_date'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.rate_margin",
+    "title": "Estimated freight margin",
+    "meaning": "Estimated air-export freight economics from usable register rates.",
+    "outcome": "Review pricing independently of booked JPR profit.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Buy Rate (UDF)",
+      "Sell Rate (UDF)",
+      "Chargeable Wt",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "Shipment Date",
+    "formula": "SUM((Sell Rate - Buy Rate) * Chargeable Wt) for usable-rate air exports",
+    "aggregation": "COUNT / RATIO OF SUMS / SUM as defined",
+    "exclusions": "Positive weight and positive recognized INR rates within configured maximum; clean/text policy retained; foreign-currency/blank/lump values excluded.",
+    "caveat": "Estimated freight only; financial permission required. Source rate text parsing is documented by the importer.",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "INR",
+    "version": "2",
+    "database_fields": {
+      "Buy Rate (UDF)": "Source mapping pending validation",
+      "Sell Rate (UDF)": "Source mapping pending validation",
+      "Chargeable Wt": "shipments.extra[\"Chargeable Wt\"]",
+      "Shipment No": "shipments.shipment_no",
+      "Shipment Date": "shipments.shipment_date"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Estimated freight margin\nWhat it means: Estimated air-export freight economics from usable register rates.\nWhy it matters: Review pricing independently of booked JPR profit.\nSource report: Shipment Register\nExact source columns: Buy Rate (UDF), Sell Rate (UDF), Chargeable Wt, Shipment No, Shipment Date\nCalculation: SUM((Sell Rate - Buy Rate) * Chargeable Wt) for usable-rate air exports\nAggregation: COUNT / RATIO OF SUMS / SUM as defined\nReporting date: Shipment Date\nExclusions and conditions: Positive weight and positive recognized INR rates within configured maximum; clean/text policy retained; foreign-currency/blank/lump values excluded.\nImportant limitation: Estimated freight only; financial permission required. Source rate text parsing is documented by the importer.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Buy Rate (UDF)': 'Source mapping pending validation', 'Sell Rate (UDF)': 'Source mapping pending validation', 'Chargeable Wt': 'shipments.extra[\"Chargeable Wt\"]', 'Shipment No': 'shipments.shipment_no', 'Shipment Date': 'shipments.shipment_date'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.rate_below_buy",
+    "title": "Selling below buy",
+    "meaning": "Estimated air-export freight economics from usable register rates.",
+    "outcome": "Review pricing independently of booked JPR profit.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Buy Rate (UDF)",
+      "Sell Rate (UDF)",
+      "Chargeable Wt",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "Shipment Date",
+    "formula": "Count usable-rate air-export records where Sell Rate < Buy Rate",
+    "aggregation": "COUNT / RATIO OF SUMS / SUM as defined",
+    "exclusions": "Positive weight and positive recognized INR rates within configured maximum; clean/text policy retained; foreign-currency/blank/lump values excluded.",
+    "caveat": "Estimated freight only; financial permission required. Source rate text parsing is documented by the importer.",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "count",
+    "version": "2",
+    "database_fields": {
+      "Buy Rate (UDF)": "Source mapping pending validation",
+      "Sell Rate (UDF)": "Source mapping pending validation",
+      "Chargeable Wt": "shipments.extra[\"Chargeable Wt\"]",
+      "Shipment No": "shipments.shipment_no",
+      "Shipment Date": "shipments.shipment_date"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Selling below buy\nWhat it means: Estimated air-export freight economics from usable register rates.\nWhy it matters: Review pricing independently of booked JPR profit.\nSource report: Shipment Register\nExact source columns: Buy Rate (UDF), Sell Rate (UDF), Chargeable Wt, Shipment No, Shipment Date\nCalculation: Count usable-rate air-export records where Sell Rate < Buy Rate\nAggregation: COUNT / RATIO OF SUMS / SUM as defined\nReporting date: Shipment Date\nExclusions and conditions: Positive weight and positive recognized INR rates within configured maximum; clean/text policy retained; foreign-currency/blank/lump values excluded.\nImportant limitation: Estimated freight only; financial permission required. Source rate text parsing is documented by the importer.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Buy Rate (UDF)': 'Source mapping pending validation', 'Sell Rate (UDF)': 'Source mapping pending validation', 'Chargeable Wt': 'shipments.extra[\"Chargeable Wt\"]', 'Shipment No': 'shipments.shipment_no', 'Shipment Date': 'shipments.shipment_date'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.air_weight_kg",
+    "title": "Air chargeable weight (kg)",
+    "meaning": "Operational measure from accepted Shipment Registers.",
+    "outcome": "Understand the selected operational activity.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Chargeable Wt",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "Shipment Date",
+    "formula": "SUM(Chargeable Wt) for Air Export and Air Import registers",
+    "aggregation": "SUM",
+    "exclusions": "Authorized company and department scope; current filter and date window.",
+    "caveat": "Configured source mapping; actual upload header validation remains pending.",
+    "readiness": "code_verified",
+    "finance_required": false,
+    "unit": "kg",
+    "version": "2",
+    "database_fields": {
+      "Chargeable Wt": "shipments.extra[\"Chargeable Wt\"]",
+      "Shipment No": "shipments.shipment_no",
+      "Shipment Date": "shipments.shipment_date"
+    },
+    "identity": [
+      "company",
+      "report_type",
+      "shipment_no",
+      "shipment_date"
+    ],
+    "permissions": "Server-scoped company and LOB access",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Air chargeable weight (kg)\nWhat it means: Operational measure from accepted Shipment Registers.\nWhy it matters: Understand the selected operational activity.\nSource report: Shipment Register\nExact source columns: Chargeable Wt, Shipment No, Shipment Date\nCalculation: SUM(Chargeable Wt) for Air Export and Air Import registers\nAggregation: SUM\nReporting date: Shipment Date\nExclusions and conditions: Authorized company and department scope; current filter and date window.\nImportant limitation: Configured source mapping; actual upload header validation remains pending.\nIdentity: company, report_type, shipment_no, shipment_date\nMapped database fields: {'Chargeable Wt': 'shipments.extra[\"Chargeable Wt\"]', 'Shipment No': 'shipments.shipment_no', 'Shipment Date': 'shipments.shipment_date'}\nAccess: Server-scoped company and LOB access\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.invoiced_count",
+    "title": "Shipments invoiced by first invoice date",
+    "meaning": "Count shipment records whose parsed first invoice date falls in the reporting window.",
+    "outcome": "Compare invoicing activity on its own date basis.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Invoice No. & Date",
+      "Billing Details",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "First parsed invoice date",
+    "formula": "COUNT DISTINCT shipment identities with a parsed first invoice date in the selected invoice window",
+    "aggregation": "COUNT DISTINCT",
+    "exclusions": "Other company/department/entity filters remain; source shipment date is not the reporting window for this metric.",
+    "caveat": "Invoice references do not establish collection or settlement; unparseable invoice dates cannot contribute.",
+    "readiness": "code_verified",
+    "finance_required": false,
+    "unit": "count",
+    "version": "2",
+    "database_fields": {
+      "Invoice No. & Date": "Source mapping pending validation",
+      "Billing Details": "Source mapping pending validation",
+      "Shipment No": "shipments.shipment_no",
+      "Shipment Date": "shipments.shipment_date"
+    },
+    "identity": [
+      "company",
+      "report_type",
+      "shipment_no",
+      "shipment_date"
+    ],
+    "permissions": "Server-scoped company and LOB access",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Shipments invoiced by first invoice date\nWhat it means: Count shipment records whose parsed first invoice date falls in the reporting window.\nWhy it matters: Compare invoicing activity on its own date basis.\nSource report: Shipment Register\nExact source columns: Invoice No. & Date, Billing Details, Shipment No, Shipment Date\nCalculation: COUNT DISTINCT shipment identities with a parsed first invoice date in the selected invoice window\nAggregation: COUNT DISTINCT\nReporting date: First parsed invoice date\nExclusions and conditions: Other company/department/entity filters remain; source shipment date is not the reporting window for this metric.\nImportant limitation: Invoice references do not establish collection or settlement; unparseable invoice dates cannot contribute.\nIdentity: company, report_type, shipment_no, shipment_date\nMapped database fields: {'Invoice No. & Date': 'Source mapping pending validation', 'Billing Details': 'Source mapping pending validation', 'Shipment No': 'shipments.shipment_no', 'Shipment Date': 'shipments.shipment_date'}\nAccess: Server-scoped company and LOB access\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "profit.low_margin",
+    "title": "Low-margin jobs",
+    "meaning": "Jobs classified below the configured GP margin threshold after higher-priority financial statuses.",
+    "outcome": "Identify margin conditions for review.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Income (INR)",
+      "Expense (INR)",
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "After no-cost, no-income and loss statuses: income > 0 and (income-expense)/income < configured low-margin threshold",
+    "aggregation": "COUNT DISTINCT",
+    "exclusions": "Preserves precedence and the existing INR 1 loss-rounding tolerance.",
+    "caveat": "Recorded cost completeness affects this ratio.",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "count",
+    "version": "2",
+    "database_fields": {
+      "Income (INR)": "profit_lines.income",
+      "Expense (INR)": "profit_lines.expense",
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Low-margin jobs\nWhat it means: Jobs classified below the configured GP margin threshold after higher-priority financial statuses.\nWhy it matters: Identify margin conditions for review.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Income (INR), Expense (INR), Job No., Job Date, LOB\nCalculation: After no-cost, no-income and loss statuses: income > 0 and (income-expense)/income < configured low-margin threshold\nAggregation: COUNT DISTINCT\nReporting date: Job Date\nExclusions and conditions: Preserves precedence and the existing INR 1 loss-rounding tolerance.\nImportant limitation: Recorded cost completeness affects this ratio.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Income (INR)': 'profit_lines.income', 'Expense (INR)': 'profit_lines.expense', 'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "profit.negative_income_rows",
+    "title": "Negative income rows",
+    "meaning": "JPR rows where recorded income is negative.",
+    "outcome": "Review credits, reversals or other negative income.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Income (INR)",
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "COUNT rows with Income (INR) < 0",
+    "aggregation": "COUNT",
+    "exclusions": "Eligible financial rows; this is not a verified document-type classification.",
+    "caveat": "Negative income does not prove a credit note was issued.",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "count",
+    "version": "2",
+    "database_fields": {
+      "Income (INR)": "profit_lines.income",
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Negative income rows\nWhat it means: JPR rows where recorded income is negative.\nWhy it matters: Review credits, reversals or other negative income.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Income (INR), Job No., Job Date, LOB\nCalculation: COUNT rows with Income (INR) < 0\nAggregation: COUNT\nReporting date: Job Date\nExclusions and conditions: Eligible financial rows; this is not a verified document-type classification.\nImportant limitation: Negative income does not prove a credit note was issued.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Income (INR)': 'profit_lines.income', 'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "profit.intercompany_proxy",
+    "title": "Company-name matched jobs",
+    "meaning": "Jobs whose organization matches a configured alias of the other company.",
+    "outcome": "Review potential intercompany activity.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Organization",
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "Count eligible jobs flagged by configured other-company name aliases",
+    "aggregation": "COUNT DISTINCT",
+    "exclusions": "Name-based classification; do not infer group consolidation or elimination.",
+    "caveat": "Reported company figures are combined without intercompany elimination.",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "count",
+    "version": "2",
+    "database_fields": {
+      "Organization": "Source mapping pending validation",
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Company-name matched jobs\nWhat it means: Jobs whose organization matches a configured alias of the other company.\nWhy it matters: Review potential intercompany activity.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Organization, Job No., Job Date, LOB\nCalculation: Count eligible jobs flagged by configured other-company name aliases\nAggregation: COUNT DISTINCT\nReporting date: Job Date\nExclusions and conditions: Name-based classification; do not infer group consolidation or elimination.\nImportant limitation: Reported company figures are combined without intercompany elimination.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Organization': 'Source mapping pending validation', 'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.customer_concentration",
+    "title": "Top customers share",
+    "meaning": "Share of the selected operational count or volume attributable to the largest configured number of customers.",
+    "outcome": "Assess concentration of reported activity.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Customer",
+      "Shipment No",
+      "Shipment Date",
+      "Chargeable Wt",
+      "TEUs"
+    ],
+    "date_column": "Shipment Date",
+    "formula": "SUM(top N customer measure totals) / SUM(all selected customer measure totals)",
+    "aggregation": "RATIO OF GROUPED SUMS",
+    "exclusions": "Uses shipment count or the selected single-mode air-tonne/ocean-TEU measure.",
+    "caveat": "Identity follows source names where customer codes are unavailable.",
+    "readiness": "code_verified",
+    "finance_required": false,
+    "unit": "ratio",
+    "version": "2",
+    "database_fields": {
+      "Customer": "Source mapping pending validation",
+      "Shipment No": "shipments.shipment_no",
+      "Shipment Date": "shipments.shipment_date",
+      "Chargeable Wt": "shipments.extra[\"Chargeable Wt\"]",
+      "TEUs": "shipments.extra[\"TEUs\"]"
+    },
+    "identity": [
+      "company",
+      "report_type",
+      "shipment_no",
+      "shipment_date"
+    ],
+    "permissions": "Server-scoped company and LOB access",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Top customers share\nWhat it means: Share of the selected operational count or volume attributable to the largest configured number of customers.\nWhy it matters: Assess concentration of reported activity.\nSource report: Shipment Register\nExact source columns: Customer, Shipment No, Shipment Date, Chargeable Wt, TEUs\nCalculation: SUM(top N customer measure totals) / SUM(all selected customer measure totals)\nAggregation: RATIO OF GROUPED SUMS\nReporting date: Shipment Date\nExclusions and conditions: Uses shipment count or the selected single-mode air-tonne/ocean-TEU measure.\nImportant limitation: Identity follows source names where customer codes are unavailable.\nIdentity: company, report_type, shipment_no, shipment_date\nMapped database fields: {'Customer': 'Source mapping pending validation', 'Shipment No': 'shipments.shipment_no', 'Shipment Date': 'shipments.shipment_date', 'Chargeable Wt': 'shipments.extra[\"Chargeable Wt\"]', 'TEUs': 'shipments.extra[\"TEUs\"]'}\nAccess: Server-scoped company and LOB access\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.period_new_customers",
+    "title": "Customers only in current period",
+    "meaning": "Customers meeting the configured activity minimum in one selected period and having zero shipments in the other.",
+    "outcome": "Review changes in observed period activity.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Customer",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "Shipment Date in the explicitly displayed current/comparison windows",
+    "formula": "COUNT distinct source customer names with period count >= activeMin and other period count = 0",
+    "aggregation": "COUNT DISTINCT CUSTOMER COHORT",
+    "exclusions": "Uses all selected source records in both windows; source names where codes are unavailable.",
+    "caveat": "This does not establish lifetime-new customers or confirmed lost business.",
+    "readiness": "code_verified",
+    "finance_required": false,
+    "unit": "count",
+    "version": "2",
+    "database_fields": {
+      "Customer": "Source mapping pending validation",
+      "Shipment No": "shipments.shipment_no",
+      "Shipment Date": "shipments.shipment_date"
+    },
+    "identity": [
+      "company",
+      "report_type",
+      "shipment_no",
+      "shipment_date"
+    ],
+    "permissions": "Server-scoped company and LOB access",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Customers only in current period\nWhat it means: Customers meeting the configured activity minimum in one selected period and having zero shipments in the other.\nWhy it matters: Review changes in observed period activity.\nSource report: Shipment Register\nExact source columns: Customer, Shipment No, Shipment Date\nCalculation: COUNT distinct source customer names with period count >= activeMin and other period count = 0\nAggregation: COUNT DISTINCT CUSTOMER COHORT\nReporting date: Shipment Date in the explicitly displayed current/comparison windows\nExclusions and conditions: Uses all selected source records in both windows; source names where codes are unavailable.\nImportant limitation: This does not establish lifetime-new customers or confirmed lost business.\nIdentity: company, report_type, shipment_no, shipment_date\nMapped database fields: {'Customer': 'Source mapping pending validation', 'Shipment No': 'shipments.shipment_no', 'Shipment Date': 'shipments.shipment_date'}\nAccess: Server-scoped company and LOB access\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.period_absent_customers",
+    "title": "Customers only in comparison period",
+    "meaning": "Customers meeting the configured activity minimum in one selected period and having zero shipments in the other.",
+    "outcome": "Review changes in observed period activity.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Customer",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "Shipment Date in the explicitly displayed current/comparison windows",
+    "formula": "COUNT distinct source customer names with period count >= activeMin and other period count = 0",
+    "aggregation": "COUNT DISTINCT CUSTOMER COHORT",
+    "exclusions": "Uses all selected source records in both windows; source names where codes are unavailable.",
+    "caveat": "This does not establish lifetime-new customers or confirmed lost business.",
+    "readiness": "code_verified",
+    "finance_required": false,
+    "unit": "count",
+    "version": "2",
+    "database_fields": {
+      "Customer": "Source mapping pending validation",
+      "Shipment No": "shipments.shipment_no",
+      "Shipment Date": "shipments.shipment_date"
+    },
+    "identity": [
+      "company",
+      "report_type",
+      "shipment_no",
+      "shipment_date"
+    ],
+    "permissions": "Server-scoped company and LOB access",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Customers only in comparison period\nWhat it means: Customers meeting the configured activity minimum in one selected period and having zero shipments in the other.\nWhy it matters: Review changes in observed period activity.\nSource report: Shipment Register\nExact source columns: Customer, Shipment No, Shipment Date\nCalculation: COUNT distinct source customer names with period count >= activeMin and other period count = 0\nAggregation: COUNT DISTINCT CUSTOMER COHORT\nReporting date: Shipment Date in the explicitly displayed current/comparison windows\nExclusions and conditions: Uses all selected source records in both windows; source names where codes are unavailable.\nImportant limitation: This does not establish lifetime-new customers or confirmed lost business.\nIdentity: company, report_type, shipment_no, shipment_date\nMapped database fields: {'Customer': 'Source mapping pending validation', 'Shipment No': 'shipments.shipment_no', 'Shipment Date': 'shipments.shipment_date'}\nAccess: Server-scoped company and LOB access\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "ops.invoice_reference_count",
+    "title": "Shipments with invoice references",
+    "meaning": "Count selected shipments with an invoice or billing reference.",
+    "outcome": "Review recorded invoicing references.",
+    "report": "Shipment Register",
+    "source_columns": [
+      "Invoice No. & Date",
+      "Billing Details",
+      "Shipment No",
+      "Shipment Date"
+    ],
+    "date_column": "Configured visual date basis; defaults to Shipment Date",
+    "formula": "COUNT shipment identities with invoice_count > 0",
+    "aggregation": "COUNT DISTINCT",
+    "exclusions": "Custom visual date basis and filters apply.",
+    "caveat": "A reference does not prove payment; a parsed invoice date is not required unless that is the chosen date basis.",
+    "readiness": "code_verified",
+    "finance_required": false,
+    "unit": "count",
+    "version": "2",
+    "database_fields": {
+      "Invoice No. & Date": "Source mapping pending validation",
+      "Billing Details": "Source mapping pending validation",
+      "Shipment No": "shipments.shipment_no",
+      "Shipment Date": "shipments.shipment_date"
+    },
+    "identity": [
+      "company",
+      "report_type",
+      "shipment_no",
+      "shipment_date"
+    ],
+    "permissions": "Server-scoped company and LOB access",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Shipments with invoice references\nWhat it means: Count selected shipments with an invoice or billing reference.\nWhy it matters: Review recorded invoicing references.\nSource report: Shipment Register\nExact source columns: Invoice No. & Date, Billing Details, Shipment No, Shipment Date\nCalculation: COUNT shipment identities with invoice_count > 0\nAggregation: COUNT DISTINCT\nReporting date: Configured visual date basis; defaults to Shipment Date\nExclusions and conditions: Custom visual date basis and filters apply.\nImportant limitation: A reference does not prove payment; a parsed invoice date is not required unless that is the chosen date basis.\nIdentity: company, report_type, shipment_no, shipment_date\nMapped database fields: {'Invoice No. & Date': 'Source mapping pending validation', 'Billing Details': 'Source mapping pending validation', 'Shipment No': 'shipments.shipment_no', 'Shipment Date': 'shipments.shipment_date'}\nAccess: Server-scoped company and LOB access\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  },
+  {
+    "id": "profit.rows",
+    "title": "Job records",
+    "meaning": "Distinct eligible jobs represented in the JPR.",
+    "outcome": "Measure job coverage without counting duplicate records as separate jobs.",
+    "report": "Job Profit Analysis Report (Basis: Job Date)",
+    "source_columns": [
+      "Job No.",
+      "Job Date",
+      "LOB"
+    ],
+    "date_column": "Job Date",
+    "formula": "COUNT eligible accepted JPR rows",
+    "aggregation": "COUNT ROWS",
+    "exclusions": "Only eligible JPR rows. Source rejects duplicate Job No. / Job Date / LOB within an import.",
+    "caveat": "Composite identity verified in canonical frontend/app_prod.js; source-level reconciliation remains pending.",
+    "readiness": "code_verified",
+    "finance_required": true,
+    "unit": "count",
+    "version": "2",
+    "database_fields": {
+      "Job No.": "profit_lines.job_no",
+      "Job Date": "profit_lines.job_date",
+      "LOB": "profit_lines.lob"
+    },
+    "identity": [
+      "company",
+      "lob",
+      "job_no",
+      "job_date"
+    ],
+    "permissions": "Server-scoped company and LOB access; finance access required",
+    "null_handling": "Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.",
+    "validation": "Code mapping verified; independent accepted-source reconciliation pending",
+    "explanation": "Job records\nWhat it means: Distinct eligible jobs represented in the JPR.\nWhy it matters: Measure job coverage without counting duplicate records as separate jobs.\nSource report: Job Profit Analysis Report (Basis: Job Date)\nExact source columns: Job No., Job Date, LOB\nCalculation: COUNT eligible accepted JPR rows\nAggregation: COUNT ROWS\nReporting date: Job Date\nExclusions and conditions: Only eligible JPR rows. Source rejects duplicate Job No. / Job Date / LOB within an import.\nImportant limitation: Composite identity verified in canonical frontend/app_prod.js; source-level reconciliation remains pending.\nIdentity: company, lob, job_no, job_date\nMapped database fields: {'Job No.': 'profit_lines.job_no', 'Job Date': 'profit_lines.job_date', 'LOB': 'profit_lines.lob'}\nAccess: Server-scoped company and LOB access; finance access required\nMissing values: Metric-specific: zero recorded amounts remain zero; ratios are unavailable when their required denominator is not positive; optional blank dimensions remain blank.\nValidation: Code mapping verified; independent accepted-source reconciliation pending"
+  }
+]

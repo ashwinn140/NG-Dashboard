@@ -419,5 +419,5 @@ row.insertAdjacentElement('afterend',links);
 const apply=()=>{const current=document.querySelector('#grpSeg .on')?.dataset.v;links.hidden=current!=='summary'};
 document.getElementById('grpSeg')?.addEventListener('click',()=>requestAnimationFrame(apply));apply();
 })();
-</script><script>document.addEventListener('DOMContentLoaded',()=>{const b=document.createElement('button');b.type='button';b.id='uxExportCurrent';b.className='btn';b.textContent='Export current view · Excel';b.addEventListener('click',()=>{if(typeof exportVisibleVisuals==='function')exportVisibleVisuals()});document.getElementById('printBtn')?.insertAdjacentElement('afterend',b)});</script></body></html>
+</script><script>document.addEventListener('DOMContentLoaded',()=>{const b=document.createElement('button');b.type='button';b.id='uxExportCurrent';b.className='btn';b.textContent='Export current view · Excel';b.addEventListener('click',()=>{if(window.MetricTrace)window.MetricTrace.exportPage().catch(e=>alert(e.message));else window.NG?.exportVisibleVisuals?.()});document.getElementById('printBtn')?.insertAdjacentElement('afterend',b)});</script><script src="/assets/metric_trace.js"></script></body></html>
 
