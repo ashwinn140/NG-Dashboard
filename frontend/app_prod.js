@@ -155,44 +155,33 @@ const CI = {customer: 0, branch: 1, carrier: 3, origin: 2, destination: 4, x_tra
 window.CHART_COLORS = ['#4c78a8', '#f58518', '#54a24b', '#b279a2', '#e45756', '#72b7b2', '#eeca3b', '#9d755d'];
 // Explanations are attached to the shared renderers, not to individual pages,
 // so newly added cards and KPIs also receive the reporting context.
+// These descriptions are tied to the actual job-summary and shipment aggregates.
+// Unmapped visuals must not be assigned a formula merely because a title contains
+// words such as 'income', 'cost', 'growth' or 'shipment'.
+const VERIFIED_METRIC_EXPLANATIONS = Object.freeze({
+  'income': ['Shows income booked against the selected jobs.', 'Adds the Income amounts in the selected Job Profit Analysis job-summary rows.'],
+  'expense': ['Shows costs booked against the selected jobs.', 'Adds the Expense amounts in the selected Job Profit Analysis job-summary rows.'],
+  'profit': ['Shows booked profit across the selected jobs.', 'Adds job profit, calculated as each job\'s Income less Expense.'],
+  'actual profit': ['Shows booked profit across the selected jobs.', 'Adds job profit, calculated as each job\'s Income less Expense.'],
+  'gross profit': ['Shows the difference between recorded income and recorded costs.', 'Adds recorded Income and subtracts recorded Expense for the selected jobs.'],
+  'margin': ['Shows the share of recorded income retained as profit.', 'Divides selected job-summary Profit by Income and multiplies by 100; unavailable when Income is zero.'],
+  'jobs': ['Shows how many job-summary records contribute to the metric.', 'Counts selected job-summary records after the active job-date and other filters.'],
+  'profit per job': ['Shows average booked profit per selected job.', 'Divides selected total job-summary Profit by the selected job count, where the count is non-zero.'],
+  'shipments': ['Shows the number of shipment-register records in scope.', 'Counts selected shipment-register rows after the active shipment-date and other filters.']
+});
 function businessMeaning(label, note) {
   const name = String(label || '').trim();
-  const lower = name.toLowerCase();
-  const formula = /gross profit|\bgp\b/.test(lower)
-    ? 'Gross profit = recorded income minus recorded expense for the selected jobs.'
-    : /^(margin|profit margin|margin %)$/.test(lower) || /margin rate/.test(lower)
-    ? 'Margin percentage = gross profit divided by income, multiplied by 100, where income is non-zero.'
-    : /^(profit|actual profit)$/.test(lower)
-    ? 'Profit = income minus booked expense across the selected job-summary records.'
-    : /^(jobs)$/.test(lower)
-    ? 'Number of jobs represented by the selected Job Profit Analysis Report records.'
-    : /^(profit per job)$/.test(lower)
-    ? 'Total profit divided by the number of selected jobs, when the job count is non-zero.'
-    : /^(shipments|air export shipments|sea export shipments|air import shipments|sea import shipments)$/.test(lower)
-    ? 'Count of selected shipment-register records within the current filters.'
-    : /teu/.test(lower)
-    ? 'Sum of TEUs for selected sea shipment records.'
-    : /chargeable weight/.test(lower)
-    ? 'Sum of chargeable weight for selected air shipment records, converted to the displayed weight unit.'
-    : /customer/.test(lower) && /active|distinct|unique/.test(lower)
-    ? 'Count of distinct customers meeting the current filters and the configured activity threshold.'
-    : /revenue|income|sales value/.test(lower)
-    ? 'Sum of recorded income for the selected job-summary records.'
-    : /cost|expense/.test(lower)
-    ? 'Sum of recorded expenses for the selected job-summary records.'
-    : /^(variance|variance:.*|change|growth|decline)$/.test(lower)
-    ? 'Difference between the selected current and comparison periods; percentage change uses the previous value as the denominator when non-zero.'
-    : '';
-  // Financial imports are job-summary snapshots, not charge-level rows.
-  // Never imply that a finance visual is sourced from charge-line data.
-  const meaning = 'Shows ' + name.toLowerCase() + ' for the selected reporting scope.';
-  const calculation = formula || (note ? 'This visual uses the source-data calculation described in its note. A metric-specific formula is not yet verified.' : 'Metric-specific formula not yet verified; refer to the displayed measure and source report before using this figure for decisions.');
+  const key = name.toLowerCase();
+  const verified = VERIFIED_METRIC_EXPLANATIONS[key];
+  const meaning = verified ? verified[0] : 'Shows ' + name.toLowerCase() + ' for the selected reporting scope.';
+  const calculation = verified ? verified[1] : 'Calculation not yet verified against this visual\'s implemented data aggregation. Do not rely on a title-based formula.';
   const reportingWindow = R && R.w ? R.w : null;
   return h('details', {class: 'business-explanation', style: 'margin-top:.55rem;font-size:.78rem'},
     h('summary', {style: 'cursor:pointer'}, 'Business meaning & calculation'),
     h('p', null, h('strong', null, 'What this means: '), meaning),
     h('p', null, h('strong', null, 'How it is calculated: '), calculation),
-    reportingWindow ? h('p', {class: 'meta'}, 'Reporting dates: ' + fRange({from:reportingWindow.from,to:reportingWindow.to}) + (S.compare && reportingWindow.pfrom != null && reportingWindow.pto != null ? '; comparison: ' + fRange({from:reportingWindow.pfrom,to:reportingWindow.pto}) : '') + '. Filters apply.') : null);
+    reportingWindow ? h('p', {class: 'meta'}, 'Dashboard date selection: ' + fRange({from:reportingWindow.from,to:reportingWindow.to}) + (S.compare && reportingWindow.pfrom != null && reportingWindow.pto != null ? '; comparison: ' + fRange({from:reportingWindow.pfrom,to:reportingWindow.pto}) : '') + '. Active filters apply where supported by this visual; visual-specific periods may differ.') : null,
+    note ? h('p', {class:'meta'}, 'Visual note: ' + note) : null);
 }
 function card(title, note, body, cls) { return h('article', {class: 'card ' + (cls || '')}, h('h2', {class: 'h'}, title), note ? h('p', {class: 'note'}, note) : null, body, businessMeaning(title, note)); }
 function kpi(label, value, delta, note, tone, previousValue) {
