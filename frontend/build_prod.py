@@ -20,6 +20,11 @@ def build():
         source = (ROOT / path).read_text(encoding="utf-8")
         assert "</script" not in source.lower(), f"Unsafe inline script: {path}"
         page = page.replace(token, source, 1)
+    # Fail closed if a generated source fragment breaks the HTML parser.
+    # Keep this check close to the production build, not just in CI.
+    assert page.lower().count("<!doctype html>") == 1, "Generated dashboard must contain exactly one document"
+    assert page.lower().count("<script") == page.lower().count("</script>"), "Generated dashboard has unbalanced script tags"
+    assert not any(token in page for token in inputs), "Unreplaced production placeholder"
     target = ROOT.parent / "app" / "web" / "dashboard.html"
     target.write_text(page, encoding="utf-8")
     print(f"Production dashboard: {len(page.encode())} bytes")
