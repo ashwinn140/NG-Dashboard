@@ -47,6 +47,10 @@ REPORT_CATALOG = {
             "ocean_shipments", "air_chargeable_weight_t", "ocean_teus",
             "lob_count", "last_shipment_date",
         ),
+        "summary_columns": (
+            "company", "customer", "shipments", "air_shipments", "ocean_shipments",
+            "air_chargeable_weight_t", "ocean_teus", "lob_count", "last_shipment_date",
+        ),
         "filters": ("customer", "branch", "agent", "salesperson", "job_owner"),
     },
     "job_profitability": {
