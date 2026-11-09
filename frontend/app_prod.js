@@ -491,7 +491,7 @@ function pageCustomers() {
       const lastShipmentOwners = new Map();
       for (let offset=0; offset<list.length; offset+=100) {
         const batch=list.slice(offset,offset+100);
-        const histories=await loadRecentJobs(batch.map(r=>({customer:COLS.customer.d[r.j],companies:historyCompanies(r.j),lobs:historyLobs()})));
+        const histories=await loadRecentJobs(batch.map(r=>({customer:COLS.customer.d[r.j],companies:historyCompanies(r.j),lobs:historyLobs(),last_shipment_date:r.last>0?fIso(dDate(r.last)):''})));
         histories.forEach(history=>{
           const jobs=history.jobs||[];
           lastShipmentOwners.set(history.customer,history.last_shipment_job_owner || 'Owner unavailable');
@@ -524,7 +524,7 @@ function pageCustomers() {
     try {
       for (let offset=0; offset<ownerShown.length; offset+=50) {
         const batch=ownerShown.slice(offset,offset+50);
-        const histories=await loadRecentJobs(batch.map(r=>({customer:COLS.customer.d[r.j],companies:historyCompanies(r.j),lobs:historyLobs()})));
+        const histories=await loadRecentJobs(batch.map(r=>({customer:COLS.customer.d[r.j],companies:historyCompanies(r.j),lobs:historyLobs(),last_shipment_date:r.last>0?fIso(dDate(r.last)):''})));
         histories.forEach(history=>{
           const row=batch.find(r=>COLS.customer.d[r.j]===history.customer);
           if(row) row.jobOwner=history.last_shipment_job_owner || 'Owner unavailable';
