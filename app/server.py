@@ -8,7 +8,7 @@ import pandas as pd
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import select, func, insert, delete, update
-from . import auth, admin_ops as ops, dataset as DS, mailer, master as MST, processor as P, profit as J
+from . import auth, admin_ops as ops, dataset as DS, mailer, master as MST, processor as P, profit as J, metric_definitions as MD
 from .db import get_engine, imports, uploads, users, prefs, admin_log, shipments, org_master
 
 log = logging.getLogger("app")
@@ -295,6 +295,23 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
     def customer360_page(request: Request):
         if not auth.session_user(engine, request.cookies.get("ng_session")): return RedirectResponse("/login", 303)
         return page("customer360.html")
+
+    @app.get("/api/metrics/definitions")
+    def api_metric_definitions(user: dict = Depends(me)):
+        """Source-backed explanation metadata, without exposing restricted financial data."""
+        if not user["finance"]:
+            raise HTTPException(403, "Financial metric definitions require finance access.")
+        return {"metrics": MD.all_metrics(), "source": "code_verified",
+                "note": "Source headers must also be checked against actual uploaded reports."}
+
+    @app.get("/api/metrics/definitions/{metric_id}")
+    def api_metric_definition(metric_id: str, user: dict = Depends(me)):
+        if not user["finance"]:
+            raise HTTPException(403, "Financial metric definitions require finance access.")
+        metric = MD.get_metric(metric_id)
+        if metric is None:
+            raise HTTPException(404, "Unknown metric.")
+        return metric.public_dict()
 
     @app.get("/api/dataset")
     def api_dataset(user: dict = Depends(me)):
