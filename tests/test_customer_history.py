@@ -1,4 +1,4 @@
-""""Tests for latest distinct customer job history and owner semantics."""
+"""Tests for latest distinct customer job history and owner semantics."""
 import unittest
 from datetime import date
 
@@ -135,4 +135,3 @@ class CustomerHistoryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-"
