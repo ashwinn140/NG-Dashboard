@@ -198,3 +198,27 @@
 3. Add cross-LOB customer inactivity only after complete authorized coverage and canonical customer identity are verified. Distinguish selected-LOB inactivity from customer-wide inactivity.
 4. Continue independent finance and variance/date audits with the two remaining original source workbooks and current production snapshot.
 5. Verify the screenshot fix in an authenticated browser after hard refresh; do not equate CI or HTTP telemetry with browser visual confirmation.
+
+
+## Continued work — Last five distinct customer jobs — 9 November 2026
+
+### Production readiness decision from live Job Owner completeness screenshot
+- Screenshot supplied by Ashwin shows owner coverage: NCS Air Export 99.88% (6 missing / 4,998), NCS Air Import 100% (512), NCS Sea Export 99.72% (8 / 2,871), NCS Sea Import 100% (282); NG Air Export 99.62% (87 / 22,740), NG Air Import 99.96% (4 / 9,565), NG Sea Export 99.73% (22 / 8,065), NG Sea Import 99.93% (2 / 2,748). GEN and FFWD ROAD DOM are also 100% in the screenshot.
+- No ambiguous or unmatched jobs are shown. Register matched is zero in each displayed company/LOB row, so the screenshot does not evidence register fallback; populated owners are from JPR.
+- Decision: proceed with last-five distinct jobs; never infer the missing 129 Air/Sea owners. Render missing/conflicting source owners as "Owner unavailable".
+
+### PR #26 — shipped
+- PR #26 merged to main as 0c2d8a91b6d2f347f0cd7c18dd89d538cac9282f.
+- GitHub Actions Phase 2 isolated tests and full metric traceability checks both SUCCESS. Full backend/permissions/Excel suite (143 tests), production build reproduction, frontend audit (including Operations Customers recent-jobs modal), and synthetic runtime visual inventory all passed.
+- Railway deployment c4af607f-84e1-4784-b6eb-822b80796e58 SUCCESS for exact merged SHA, region iad. NG-Dashboard Online, 1/1 replica, no warnings/criticals or recent failures. Post-deploy telemetry at verification: 427 HTTP requests, 0 4xx, 0 5xx, 0% error rate.
+- Operations → Customers now includes a "View jobs" action per customer. Modal shows the five most recent distinct jobs with company, job number, Job Date, LOB and JPR Job Owner; latest owner/date are identified above the table.
+- Customer Excel export now has a separate "Last 5 Jobs" worksheet, batched in groups of 100 customers.
+- API is authenticated, CSRF-protected and revalidates company/LOB scope. Operations-only users can use it without finance permission. It returns no financial values.
+- Distinct identity is company + LOB + Job No. + Job Date. Sorting is newest Job Date first, with deterministic job/LOB/company tie-breaks. Repeated owners are preserved. Missing or conflicting JPR owners show unavailable. No salesperson or shipment-register owner substitution.
+- History uses current loaded JPR snapshot, Basis: Job Date; it is independent of the selected dashboard date window but respects the permitted company/LOB scope and current operational filters. It is not an all-time guarantee beyond loaded JPR history.
+- No schema changes, data writes, import promotions, or financial calculations were made.
+
+### Remaining work
+1. Authenticated browser verification on the live dashboard: open Operations → Customers, use View jobs, inspect the last five jobs for representative NG/NCS customers, and verify the Last 5 Jobs Excel worksheet. Automated frontend tests and deployment are green, but no authenticated live browser session was available during this continuation.
+2. Continue cross-LOB inactivity / lost-customer analysis only after validating canonical customer identity and authorized history coverage. Keep selected-LOB inactivity distinct from customer-wide inactivity.
+3. Continue the outstanding two original ERP workbook row-level reconciliations, variance/date audit and finance ingestion audit.
