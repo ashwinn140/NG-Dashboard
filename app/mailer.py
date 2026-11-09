@@ -31,7 +31,8 @@ def _normalize_attachments(attachments):
         if not isinstance(item, dict):
             raise ValueError("Invalid attachment.")
         filename, content = str(item.get("filename") or ""), item.get("content")
-        if not filename or len(filename) > 180 or re.search(r"[\\/\\x00-\\x1f]", filename):
+        if (not filename or len(filename) > 180 or "/" in filename or "\\" in filename
+                or any(ord(ch) < 32 for ch in filename)):
             raise ValueError("Invalid attachment filename.")
         if not isinstance(content, bytes):
             raise ValueError("Attachment content must be bytes.")
