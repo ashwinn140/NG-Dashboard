@@ -376,20 +376,21 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             requests = body["customers"]
             if len(requests) > 500: raise ValueError("Please export customer history in smaller batches.")
             allowed_companies = set(user["companies"] or ["NG", "NCS"])
-            allowed_lobs = set(user["lobs"] or ["AE", "AI", "OE", "OI"])
+            allowed_lobs = set(user["lobs"]) if user["lobs"] else None
             normalized = []
             all_companies, all_names = set(), set()
             for item in requests:
                 if not isinstance(item, dict): raise ValueError("Invalid customer selection.")
                 name = " ".join(str(item.get("customer") or "").split())
                 companies = item.get("companies") or sorted(allowed_companies)
-                lobs = item.get("lobs") or sorted(allowed_lobs)
+                requested_lobs = item.get("lobs")
+                lobs = set(requested_lobs or (allowed_lobs or []))
                 if not name or len(name) > 300: raise ValueError("Invalid customer name.")
                 if not isinstance(companies, list) or not companies or not set(companies).issubset(allowed_companies):
                     raise PermissionError("The selected company is outside your access scope.")
-                if not isinstance(lobs, list) or not set(lobs).issubset(allowed_lobs):
+                if not isinstance(requested_lobs or [], list) or (allowed_lobs is not None and not lobs.issubset(allowed_lobs)):
                     raise PermissionError("The selected line of business is outside your access scope.")
-                normalized.append((name, set(companies), set(lobs)))
+                normalized.append((name, set(companies), lobs))
                 all_companies.update(companies)
                 all_names.add(name.strip().casefold())
             if not normalized:
