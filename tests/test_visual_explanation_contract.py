@@ -48,6 +48,10 @@ class VisualExplanationContract(unittest.TestCase):
             with self.subTest(label=label):
                 self.assertIn("businessMeaning('" + label + "'", APP)
 
+    def test_custom_variance_kpi_builders_have_explanations(self):
+        self.assertIn("businessMeaning(label, note)); };", APP)
+        self.assertIn("businessMeaning(label, 'Current versus previous reporting period')); };", APP)
+
     def test_no_demo_rows_generated(self):
         self.assertIn("const DEMO_KEEP = [0, 0.86, 0.72], demoSrc = [], demoK = []", APP)
 
