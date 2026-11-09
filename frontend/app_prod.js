@@ -335,6 +335,8 @@ function traceExplanation(trace,title) {
   'ops.rate_below_buy':['Air-export shipments priced below buy','Counts air-export records with usable buy and sell rates where Sell Rate is below Buy Rate; rate parsing and maximum-rate rules follow Definitions.'],
   'ops.rate_margin':['Estimated air-export freight margin','Sums (Sell Rate − Buy Rate) × Chargeable Weight for air-export records with usable rates. This is estimated freight margin, not booked job profit.'],
   'ops.rate_margin_kg':['Estimated freight margin per kg','Divides total estimated air-export freight margin by total chargeable weight for records with usable rates; this is a weighted ratio, not an average of row rates.'],
+  'ops.rate_sell':['Average sell rate','Divides total Sell Rate × Chargeable Weight by total chargeable weight across air-export records with usable rates; this is a weighted average, not a simple average of shipment rates.'],
+  'ops.rate_buy':['Average buy rate','Divides total Buy Rate × Chargeable Weight by total chargeable weight across air-export records with usable rates; this is a weighted average, not a simple average of shipment rates.'],
   'ops.rate_air_exports':['Air-export shipment count','Counts air-export register records in the selected scope.'],
   'ops.rate_usable':['Share of air exports with usable rates','Divides air-export records with usable buy and sell rates by all selected air-export records.']
  };
@@ -1546,8 +1548,15 @@ function ppRates() {
   const M = mask(), root = h('div'), pr = periods(S.cmp); let nAE = 0, nOK = 0, kg = 0, sellRev = 0, buyCost = 0, mar = 0, neg = 0, negAmt = 0; const bad = {none: 0, text: 0, clean: 0, foreign: 0, lump: 0}, below = [];
   for (let i = 0; i < N; i++) { if (!M[i] || rtype[i] !== 0) continue; nAE++; if (rbf[i] === 3 || rsf[i] === 3) bad.foreign++; else if (rbf[i] === 0 || rsf[i] === 0) bad.none++; else if (rbuy[i] > S.def.rateMax || rsell[i] > S.def.rateMax) bad.lump++; else if (rateOK(i)) { nOK++; if (rbf[i] === 2 || rsf[i] === 2) bad.text++; else bad.clean++; } else bad.none++;
     if (rateOK(i)) { const k = ckg[i]; kg += k; sellRev += rsell[i] * k; buyCost += rbuy[i] * k; mar += rmargin(i); if (rsell[i] < rbuy[i]) { neg++; negAmt += rmargin(i); below.push(i); } } }
-  const kp = h('div', {class: 'kpis'}, kpi('Air export shipments', fInt(nAE), null, 'The registers record buy and sell rates for air exports only'), kpi('With usable rates', nAE ? fP0(nOK / nAE) : '–', null, fInt(nOK) + ' shipments; the rest are lump sums, foreign currency or blank'), kpi('Average sell rate', kg ? fRate(sellRev / kg) : '–', null, 'Weighted by chargeable weight'), kpi('Average buy rate', kg ? fRate(buyCost / kg) : '–', null, 'Weighted by chargeable weight'),
-    kpi('Freight margin per kg', kg ? fRate(mar / kg) : '–', null, sellRev ? fMargin(mar / sellRev) + ' of the sell value' : ''), kpi('Estimated freight margin', money(mar), null, 'Sell minus buy, times chargeable weight', mar < 0 ? 'bad' : ''), kpi('Selling below buy', fInt(neg), null, neg ? money(Math.abs(negAmt)) + ' given away on these shipments' : 'No shipment sold below its buy rate', neg ? 'bad' : ''));
+  const withRateEvidence=(node,metric,label)=>{node.append(h('button',{type:'button',class:'mt-info',style:'margin-top:.4rem',onclick:(e)=>{e.stopPropagation();const q=window.NG?.traceVisual?.(metric,null,label);if(q)window.MetricTrace?.openWithRequest(q);}},'Calculation & records'));return node;};
+  const kp = h('div', {class: 'kpis'},
+    withRateEvidence(kpi('Air export shipments', fInt(nAE), null, 'The registers record buy and sell rates for air exports only'),'ops.rate_air_exports','Air export shipments'),
+    withRateEvidence(kpi('With usable rates', nAE ? fP0(nOK / nAE) : '–', null, fInt(nOK) + ' shipments; the rest are lump sums, foreign currency or blank'),'ops.rate_usable','With usable rates'),
+    withRateEvidence(kpi('Average sell rate', kg ? fRate(sellRev / kg) : '–', null, 'Weighted by chargeable weight'),'ops.rate_sell','Average sell rate'),
+    withRateEvidence(kpi('Average buy rate', kg ? fRate(buyCost / kg) : '–', null, 'Weighted by chargeable weight'),'ops.rate_buy','Average buy rate'),
+    withRateEvidence(kpi('Freight margin per kg', kg ? fRate(mar / kg) : '–', null, sellRev ? fMargin(mar / sellRev) + ' of the sell value' : ''),'ops.rate_margin_kg','Freight margin per kg'),
+    withRateEvidence(kpi('Estimated freight margin', money(mar), null, 'Sell minus buy, times chargeable weight', mar < 0 ? 'bad' : ''),'ops.rate_margin','Estimated freight margin'),
+    withRateEvidence(kpi('Selling below buy', fInt(neg), null, neg ? money(Math.abs(negAmt)) + ' given away on these shipments' : 'No shipment sold below its buy rate', neg ? 'bad' : ''),'ops.rate_below_buy','Selling below buy'));
   // by month
   const mm = new Map(); for (let i = 0; i < N; i++) { if (!M[i] || rtype[i] !== 0 || !rateOK(i)) continue; const e = mm.get(mStart[i]) || {m: 0, k: 0, n: 0}; e.m += rmargin(i); e.k += ckg[i]; e.n++; mm.set(mStart[i], e); }
   const months = [...mm.keys()].sort((a, b) => a - b), mlab = months.map((x) => d3.utcFormat('%b %Y')(dDate(x)));
