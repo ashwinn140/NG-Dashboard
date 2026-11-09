@@ -299,12 +299,12 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
     @app.get("/api/metrics/definitions")
     def api_metric_definitions(user: dict = Depends(me)):
         """Source-backed explanation metadata, without exposing restricted financial data."""
-        return {"metrics": [m for m in MD.all_metrics() if user["finance"] or m["id"].startswith("ops.")], "source": "code_verified",
+        return {"metrics": [m for m in MD.all_metrics() if user["finance"] or not m["finance_required"]], "source": "code_verified",
                 "note": "Source headers must also be checked against actual uploaded reports."}
 
     @app.get("/api/metrics/definitions/{metric_id}")
     def api_metric_definition(metric_id: str, user: dict = Depends(me)):
-        if not user["finance"] and metric_id.startswith("profit."):
+        if not user["finance"] and (metric_id.startswith("profit.") or metric_id.startswith("ops.rate_")):
             raise HTTPException(403, "Financial metric definitions require finance access.")
         metric = MD.get_metric(metric_id)
         if metric is None:
@@ -325,6 +325,26 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
     @app.post("/api/metrics/evidence")
     async def metric_evidence_api(request: Request, user: dict = Depends(unsafe)):
         return await metric_evidence(request, user)
+
+    @app.post("/api/metrics/activity")
+    async def metric_activity_api(request: Request, user: dict = Depends(unsafe)):
+        evidence = await metric_evidence(request, user)
+        if evidence['metric']['id'] != 'ops.shipments': raise HTTPException(400, "Activity requires operational shipment evidence.")
+        from .phase2_metrics import customer_activity
+        groups = {}
+        try: as_of = date.fromisoformat(evidence['context']['as_of'])
+        except (ValueError, KeyError, TypeError): raise HTTPException(400, "A valid activity as-of date is required.")
+        for row in evidence['records']:
+            if not row['customer'] or not row['date'] or row['date'] > as_of.isoformat(): continue
+            key = (row['company'], row['customer'])
+            group = groups.setdefault(key, dict(company=key[0], customer=key[1], dates=[], indices=[]))
+            group['dates'].append(date.fromisoformat(row['date']));group['indices'].append(row['source_index'])
+        result = []
+        for group in groups.values():
+            signal = customer_activity(group.pop('dates'), as_of)
+            result.append(dict(group, **signal))
+        result.sort(key=lambda r: (r['status']=='active', -(r['days_since_last'] or 0), r['customer']))
+        return {"as_of": as_of.isoformat(), "customers": result, "snapshot": evidence['snapshot'], "method": "Median inter-shipment-date interval: <=14 days uses 30-day threshold, <=30 uses 60, otherwise 90; >=3 distinct dates required. At risk after threshold, inactive after 1.5 times threshold. Review signals, not confirmed lost business."}
 
     @app.post("/api/metrics/export")
     async def metric_export_api(request: Request, user: dict = Depends(unsafe)):
@@ -592,7 +612,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                 as_of = min(latest, date.today())
                 cutoff = as_of - timedelta(days=179)
                 records = c.execute(select(shipments.c.company, shipments.c.report_type,
-                    shipments.c.customer, shipments.c.shipment_no, shipments.c.shipment_date).where(
+                    shipments.c.customer, shipments.c.shipment_no, shipments.c.shipment_date, shipments.c.extra["Sales Person"].as_string().label("erp_salesperson")).where(
                     shipments.c.company == company,
                     shipments.c.report_type.in_(["AE", "AI", "OE", "OI"]),
                     shipments.c.to_import.is_(None),
@@ -600,16 +620,25 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                     shipments.c.shipment_date <= as_of)).mappings().all()
                 rows = [{"company": r["company"], "lob": r["report_type"],
                          "customer": r["customer"], "shipment_id": r["shipment_no"],
-                         "shipment_date": r["shipment_date"]} for r in records]
+                         "shipment_date": r["shipment_date"], "salesperson": r["erp_salesperson"]} for r in records]
                 candidates = find_opportunities(rows, as_of, complete_lob_coverage=True)
                 output.extend(candidates)
                 coverage.append({"company": company, "status": "ready",
                                  "available_lobs": sorted(available), "as_of": as_of.isoformat(),
                                  "window_rows": len(rows), "candidate_count": len(candidates)})
         output.sort(key=lambda r: (-r["shipment_count"], r["company"], r["customer"]))
-        return {"window_days": 180, "candidates": output[:200],
+        return {"viewer_id": user["id"], "window_days": 180, "candidates": output,
                 "total_candidates": len(output), "coverage": coverage,
                 "note": "Potential cross-service whitespace, not verified demand. Company-scoped, latest available 180-day shipment window. Only companies with all four LOBs loaded qualify."}
+
+    @app.post("/api/admin/phase2/opportunities/export")
+    def phase2_opportunities_export(user: dict = Depends(unsafe)):
+        if user['role'] != 'admin': raise HTTPException(403, "Administrator access required.")
+        data = phase2_opportunities(user)
+        rows = [{"company": r['company'], "customer": r['customer'], "shipments": r['shipment_count'], "active_lobs": json.dumps(r['active_lobs']), "candidate_lobs": ', '.join(r['candidate_lobs']), "erp_salespersons": json.dumps(r.get('salespersons',{})), "confidence": r['confidence'], "reason": r['reason']} for r in data['candidates']]
+        definition = dict(id='ops.opportunities', title='Potential cross-service opportunities', formula='Count customer/company groups with at least 3 distinct recent shipments and at least one absent LOB in the latest 180-day window; all four source LOBs must be available.', explanation=data['note'], source='Shipment Register', source_headers=['Shipment No','Shipment Date','Customer','Sales Person'], date_basis='Shipment Date', limitations='Name-based customer identity where ERP codes are unavailable. No forecast GP or confirmed customer demand.')
+        result = dict(metric=definition, snapshot=str(store.version), version='1', current=dict(value=len(rows),numerator=None,denominator=None), previous=dict(value=None,numerator=None,denominator=None), difference=None, percentage=None, reconciliation=dict(displayed_value=data['total_candidates'],recalculated_value=len(rows),difference=data['total_candidates']-len(rows),status='match'), records=rows, comparison_records=[], context=dict(window_days=180,scope='All authorized qualified opportunities, independent of the table text search'), lineage=dict(coverage=data['coverage']))
+        return Response(MX.workbook(result), media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', headers={'Content-Disposition':'attachment; filename="opportunity_reconciliation.xlsx"','Cache-Control':'private, no-store'})
 
     @app.get("/api/admin/imports")
     def a_imports(status: str = "", user: dict = Depends(admin)):

@@ -3,7 +3,7 @@ from openpyxl import load_workbook
 from app import metric_execution as X,metric_definitions as M
 class MetricExecutionTests(unittest.TestCase):
  def fixture(self):
-  return dict(user={'finance':True},built_at='test',rep=[0,4],reps=[['NG','AE'],['NG','AI'],['NG','OE'],['NG','OI'],['NCS','AE']],no=['S1','S1'],date=[20000,20000],chg=[1.25,2.5],teus=[0,0],cbm=[1,2],cols={'p_job':{'d':['=unsafe'], 'pc':[0,0]},'p_lob':{'d':['FFWD AIR EXP'],'pc':[0,0]}},p=dict(co=[0,1],jd=[20000,20000],income=[100,50],expense=[40,70],meta=[]))
+  return dict(user={'finance':True},built_at='test',rep=[0,4],reps=[['NG','AE'],['NG','AI'],['NG','OE'],['NG','OI'],['NCS','AE']],no=['S1','S1'],ops=[-1,-1],fin=[-1,-1],inv1=[-1,-1],invN=[0,0],date=[20000,20000],chg=[1.25,2.5],teus=[0,0],cbm=[1,2],ckg=[1250,2500],rbuy=[0,0],rsell=[0,0],rbf=[0,0],rsf=[0,0],cols={'p_job':{'d':['=unsafe'], 'pc':[0,0]},'p_lob':{'d':['FFWD AIR EXP'],'pc':[0,0]}},p=dict(co=[0,1],sidx=[0,1],jd=[20000,20000],income=[100,50],expense=[40,70],meta=[]))
  def test_cross_company_identity_totals_and_variance(self):
   d=self.fixture();q=dict(metric='profit.jobs',indices=[0,1],previous_indices=[0]);r=X.execute(d,q,M);self.assertEqual(r['current']['value'],2);self.assertEqual(r['difference'],1)
   q['metric']='profit.gp';r=X.execute(d,q,M);self.assertEqual(r['current']['value'],40);self.assertEqual(r['previous']['value'],60)
@@ -27,6 +27,22 @@ class MetricExecutionTests(unittest.TestCase):
   self.assertEqual(r['current']['value'],30);self.assertEqual(r['records'][0]['expected_cost'],20)
   self.assertEqual(r['previous']['value'],60);self.assertEqual(len(r['benchmark_records']),1)
   self.assertIn('Benchmark Records',load_workbook(io.BytesIO(X.workbook(r))).sheetnames)
+ def test_pending_lock_uses_actual_source_stage_label(self):
+  d=self.fixture();d['cols']['stage']={'d':['Pending ops lock','Closed'],'c':[0,1]}
+  r=X.execute(d,dict(metric='ops.waiting_lock',indices=[0,1]),M)
+  self.assertEqual(r['current']['value'],1);self.assertEqual(len(r['records']),1);self.assertEqual(r['records'][0]['source_index'],0)
+ def test_workbook_splits_at_excel_limit(self):
+  from unittest.mock import patch
+  r=X.execute(self.fixture(),dict(metric='profit.gp',indices=[0,1]),M)
+  with patch.object(X,'EXCEL_ROW_LIMIT',2):w=load_workbook(io.BytesIO(X.workbook(r)))
+  self.assertIn('Contributing Records 2',w.sheetnames)
+  total=0
+  for name in ['Contributing Records','Contributing Records 2']:
+   ws=w[name];headers=[c.value for c in ws[1]];total+=ws.cell(2,headers.index('profit')+1).value
+  self.assertEqual(total,40)
+ def test_malformed_context_and_nonfinite_expected_values_are_rejected(self):
+  for extra in [dict(context=[]),dict(displayed_value=float('inf')),dict(context={'age_as_of':float('inf')}),dict(displayed_value='wrong')]:
+   with self.assertRaises(ValueError):X.execute(self.fixture(),dict(metric='ops.shipments',indices=[0],**extra),M)
  def test_ops_does_not_include_money(self):
   r=X.execute(self.fixture(),dict(metric='ops.shipments',indices=[0,1]),M);self.assertEqual(r['current']['value'],2);self.assertNotIn('income',r['records'][0])
 if __name__=='__main__':unittest.main()

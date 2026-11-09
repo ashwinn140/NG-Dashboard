@@ -1,0 +1,330 @@
+[
+  {
+    "metric": "ops.shipments",
+    "page": "overview",
+    "frontend": 47482,
+    "backend": 47482,
+    "status": "match",
+    "difference": 0
+  },
+  {
+    "metric": "ops.air_weight",
+    "page": "overview",
+    "frontend": 19459.610711999816,
+    "backend": 19459.610712,
+    "status": "match",
+    "difference": -1.8553691916167736e-10
+  },
+  {
+    "metric": "ops.teu",
+    "page": "overview",
+    "frontend": 12888,
+    "backend": 12888.0,
+    "status": "match",
+    "difference": 0.0
+  },
+  {
+    "metric": "ops.active_customers",
+    "page": "overview",
+    "frontend": 1992,
+    "backend": 1992,
+    "status": "match",
+    "difference": 0
+  },
+  {
+    "metric": "ops.waiting_lock",
+    "page": "ops",
+    "frontend": 3056,
+    "backend": 3056,
+    "status": "match",
+    "difference": 0
+  },
+  {
+    "metric": "ops.financials_open",
+    "page": "ops",
+    "frontend": 9680,
+    "backend": 9680,
+    "status": "match",
+    "difference": 0
+  },
+  {
+    "metric": "ops.old_open",
+    "page": "ops",
+    "frontend": 7194,
+    "backend": 7194,
+    "status": "match",
+    "difference": 0
+  },
+  {
+    "metric": "ops.oldest_open",
+    "page": "ops",
+    "frontend": 677,
+    "backend": 677,
+    "status": "match",
+    "difference": 0
+  },
+  {
+    "metric": "ops.lock_lag",
+    "page": "ops",
+    "frontend": 120.37279111264606,
+    "backend": 120.37279111264606,
+    "status": "match",
+    "difference": 0.0
+  },
+  {
+    "metric": "profit.income",
+    "page": "p_overview",
+    "frontend": 8003642422.900078,
+    "backend": 8003642422.9,
+    "status": "match",
+    "difference": 7.82012939453125e-05
+  },
+  {
+    "metric": "profit.expense",
+    "page": "p_overview",
+    "frontend": 6948061220.659821,
+    "backend": 6948061220.66,
+    "status": "match",
+    "difference": -0.000179290771484375
+  },
+  {
+    "metric": "profit.gp",
+    "page": "p_overview",
+    "frontend": 1055581202.2402573,
+    "backend": 1055581202.2399998,
+    "status": "match",
+    "difference": 0.0002574920654296875
+  },
+  {
+    "metric": "profit.margin",
+    "page": "p_overview",
+    "frontend": 0.13188760147754988,
+    "backend": 0.13188760147751902,
+    "status": "match",
+    "difference": 3.086420008457935e-14
+  },
+  {
+    "metric": "profit.jobs",
+    "page": "p_overview",
+    "frontend": 52420,
+    "backend": 52420,
+    "status": "match",
+    "difference": 0
+  },
+  {
+    "metric": "profit.per_job",
+    "page": "p_overview",
+    "frontend": 20136.993556662674,
+    "backend": 20136.99355665776,
+    "status": "match",
+    "difference": 4.914909368380904e-09
+  },
+  {
+    "metric": "profit.cost_coverage",
+    "page": "p_overview",
+    "frontend": 0.9714994276993514,
+    "backend": 0.9714994276993514,
+    "status": "match",
+    "difference": 0.0
+  },
+  {
+    "metric": "profit.expected_adjusted",
+    "page": "p_overview",
+    "frontend": 949349623.2039032,
+    "backend": 949349623.203646,
+    "status": "match",
+    "difference": 0.00025725364685058594
+  },
+  {
+    "metric": "profit.customers",
+    "page": "p_customers",
+    "frontend": 2350,
+    "backend": 2350,
+    "status": "match",
+    "difference": 0
+  },
+  {
+    "metric": "profit.customers_80",
+    "page": "p_customers",
+    "frontend": 220,
+    "backend": 220,
+    "status": "match",
+    "difference": 0
+  },
+  {
+    "metric": "profit.biggest_customer",
+    "page": "p_customers",
+    "frontend": 0.12321549066428754,
+    "backend": 0.12321549066428741,
+    "status": "match",
+    "difference": 1.249000902703301e-16
+  },
+  {
+    "metric": "profit.loss_customers",
+    "page": "p_customers",
+    "frontend": 330,
+    "backend": 330,
+    "status": "match",
+    "difference": 0
+  },
+  {
+    "metric": "profit.air_yield",
+    "page": "p_explorer",
+    "frontend": 43203.13838793752,
+    "backend": 43203.138387937586,
+    "status": "match",
+    "difference": -6.548361852765083e-11
+  },
+  {
+    "metric": "profit.ocean_yield",
+    "page": "p_explorer",
+    "frontend": 18126.53552531643,
+    "backend": 18126.535525316456,
+    "status": "match",
+    "difference": -2.546585164964199e-11
+  },
+  {
+    "metric": "profit.matched_share",
+    "page": "p_explorer",
+    "frontend": 0.8838611217092712,
+    "backend": 0.8838611217092712,
+    "status": "match",
+    "difference": 0.0
+  },
+  {
+    "metric": "profit.best_dimension",
+    "page": "p_explorer",
+    "frontend": 130063955.76999992,
+    "backend": 130063955.77000001,
+    "status": "match",
+    "difference": -8.940696716308594e-08
+  },
+  {
+    "metric": "ops.invoiced_share",
+    "page": "p_billing",
+    "frontend": 0.9697148393075271,
+    "backend": 0.9697148393075271,
+    "status": "match",
+    "difference": 0.0
+  },
+  {
+    "metric": "ops.invoice_lag",
+    "page": "p_billing",
+    "frontend": 5.327903744244636,
+    "backend": 5.327903744244636,
+    "status": "match",
+    "difference": 0.0
+  },
+  {
+    "metric": "ops.lock_invoice_lag",
+    "page": "p_billing",
+    "frontend": -15.999247708931748,
+    "backend": -15.999247708931748,
+    "status": "match",
+    "difference": 0.0
+  },
+  {
+    "metric": "ops.locked_no_invoice",
+    "page": "p_billing",
+    "frontend": 560,
+    "backend": 560,
+    "status": "match",
+    "difference": 0
+  },
+  {
+    "metric": "ops.overdue_invoice",
+    "page": "p_billing",
+    "frontend": 527,
+    "backend": 527,
+    "status": "match",
+    "difference": 0
+  },
+  {
+    "metric": "ops.rate_air_exports",
+    "page": "p_rates",
+    "frontend": 26139,
+    "backend": 26139,
+    "status": "match",
+    "difference": 0
+  },
+  {
+    "metric": "ops.rate_usable",
+    "page": "p_rates",
+    "frontend": 0.8703087340755193,
+    "backend": 0.8703087340755193,
+    "status": "match",
+    "difference": 0.0
+  },
+  {
+    "metric": "ops.rate_sell",
+    "page": "p_rates",
+    "frontend": 281.1047435632426,
+    "backend": 281.1047435632423,
+    "status": "match",
+    "difference": 2.8421709430404007e-13
+  },
+  {
+    "metric": "ops.rate_buy",
+    "page": "p_rates",
+    "frontend": 264.0171723850818,
+    "backend": 264.017172385082,
+    "status": "match",
+    "difference": -2.2737367544323206e-13
+  },
+  {
+    "metric": "ops.rate_margin_kg",
+    "page": "p_rates",
+    "frontend": 17.08757117816081,
+    "backend": 17.087571178160296,
+    "status": "match",
+    "difference": 5.151434834260726e-13
+  },
+  {
+    "metric": "ops.rate_margin",
+    "page": "p_rates",
+    "frontend": 238424208.0114069,
+    "backend": 238424208.01139975,
+    "status": "match",
+    "difference": 7.152557373046875e-06
+  },
+  {
+    "metric": "ops.rate_below_buy",
+    "page": "p_rates",
+    "frontend": 240,
+    "backend": 240,
+    "status": "match",
+    "difference": 0
+  },
+  {
+    "metric": "profit.rate_matched_count",
+    "page": "p_rates",
+    "frontend": 22493,
+    "backend": 22493,
+    "status": "match",
+    "difference": 0
+  },
+  {
+    "metric": "profit.rate_matched_estimate",
+    "page": "p_rates",
+    "frontend": 233830657.77140713,
+    "backend": 233830657.77139997,
+    "status": "match",
+    "difference": 7.152557373046875e-06
+  },
+  {
+    "metric": "profit.rate_matched_actual",
+    "page": "p_rates",
+    "frontend": 624948345.4199276,
+    "backend": 624948345.42,
+    "status": "match",
+    "difference": -7.236003875732422e-05
+  },
+  {
+    "metric": "profit.rate_matched_difference",
+    "page": "p_rates",
+    "frontend": 391117687.64852047,
+    "backend": 391117687.6486,
+    "status": "match",
+    "difference": -7.95125961303711e-05
+  }
+]

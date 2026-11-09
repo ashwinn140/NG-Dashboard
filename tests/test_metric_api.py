@@ -14,9 +14,16 @@ class MetricAPITests(unittest.TestCase):
  def test_authentication_csrf_and_finance_scope(self):
   q=dict(metric='profit.gp',indices=[0]);self.assertEqual(self.c.post('/api/metrics/evidence',json=q).status_code,401);self.login(False)
   self.assertEqual(self.c.post('/api/metrics/evidence',json=q).status_code,403)
+  self.assertEqual(self.c.post('/api/metrics/evidence',json=dict(metric='ops.rate_sell',indices=[0])).status_code,403)
   self.assertTrue(all(x['id'].startswith('ops.') for x in self.c.get('/api/metrics/definitions').json()['metrics']))
   r=self.c.post('/api/metrics/evidence',json=dict(metric='ops.shipments',indices=[0]));self.assertEqual(r.status_code,200);self.assertNotIn('income',r.json()['records'][0])
   self.c.headers.pop('X-CSRF-Token');self.assertEqual(self.c.post('/api/metrics/export',json=q).status_code,403)
+ def test_activity_review_is_scoped_and_does_not_call_sparse_history_lost(self):
+  self.login(False)
+  r=self.c.post('/api/metrics/activity',json=dict(metric='ops.shipments',indices=[0,1],context={'as_of':'2026-11-09'}));self.assertEqual(r.status_code,200,r.text)
+  self.assertTrue(all(x['company']=='NG' and x['status']=='insufficient_history' for x in r.json()['customers']))
+  r=self.c.post('/api/metrics/evidence',json=dict(metric='ops.shipments',indices=[0],dataset_built_at='stale'))
+  self.assertEqual(r.status_code,400)
  def test_financial_evidence_export_and_invalid_index(self):
   self.login(True);q=dict(metric='profit.gp',indices=[0,1,2],previous_indices=[])
   r=self.c.post('/api/metrics/evidence',json=q);self.assertEqual(r.status_code,200,r.text);v=r.json();self.assertEqual(v['current']['value'],150)

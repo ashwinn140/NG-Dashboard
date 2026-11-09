@@ -52,3 +52,11 @@ class OpportunityTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class OpportunityIdentityRegression(unittest.TestCase):
+ def test_repeated_shipment_number_on_distinct_dates_and_sales_source(self):
+  from app.phase2_opportunity import find_opportunities
+  from datetime import date
+  rows=[dict(company='NG',customer='Acme Logistics',lob='AE',shipment_id='REUSED',shipment_date=date(2026,1,d),salesperson='ERP Sales') for d in [1,2,3]]
+  result=find_opportunities(rows,date(2026,1,3),complete_lob_coverage=True)
+  self.assertEqual(result[0]['shipment_count'],3);self.assertEqual(result[0]['customer'],'Acme Logistics');self.assertEqual(result[0]['salespersons'],{'ERP Sales':3})

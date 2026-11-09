@@ -28,10 +28,10 @@ def find_opportunities(rows, as_of: date, window_days: int = 180,
         raise ValueError("min_shipments must be positive")
     from datetime import timedelta
     start = as_of - timedelta(days=window_days - 1)
-    grouped = defaultdict(lambda: defaultdict(set))
+    grouped = defaultdict(lambda: defaultdict(set)); display_names = {}; sales = defaultdict(lambda: defaultdict(set))
     for row in rows:
         company = str(row.get("company") or "").strip().upper()
-        customer = " ".join(str(row.get("customer") or "").split()).casefold()
+        customer = " ".join(str(row.get("customer") or "").split())
         lob = str(row.get("lob") or "").strip().upper()
         shipment_id = str(row.get("shipment_id") or "").strip()
         when = row.get("shipment_date")
@@ -39,7 +39,10 @@ def find_opportunities(rows, as_of: date, window_days: int = 180,
                 and isinstance(when, date) and not hasattr(when, "hour")
                 and start <= when <= as_of):
             continue
-        grouped[(company, customer)][lob].add(shipment_id)
+        grouped[(company, customer)][lob].add((shipment_id,when))
+        display_names.setdefault((company,customer),' '.join(str(row.get('customer') or '').split()))
+        salesperson=str(row.get('salesperson') or '').strip()
+        if salesperson:sales[(company,customer)][salesperson].add((lob,shipment_id,when))
     result = []
     for (company, customer), lob_counts in grouped.items():
         active = {lob: len(ids) for lob, ids in lob_counts.items() if ids}
@@ -50,7 +53,7 @@ def find_opportunities(rows, as_of: date, window_days: int = 180,
         if not missing:
             continue
         result.append({
-            "company": company, "customer": customer,
+            "company": company, "customer": display_names[(company,customer)], "customer_key": customer, "salespersons": {name:len(ids) for name,ids in sales[(company,customer)].items()},
             "active_lobs": dict(sorted(active.items())),
             "candidate_lobs": missing, "shipment_count": total,
             "signal": "cross_service_whitespace",
