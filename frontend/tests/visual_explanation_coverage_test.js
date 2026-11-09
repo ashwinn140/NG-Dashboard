@@ -125,4 +125,17 @@ for(const title of ['Growing accounts','Declining accounts']){
  assert.equal(q.context.date_basis,'Shipment Date');
 }
 
+
+n.setGroup('profit');n.S.page='p_billing';Object.assign(n.S.bl,{dim:'branch'});n.S.sel={};n.renderAll();
+{
+ const title='Where billing is slow';
+ const c=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()===title);
+ assert.ok(c,'billing worklist visual exists');
+ const b=c.querySelector('.mt-info');assert.ok(b,'Calculation & records action exists for locked/no-invoice worklist');
+ assert.equal(b.dataset.traceMetric,'ops.locked_no_invoice');assert.equal(b.dataset.traceDimension,'branch');
+ const q=n.traceVisual('ops.locked_no_invoice','branch',title);
+ assert.ok(q.indices.length>0,'shipment-register evidence rows supplied');
+ assert.equal(q.previous_indices.length,0,'locked/no-invoice metric is an as-of snapshot, not a previous-period comparison');
+}
+
 assert.deepEqual(errors,[]);w.close();console.log('PASS verified visual explanations: summary, scorecard, agent reports, profitability, billing, variance and source-status pages.');})().catch(e=>{console.error(e);dom.window.close();process.exit(1)});
