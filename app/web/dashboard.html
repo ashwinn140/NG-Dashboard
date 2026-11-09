@@ -832,12 +832,13 @@ function pageCustomers() {
       h('td', {class: 'n'}, fS(r.share)), h('td', {class: 'n ' + (r.delta > 0 ? 'ok' : r.delta < 0 ? 'bad' : '')}, hasPrev ? (r.delta > 0 ? '+' : r.delta < 0 ? '−' : '') + fInt(Math.abs(r.delta)) : '–'), h('td', {class: 'n'}, r.last > 0 ? fDay(r.last) : '–'), h('td', null, ownerByCustomer.get(r.j) || (r.last > 0 ? 'Loading…' : 'No shipment')), h('td', null, h('button',{type:'button',class:'link',onclick:event=>{event.stopPropagation();showRecentJobs(COLS.customer.d[r.j],historyCompanies(r.j));}},'View jobs')))));
     note.textContent = 'Showing ' + shown.length + ' of ' + fInt(rows.length) + ' customers. Click a row to filter; use View jobs to inspect the last five distinct JPR jobs. Job history uses Job Date and is independent of the dashboard date range. ' + (hasPrev ? 'Change = shipments minus the ' + cmpLabel() + '.' : 'No earlier period exists before this date range, so there is no change to show.'); };
   draw();
-  // Resolve the owner against the exact latest Shipment Date shown in this table.
-  // The backend only returns an owner for a unique, source-backed JPR match.
+  // Resolve owners in parallel batches after the table has rendered. Cache by customer row
+  // index, and refresh the visible cells once the source-backed lookup completes.
+  const visibleOwnerRows = rows.slice().sort((a,b)=>b.cnt-a.cnt).slice(0,S.def.tableRows).filter(r=>r.last>0);
+  const ownerBatches = [];
+  for(let offset=0;offset<visibleOwnerRows.length;offset+=100) ownerBatches.push(visibleOwnerRows.slice(offset,offset+100));
   (async()=>{
-    const visible=rows.slice(0,S.def.tableRows).filter(r=>r.last>0);
-    for(let offset=0;offset<visible.length;offset+=100){
-      const batch=visible.slice(offset,offset+100);
+    await Promise.all(ownerBatches.map(async batch=>{
       try{
         const histories=await loadRecentJobs(batch.map(r=>({customer:COLS.customer.d[r.j],companies:historyCompanies(r.j),lobs:historyLobs(),last_shipment_date:fIso(dDate(r.last))})));
         histories.forEach(history=>{
@@ -845,7 +846,7 @@ function pageCustomers() {
           if(row) ownerByCustomer.set(row.j,history.last_shipment_job_owner||'Owner unavailable');
         });
       }catch(_){batch.forEach(r=>ownerByCustomer.set(r.j,'Owner unavailable'));}
-    }
+    }));
     draw();
   })();
   // heatmap
