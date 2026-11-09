@@ -1,7 +1,7 @@
 """Database tables. Works on SQLite (local testing) and Postgres (Railway) with no code change."""
 import os
 from sqlalchemy import (JSON, Column, Date, DateTime, Float, ForeignKey, Index, Integer, MetaData,
-                        String, Table, Text, create_engine)
+                        String, Table, Text, UniqueConstraint, create_engine)
 
 metadata = MetaData()
 
@@ -135,3 +135,34 @@ settings = Table(
     Column("key", String(60), primary_key=True), Column("value", Text),
 )
 
+# Durable report scheduling. Definitions and run history are separate so a
+# worker restart or a second replica cannot silently lose or duplicate a run.
+report_schedules = Table(
+    "report_schedules", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("owner_id", Integer, ForeignKey("users.id"), nullable=False, index=True),
+    Column("report_id", String(60), nullable=False), Column("report_version", Integer, nullable=False),
+    Column("definition", JSON, nullable=False),  # allowlisted, normalized scheduler contract
+    Column("status", String(20), nullable=False, default="paused", index=True),
+    Column("next_run_at", DateTime, index=True), Column("last_run_at", DateTime),
+    Column("last_error", Text), Column("created_at", DateTime), Column("updated_at", DateTime),
+)
+
+report_runs = Table(
+    "report_runs", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("schedule_id", Integer, ForeignKey("report_schedules.id"), nullable=False, index=True),
+    Column("scheduled_for", DateTime, nullable=False),
+    Column("idempotency_key", String(160), nullable=False, unique=True),
+    Column("status", String(24), nullable=False, default="queued", index=True),
+    Column("attempts", Integer, nullable=False, default=0),
+    Column("period_start", Date), Column("period_end_exclusive", Date),
+    Column("freshness", JSON), Column("row_count", Integer), Column("file_size", Integer),
+    Column("file_sha256", String(64)), Column("provider_status", String(32)),
+    Column("provider_message_id", String(200)), Column("error_code", String(80)), Column("error_message", Text),
+    Column("retry_after", DateTime, index=True), Column("started_at", DateTime),
+    Column("finished_at", DateTime), Column("created_at", DateTime),
+    UniqueConstraint("schedule_id", "scheduled_for", name="uq_report_run_schedule_instant"),
+)
+Index("ix_report_schedule_due", report_schedules.c.status, report_schedules.c.next_run_at)
+Index("ix_report_run_claim", report_runs.c.status, report_runs.c.retry_after, report_runs.c.created_at)
