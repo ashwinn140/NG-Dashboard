@@ -82,7 +82,7 @@ def build_recent_jobs(rows, lobs=None, limit=5):
     return result[:max(0, min(int(limit), 5))]
 
 
-def build_last_shipment_owners(shipment_rows, jpr_rows, lobs=None):
+def build_last_shipment_owners(shipment_rows, jpr_rows, lobs=None, target_date=None):
     """Map each customer's latest shipment date to its JPR Job Owner.
 
     Shipment-to-job identity follows the dashboard's existing matching rule:
@@ -91,6 +91,7 @@ def build_last_shipment_owners(shipment_rows, jpr_rows, lobs=None):
     A date with multiple shipments is reported only when all owners agree.
     """
     allowed_lobs = set(lobs or [])
+    target_date = _iso_day(target_date) if target_date else None
     jobs_by_number = defaultdict(list)
     grouped_jobs = {}
 
@@ -132,6 +133,8 @@ def build_last_shipment_owners(shipment_rows, jpr_rows, lobs=None):
         if not company or not report_type or not shipment_no or not shipment_date or not customer:
             continue
         if allowed_lobs and report_type not in allowed_lobs:
+            continue
+        if target_date and shipment_date != target_date:
             continue
         item = {
             "company": company, "report_type": report_type,
