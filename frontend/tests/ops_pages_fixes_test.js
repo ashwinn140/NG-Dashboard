@@ -45,7 +45,7 @@ async function boot(mutate){
    const dialog=d.querySelector('dialog[open]'),jobs=dialog?[...dialog.querySelectorAll('tbody tr')]:[];
    check('View jobs opens a customer history dialog',!!dialog);
    check('customer history shows the last five distinct JPR jobs',jobs.length===5&&jobs[0].textContent.includes('JOB-5'),jobs.map(r=>r.textContent));
-   check('customer history fetch is invoked once',w.__recentJobsCalls===1,w.__recentJobsCalls);
+   check('customer owner preload and View jobs each make one request',w.__recentJobsCalls===2,w.__recentJobsCalls);
    check('repeated Job Owner values remain visible',jobs.filter(r=>r.textContent.includes('Repeated Owner')).length===5);
   }
   dom.window.close()}
