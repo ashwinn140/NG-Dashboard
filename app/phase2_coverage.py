@@ -51,3 +51,79 @@ def report_field_coverage(rows):
             except (TypeError, ValueError):
                 result.append({"company": company, "lob": lob, "status": "invalid_column_metadata", "fields": {}})
     return result
+
+
+# Job-history readiness is deliberately separate from the eight-register field
+# coverage above. It reports header availability only; it does not claim that
+# a JPR job can be matched to a register row or that every owner is populated.
+JOB_HISTORY_REPORTS = ("AE", "AI", "OE", "OI", "JP")
+JOB_HISTORY_FIELDS = {
+    "job_number": ("jobno", "jobnumber"),
+    "job_date": ("jobdate",),
+    "job_owner": ("jobowner",),
+    "lob": ("lob", "lineofbusiness"),
+    "shipment_number": ("shipmentno",),
+    "shipment_date": ("shipmentdate",),
+}
+
+
+def job_history_field_coverage(rows):
+    """Return latest promoted source-header coverage for the five report types.
+
+    Shipment registers need Shipment No, Shipment Date and Job Owner.
+    JPR needs Job No., Job Date and LOB; Job Owner is optional there because
+    the dataset can fall back to the uniquely matched shipment register.
+    This is metadata-only and does not inspect or expose customer/job rows.
+    """
+    latest = {}
+    for row in rows:
+        company, report = row.get("company"), row.get("report_type")
+        if company not in EXPECTED or report not in JOB_HISTORY_REPORTS:
+            continue
+        key = (company, report)
+        if key not in latest or int(row["id"]) > int(latest[key]["id"]):
+            latest[key] = row
+
+    result = []
+    for company in EXPECTED:
+        for report in JOB_HISTORY_REPORTS:
+            row = latest.get((company, report))
+            if row is None:
+                result.append({
+                    "company": company, "report_type": report,
+                    "status": "no_promoted_import", "fields": {},
+                    "required_fields_present": False,
+                })
+                continue
+            try:
+                columns = json.loads(row.get("columns") or "[]")
+                if not isinstance(columns, list):
+                    raise ValueError("not a list")
+                names = {_norm(c) for c in columns}
+                fields = {
+                    field: any(candidate in names for candidate in aliases)
+                    for field, aliases in JOB_HISTORY_FIELDS.items()
+                }
+                required = (
+                    ("job_number", "job_date", "lob")
+                    if report == "JP"
+                    else ("shipment_number", "shipment_date", "job_owner")
+                )
+                result.append({
+                    "company": company, "report_type": report,
+                    "status": "ok" if all(fields[k] for k in required) else "missing_required_fields",
+                    "fields": fields,
+                    "required_fields_present": all(fields[k] for k in required),
+                    "job_owner_source": (
+                        "jpr_source_column" if report == "JP" and fields["job_owner"]
+                        else "matched_register_fallback" if report == "JP"
+                        else "shipment_register"
+                    ),
+                })
+            except (TypeError, ValueError):
+                result.append({
+                    "company": company, "report_type": report,
+                    "status": "invalid_column_metadata", "fields": {},
+                    "required_fields_present": False,
+                })
+    return result

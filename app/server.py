@@ -555,13 +555,14 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
     @app.get("/api/admin/phase2/source-readiness")
     def phase2_source_readiness(user: dict = Depends(admin)):
         """Read-only Phase 2 field availability. Existing imports and reports unchanged."""
-        from .phase2_coverage import report_field_coverage
+        from .phase2_coverage import report_field_coverage, job_history_field_coverage
         with engine.connect() as c:
             rows = c.execute(select(imports.c.id, imports.c.company,
                 imports.c.report_type, imports.c.columns).where(
                 imports.c.status == "promoted")).mappings().all()
         return {"report_fields": report_field_coverage(rows),
-                "note": "Metadata only; validate actual ERP identifiers before enabling customer intelligence."}
+                "job_history_fields": job_history_field_coverage(rows),
+                "note": "Metadata only; field presence does not prove job-to-register matching or owner completeness. Validate actual ERP identifiers before enabling customer intelligence."}
 
     @app.get("/phase2/intelligence", response_class=HTMLResponse)
     def phase2_intelligence_page(user: dict = Depends(me)):
