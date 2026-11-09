@@ -484,6 +484,7 @@ function pageCustomers() {
     card('Customer by month', 'Top ' + S.def.heatN + ' customers by ' + (R.useVol ? 'volume' : 'shipments') + '. Click a cell to focus that customer and month.', heat, 'full', {metric: opsVisualMetric(), dimension: 'customer'}),
     card('Growing accounts', 'Biggest increase in shipments against the ' + cmpLabel() + '.', moverList(gain, 1)),
     card('Declining accounts', 'Biggest fall in shipments against the ' + cmpLabel() + '.', moverList(lose, -1))));
+}
 function pageLanes() {
   const a = laneAgg(); a.rows.sort((x, y) => y.cnt - x.cnt); const shown = a.rows.slice(0, S.def.tableRows);
   const exportLanes = () => { const list = a.rows.slice().sort((x, y) => y.cnt - x.cnt);
