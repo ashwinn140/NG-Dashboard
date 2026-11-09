@@ -1727,23 +1727,65 @@ function metricTraceVariance(metric,pr,displayed){
  const q=metricTraceSelection(metric,'Variance');q.indices=Array.from(m).flatMap((v,i)=>v?[i]:[]);q.previous_indices=Array.from(p).flatMap((v,i)=>v?[i]:[]);q.displayed_value=displayed;q.context.period=pr;q.context.active_min=1;q.context.date_basis=metric==='ops.invoiced_count'?'First parsed invoice date':fin?'Job Date':'Shipment Date';return q;
 }
 function metricTraceMasks(metric,key) {
- const fin=metric.startsWith('profit.'),skip=key?{skip:key}:{};
+ const fin=metric.startsWith('profit.'),skip=new Set([...(key?[key]:[])]);
+ if(fin&&S.page==='p_explorer'){const d=EXP_DIMS[S.exp.dim]||EXP_DIMS[0];skip.add(d.k);}
+ if(fin&&S.page==='p_quality')skip.add(metric==='profit.intercompany_proxy'?'p_ic':'jobstatus');
+ if(fin&&S.page==='p_customers')skip.add('customer');
+ const opt={skip:[...skip]};
+ let m,p;
  if((fin&&S.page==='p_compare')||(!fin&&S.page==='compare')){
   const pr=periods(S.cmp);if(pr.err)throw Error(pr.err);
-  const m=fin?maskP({...skip,dates:'none'}):mask({...skip,dates:'none'}),p=fin?maskP({...skip,dates:'none'}):mask({...skip,dates:'none'}),ds=fin?pdate:date;
+  m=fin?maskP({...opt,dates:'none'}):mask({...opt,dates:'none'});
+  p=fin?maskP({...opt,dates:'none'}):mask({...opt,dates:'none'});
+  const ds=fin?pdate:date;
   for(let i=0;i<m.length;i++){if(ds[i]<pr.cur.from||ds[i]>pr.cur.to)m[i]=0;if(ds[i]<pr.prev.from||ds[i]>pr.prev.to)p[i]=0;}
-  return {m,p};
+ }else{
+  m=fin?maskP(opt):mask(opt);p=fin?maskP({...opt,dates:'prev'}):mask({...opt,dates:'prev'});
  }
- return {m:fin?maskP(skip):mask(skip),p:fin?maskP({...skip,dates:'prev'}):mask({...skip,dates:'prev'})};
+ if(fin&&S.page==='p_explorer'){const d=EXP_DIMS[S.exp.dim]||EXP_DIMS[0];if(d.mode!=null)for(let i=0;i<NP;i++)if(psidx[i]<0||mode[psidx[i]]!==d.mode){m[i]=0;p[i]=0;}}
+ if(!fin&&(['ops.waiting_lock','ops.financials_open','ops.old_open','ops.oldest_open','ops.locked_no_invoice','ops.overdue_invoice'].includes(metric)||(metric==='ops.lock_lag'&&(S.group==='summary'||S.page==='ops')))){m=mask({...opt,dates:'none'});p=new Uint8Array(N);}
+ if(metric.startsWith('ops.rate_'))for(let i=0;i<N;i++)if(rtype[i]!==0){m[i]=0;p[i]=0;}
+ if(metric.startsWith('profit.rate_matched_'))for(let i=0;i<NP;i++){const si=psidx[i];if(si<0||rtype[si]!==0||!rateOK(si)){m[i]=0;p[i]=0;}}
+ return {m,p};
 }
-function metricTraceValue(metric,m) {
- if(metric==='ops.shipments')return opsFacts(m).n;
- if(metric==='ops.air_weight')return opsFacts(m).air;
- if(metric==='ops.teu')return opsFacts(m).sea;
- if(metric==='profit.gp')return totalsP(m).profit;
- if(metric==='profit.income')return totalsP(m).inc;
- if(metric==='profit.expense')return totalsP(m).exp;
- if(metric==='profit.jobs')return totalsP(m).jobs;
+function metricTraceValue(metric,m,p) {
+ const fin=metric.startsWith('profit.');
+ if(!fin){
+  const f=opsFacts(m),ids=Array.from(m).flatMap((v,i)=>v?[i]:[]);
+  if(metric==='ops.shipments')return f.n;
+  if(metric==='ops.air_weight')return f.air;
+  if(metric==='ops.teu')return f.sea;
+  if(metric==='ops.active_customers')return S.group==='summary'?f.cust:activeCust(m);
+  if(metric==='ops.waiting_lock')return ids.filter(i=>COLS.stage.c[i]===STAGE_PEND).length;
+  if(metric==='ops.financials_open')return ids.filter(i=>COLS.stage.c[i]===STAGE_FIN).length;
+  if(metric==='ops.old_open'||metric==='ops.oldest_open'){const a=ids.filter(i=>COLS.stage.d[COLS.stage.c[i]]!=='Closed').map(i=>OPS_MAX-date[i]);return metric==='ops.old_open'?a.filter(x=>x>S.def.oldDays).length:Math.max(0,...a);}
+  if(metric==='ops.lock_lag')return f.lag;
+  if(metric==='ops.invoiced_share')return ids.length?ids.filter(i=>invN[i]>0).length/ids.length:null;
+  if(metric==='ops.invoice_lag'||metric==='ops.lock_invoice_lag'){const a=ids.filter(i=>invN[i]>0&&inv1[i]>0&&(metric==='ops.invoice_lag'||opsD[i]>0));return a.length?d3.sum(a,i=>inv1[i]-(metric==='ops.invoice_lag'?date[i]:opsD[i]))/a.length:null;}
+  if(metric==='ops.locked_no_invoice'||metric==='ops.overdue_invoice'){const a=ids.filter(i=>opsD[i]>0&&invN[i]===0);return metric==='ops.locked_no_invoice'?a.length:a.filter(i=>OPS_MAX-opsD[i]>S.def.unbilledDays).length;}
+  if(metric==='ops.customer_concentration')return top10(m,R.useVol);
+  if(metric.startsWith('ops.rate_')){const all=ids.filter(i=>rtype[i]===0),ok=all.filter(rateOK),kg=d3.sum(ok,i=>ckg[i]),sell=d3.sum(ok,i=>rsell[i]*ckg[i]),buy=d3.sum(ok,i=>rbuy[i]*ckg[i]);return {'ops.rate_air_exports':all.length,'ops.rate_usable':all.length?ok.length/all.length:null,'ops.rate_sell':kg?sell/kg:null,'ops.rate_buy':kg?buy/kg:null,'ops.rate_margin_kg':kg?(sell-buy)/kg:null,'ops.rate_margin':sell-buy,'ops.rate_below_buy':ok.filter(i=>rsell[i]<rbuy[i]).length}[metric];}
+  if(metric==='ops.period_new_customers'||metric==='ops.period_absent_customers'){const a=new Map(),b=new Map();for(let i=0;i<N;i++){if(m[i])a.set(COLS.customer.c[i],(a.get(COLS.customer.c[i])||0)+1);if(p?.[i])b.set(COLS.customer.c[i],(b.get(COLS.customer.c[i])||0)+1);}const cur=metric==='ops.period_new_customers'?a:b,other=metric==='ops.period_new_customers'?b:a;return [...cur].filter(([k,v])=>v>=S.def.activeMin&&!other.has(k)).length;}
+  return undefined;
+ }
+ const t=totalsP(m),jobs=pbyJob(m);
+ if(metric==='profit.gp')return t.profit;
+ if(metric==='profit.income')return t.inc;
+ if(metric==='profit.expense')return t.exp;
+ if(metric==='profit.jobs')return t.jobs;
+ if(metric==='profit.margin')return t.margin;
+ if(metric==='profit.per_job')return t.jobs?t.profit/t.jobs:null;
+ if(metric==='profit.cost_coverage')return t.jobs?t.booked/t.jobs:null;
+ if(metric==='profit.expected_adjusted')return t.profit-pExpectedByLob(m).est;
+ if(metric==='profit.cost_not_booked_proxy')return jobs.filter(r=>r.status===1).length;
+ if(metric==='profit.billing_pending_proxy')return jobs.filter(r=>r.status===2).length;
+ if(metric==='profit.loss_making')return jobs.filter(r=>r.status===3).length;
+ if(metric==='profit.low_margin')return jobs.filter(r=>r.status===4).length;
+ if(metric==='profit.negative_income_rows')return Array.from(m).filter((v,i)=>v&&pinc[i]<0).length;
+ if(metric==='profit.intercompany_proxy')return jobs.filter(r=>pcatv('p_ic',r.i0)==='Intercompany').length;
+ if(['profit.customers','profit.customers_80','profit.biggest_customer','profit.loss_customers'].includes(metric)){const a=groupByP('customer',m).sort((x,y)=>y.profit-x.profit),total=d3.sum(a,r=>r.profit),positive=d3.sum(a.filter(r=>r.profit>0),r=>r.profit);let cum=0,n=0;a.forEach(r=>{if(r.profit>0&&cum<.8*positive){cum+=r.profit;n++;}});return {'profit.customers':a.length,'profit.customers_80':n,'profit.biggest_customer':a.length?a[0].profit/(total||1):null,'profit.loss_customers':a.filter(r=>r.profit<0).length}[metric];}
+ if(['profit.air_yield','profit.ocean_yield','profit.matched_share','profit.best_dimension'].includes(metric)){const d=EXP_DIMS[S.exp.dim]||EXP_DIMS[0],a=groupByP(d.k,m);if(metric==='profit.air_yield')return d3.sum(a,r=>r.airT)>0?d3.sum(a,r=>r.airP)/d3.sum(a,r=>r.airT):null;if(metric==='profit.ocean_yield')return d3.sum(a,r=>r.seaT)>0?d3.sum(a,r=>r.seaP)/d3.sum(a,r=>r.seaT):null;if(metric==='profit.matched_share')return t.jobs?jobs.filter(r=>psidx[r.i0]>=0).length/t.jobs:null;return d3.max(a.filter(r=>r.profit>0),r=>r.profit)??null;}
+ if(metric.startsWith('profit.rate_matched_')){const ids=Array.from(m).flatMap((v,i)=>v&&psidx[i]>=0?[psidx[i]]:[]),ok=ids.filter(rateOK),kg=d3.sum(ok,i=>ckg[i]),sell=d3.sum(ok,i=>rsell[i]*ckg[i]),buy=d3.sum(ok,i=>rbuy[i]*ckg[i]);return {'profit.rate_matched_count':ok.length,'profit.rate_matched_estimate':sell-buy,'profit.rate_matched_actual':t.profit,'profit.rate_matched_difference':t.profit-(sell-buy)}[metric];}
  return undefined;
 }
 function metricTraceCategory(metric,key,code){
