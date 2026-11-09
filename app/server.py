@@ -376,10 +376,9 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             key = (company, normalize_customer(customer))
             group = groups.setdefault(key, {
                 "company": company, "customer": customer, "indices": [],
-                "selected_dates": [], "selected_lobs": set(selected_lobs),
+                "selected_lobs": set(selected_lobs),
             })
             group["indices"].append(row["source_index"])
-            group["selected_dates"].append(shipment_day)
 
         if not groups:
             return {
@@ -425,14 +424,17 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                 promoted.add((row["company"], row["report_type"]))
 
             normalized_names = sorted({customer for _, customer in groups})
-            jpr_rows = conn.execute(select(
-                profit_lines.c.company, profit_lines.c.job_no, profit_lines.c.job_date,
-                profit_lines.c.lob, profit_lines.c.customer, profit_lines.c.extra
-            ).where(
-                profit_lines.c.company.in_(companies),
-                func.lower(func.trim(profit_lines.c.customer)).in_(normalized_names),
-                *J.current_jobs(),
-            ).order_by(profit_lines.c.job_date.desc(), profit_lines.c.id.desc())).mappings().all()
+            jpr_rows = []
+            for offset in range(0, len(normalized_names), 500):
+                name_batch = normalized_names[offset:offset + 500]
+                jpr_rows.extend(conn.execute(select(
+                    profit_lines.c.company, profit_lines.c.job_no, profit_lines.c.job_date,
+                    profit_lines.c.lob, profit_lines.c.customer, profit_lines.c.extra
+                ).where(
+                    profit_lines.c.company.in_(companies),
+                    func.lower(func.trim(profit_lines.c.customer)).in_(name_batch),
+                    *J.current_jobs(),
+                ).order_by(profit_lines.c.job_date.desc(), profit_lines.c.id.desc())).mappings().all())
 
         for row in jpr_rows:
             key = (row["company"], normalize_customer(row["customer"]))
