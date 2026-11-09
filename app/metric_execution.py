@@ -99,7 +99,7 @@ def aggregate(metric,rows,options=None):
   elif metric=='ops.invoiced_share':numerator=sum(r['invoice_count']>0 for r in rows);denominator=len(rows);v=numerator/denominator if denominator else None
   elif metric in ['ops.invoice_lag','ops.lock_invoice_lag']:
    eligible=[r for r in rows if r['invoice_count']>0 and r['invoice_day']>0 and (metric=='ops.invoice_lag' or r['operations_lock_day']>0)];numerator=sum(r['invoice_day']-(r['shipment_day'] if metric=='ops.invoice_lag' else r['operations_lock_day']) for r in eligible);denominator=len(eligible);v=numerator/denominator if denominator else None
-  elif metric in ['ops.locked_no_invoice','ops.overdue_invoice']:eligible=[r for r in rows if r['operations_lock_day']>0 and r['invoice_count']==0 and (metric=='ops.locked_no_invoice' or today-r['operations_lock_day']>unbilled)];v=len(eligible)
+  elif metric=='ops.operations_locked':eligible=[r for r in rows if r['operations_lock_day']>0];v=len(eligible)\n  elif metric in ['ops.locked_no_invoice','ops.overdue_invoice']:eligible=[r for r in rows if r['operations_lock_day']>0 and r['invoice_count']==0 and (metric=='ops.locked_no_invoice' or today-r['operations_lock_day']>unbilled)];v=len(eligible)
   else:raise ValueError('Unsupported operational metric.')
   return dict(value=v,numerator=numerator,denominator=denominator)
  if metric in ['ops.period_new_customers','ops.period_absent_customers']:return dict(value=len({r['customer'] for r in rows}),numerator=None,denominator=None)
@@ -137,7 +137,7 @@ def eligible_records(metric, rows, context):
  'ops.lock_lag':lambda r:r['operations_lock_day']>0 and r['financial_lock_day']>0,
  'ops.invoice_lag':lambda r:r['invoice_count']>0 and r['invoice_day']>0,
  'ops.lock_invoice_lag':lambda r:r['invoice_count']>0 and r['invoice_day']>0 and r['operations_lock_day']>0,
- 'ops.locked_no_invoice':lambda r:r['operations_lock_day']>0 and r['invoice_count']==0,
+ 'ops.operations_locked':lambda r:r['operations_lock_day']>0,\n 'ops.locked_no_invoice':lambda r:r['operations_lock_day']>0 and r['invoice_count']==0,
  'ops.overdue_invoice':lambda r:r['operations_lock_day']>0 and r['invoice_count']==0 and today-r['operations_lock_day']>late}
  if metric.startswith('ops.rate_'):
   rows=[r for r in rows if r.get('register_report',-1)%4==0]
