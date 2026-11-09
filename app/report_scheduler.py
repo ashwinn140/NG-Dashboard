@@ -229,6 +229,12 @@ def validate_schedule(user: dict, payload: dict) -> dict:
     if period == "fixed_range":
         period_bounds(period, date.today(), start_date=payload.get("start_date"), end_date=payload.get("end_date"))
 
+    mode = payload.get("summary_detail", "summary" if report_id == "customer_performance" else "detail")
+    if mode not in ("summary", "detail"):
+        raise ScheduleValidationError("Choose summary or detail mode.")
+    if report_id == "customer_performance" and mode != "summary":
+        raise ScheduleValidationError("Customer Performance is a summary report in the pilot.")
+    available_columns = report["summary_columns"] if mode == "summary" else report["columns"]
     columns = payload.get("columns") or list(available_columns)
     if not isinstance(columns, list) or not columns or len(columns) != len(set(columns)):
         raise ScheduleValidationError("Select one or more unique report columns.")
@@ -247,12 +253,6 @@ def validate_schedule(user: dict, payload: dict) -> dict:
             raise ScheduleValidationError("Filter values must be lists of at most 100 text values.")
         clean_filters[key] = list(dict.fromkeys(v.strip() for v in values if v.strip()))
 
-    mode = payload.get("summary_detail", "summary" if report_id == "customer_performance" else "detail")
-    if mode not in ("summary", "detail"):
-        raise ScheduleValidationError("Choose summary or detail mode.")
-    if report_id == "customer_performance" and mode != "summary":
-        raise ScheduleValidationError("Customer Performance is a summary report in the pilot.")
-    available_columns = report["summary_columns"] if mode == "summary" else report["columns"]
     recipients = payload.get("recipients", ["self"])
     if recipients != ["self"]:
         raise PermissionError("The pilot only supports delivery to the schedule owner's verified account email.")
