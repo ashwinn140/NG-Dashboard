@@ -41,7 +41,7 @@ async function boot(mutate){
  {const {dom,w,d,ng}=await boot();ng.S.sel={};ng.S.rel=null;ng.S.from=null;ng.S.to=null;ng.setGroup('ops');ng.S.page='customers';ng.renderAll();
   const button=[...d.querySelectorAll('#page button')].find(b=>b.textContent==='View jobs');
   check('Operations Customers exposes a View jobs action',!!button);
-  if(button){await click(w,button);await sleep(150);
+  if(button){button.dispatchEvent(new w.MouseEvent('click',{bubbles:true,cancelable:true}));await sleep(650);
    const dialog=d.querySelector('dialog[open]'),jobs=dialog?[...dialog.querySelectorAll('tbody tr')]:[];
    check('View jobs opens a customer history dialog',!!dialog);
    check('customer history shows the last five distinct JPR jobs',jobs.length===5&&jobs[0].textContent.includes('JOB-5'),jobs.map(r=>r.textContent));
