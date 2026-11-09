@@ -171,19 +171,22 @@ function businessMeaning(label, note) {
     : /customer/.test(lower) && /active|distinct|unique/.test(lower)
     ? 'Count of distinct customers meeting the current filters and the configured activity threshold.'
     : /revenue|income|sales value/.test(lower)
-    ? 'Sum of recorded income for the selected job-profit lines.'
+    ? 'Sum of recorded income for the selected job-summary records.'
     : /cost|expense/.test(lower)
-    ? 'Sum of recorded expenses for the selected job-profit lines.'
+    ? 'Sum of recorded expenses for the selected job-summary records.'
     : /variance|change|growth|decline/.test(lower)
     ? 'Difference between the selected current and comparison periods; percentage change uses the previous value as the denominator when non-zero.'
     : '';
+  // Financial imports are job-summary snapshots, not charge-level rows.
+  // Never imply that a finance visual is sourced from charge-line data.
   const meaning = 'Shows ' + name.toLowerCase() + ' for the selected reporting scope.';
   const calculation = formula || (note ? 'This visual uses the source-data calculation described in its note. A metric-specific formula is not yet verified.' : 'Metric-specific formula not yet verified; refer to the displayed measure and source report before using this figure for decisions.');
+  const reportingWindow = R && R.w ? R.w : null;
   return h('details', {class: 'business-explanation', style: 'margin-top:.55rem;font-size:.78rem'},
     h('summary', {style: 'cursor:pointer'}, 'Business meaning & calculation'),
     h('p', null, h('strong', null, 'What this means: '), meaning),
     h('p', null, h('strong', null, 'How it is calculated: '), calculation),
-    h('p', {class: 'meta'}, 'Reporting dates: ' + fRange({from:R.w.from,to:R.w.to}) + (S.compare ? '; comparison: ' + fRange({from:R.w.pfrom,to:R.w.pto}) : '') + '. Filters apply.'));
+    reportingWindow ? h('p', {class: 'meta'}, 'Reporting dates: ' + fRange({from:reportingWindow.from,to:reportingWindow.to}) + (S.compare && reportingWindow.pfrom != null && reportingWindow.pto != null ? '; comparison: ' + fRange({from:reportingWindow.pfrom,to:reportingWindow.pto}) : '') + '. Filters apply.') : null);
 }
 function card(title, note, body, cls) { return h('article', {class: 'card ' + (cls || '')}, h('h2', {class: 'h'}, title), note ? h('p', {class: 'note'}, note) : null, body, businessMeaning(title, note)); }
 function kpi(label, value, delta, note, tone, previousValue) {
