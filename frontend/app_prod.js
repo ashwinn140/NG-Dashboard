@@ -401,10 +401,83 @@ function sortHead(cols, state, redraw) {
 function pageCustomers() {
   const key = 'customer', M2 = mask({skip: key}), P2 = mask({skip: key, dates: 'prev'}), c = COLS.customer.c, sz = COLS.customer.d.length;
   const cnt = new Float64Array(sz), pc = new Float64Array(sz), air = new Float64Array(sz), sea = new Float64Array(sz), last = new Int32Array(sz), vol = new Float64Array(sz); let totC = 0, totV = 0;
-  for (let i = 0; i < N; i++) { if (M2[i]) { const j = c[i]; cnt[j]++; totC++; const v = vi(i); vol[j] += v; totV += v; if (mode[i]) sea[j] += teus[i]; else air[j] += chg[i]; if (date[i] > last[j]) last[j] = date[i]; } if (P2[i]) pc[c[i]]++; }
+  const customerCompanies = new Map();
+  for (let i = 0; i < N; i++) { if (M2[i]) { const j = c[i]; cnt[j]++; totC++; const v = vi(i); vol[j] += v; totV += v; if (mode[i]) sea[j] += teus[i]; else air[j] += chg[i]; if (date[i] > last[j]) last[j] = date[i]; if (!customerCompanies.has(j)) customerCompanies.set(j, new Set()); customerCompanies.get(j).add(comp[i] === 0 ? 'NG' : 'NCS'); } if (P2[i]) pc[c[i]]++; }
+  const historyLobs = () => S.sel.report ? [...S.sel.report].map(i => ['AE','AI','OE','OI'][i]).filter(Boolean) : [];
+  const historyCompanies = j => [...(customerCompanies.get(j) || new Set(D.reps.map(r => r[0])))].sort();
+  async function loadRecentJobs(requests) {
+    const response = await fetch('/api/customers/recent-jobs', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json','X-CSRF-Token':window.__ME?.csrf || ''}, body:JSON.stringify({customers:requests})});
+    if (!response.ok) { let message='Customer job history is temporarily unavailable.'; try { message=(await response.json()).detail || message; } catch (_) {} throw Error(message); }
+    return (await response.json()).histories || [];
+  }
+  function showRecentJobs(customer, companyList) {
+    const dialog = h('dialog', {style:'width:min(920px,94vw);max-width:920px;max-height:85vh;border:1px solid var(--line);border-radius:12px;padding:22px;box-shadow:0 16px 60px #102c3c35;color:var(--ink)'});
+    const title = h('h2', null, 'Last five distinct jobs · ' + customer);
+    const status = h('p', {class:'meta'}, 'Loading current Job Profit Analysis history…');
+    const content = h('div', {class:'scroll'});
+    const close = h('button', {type:'button', onclick:()=>dialog.close()}, 'Close');
+    dialog.append(h('div',{class:'row spread'},title,close),h('p',{class:'meta'},'Source: current Job Profit Analysis Report · Job Date basis. Repeated owners are retained. Missing or conflicting JPR owners are shown as unavailable; no salesperson or register owner is substituted.'),status,content);
+    dialog.addEventListener('close',()=>dialog.remove());
+    document.body.append(dialog); dialog.showModal();
+    loadRecentJobs([{customer,companies:companyList,lobs:historyLobs()}]).then(results=>{
+      const jobs=results[0]?.jobs||[];
+      status.textContent=jobs.length?'Showing '+jobs.length+' most recent distinct jobs. The first row is the latest job and its owner.':'No current JPR job history matches this customer and permitted scope.';
+      if(!jobs.length)return;
+      const table=h('table',{class:'tbl'});
+      table.append(h('thead',null,h('tr',null,['Company','Job No.','Job Date','LOB','Job Owner'].map(v=>h('th',null,v)))));
+      table.append(h('tbody',null,jobs.map(job=>h('tr',null,h('td',null,job.company),h('td',null,job.job_no),h('td',null,job.job_date),h('td',null,job.lob),h('td',null,job.job_owner)))));
+      content.append(table);
+      const latest=jobs[0];
+      status.textContent='Latest owner: '+latest.job_owner+' · Latest job date: '+latest.job_date+' · '+jobs.length+' distinct jobs shown.';
+    }).catch(error=>{status.textContent=error.message;status.className='bad';});
+  }
   const sel = S.sel[key] || new Set(), hasPrev = R.np > 0; const rows = []; for (let j = 0; j < sz; j++) if (cnt[j] > 0 || sel.has(j)) rows.push({j, cnt: cnt[j], air: air[j], sea: sea[j], share: totC ? cnt[j] / totC : 0, delta: hasPrev ? cnt[j] - pc[j] : 0, last: last[j], v: vol[j]});
-  const exportCust = () => { const list = rows.slice().sort((a, b) => b.cnt - a.cnt), n = list.length + 1;
-    downloadXlsx('customers_' + fIso(dDate(MAXDATE)) + '.xlsx', [{name: 'Customers', freeze: true, filter: true, cols: [42, 12, 18, 12, 18, 18, 16], rows: [['Customer', 'Shipments', 'Air chargeable weight (t)', 'Sea TEUs', 'Share of shipments', 'Change vs comparison (shipments)', 'Last shipment'].map(HDR)].concat(list.map((r, i) => [COLS.customer.d[r.j], {v: r.cnt, s: 3}, r.air ? {v: +r.air.toFixed(3), s: 4} : '', r.sea ? {v: Math.round(r.sea), s: 3} : '', {f: 'B' + (i + 2) + '/SUM(B$2:B$' + n + ')', s: 2}, hasPrev ? {v: r.delta, s: 3} : '', r.last > 0 ? {v: serial(r.last), s: 5} : '']))}, settingsSheet([[HDR('Range'), fDay(R.w.from) + ' to ' + fDay(R.w.to)]])]); };
+  const exportCust = async () => { const list = rows.slice().sort((a, b) => b.cnt - a.cnt), n = list.length + 1;
+    try {
+      const historyRows = [[HDR('Customer'),HDR('Company'),HDR('Job No.'),HDR('Job Date'),HDR('LOB'),HDR('Job Owner'),HDR('Owner status')]];
+      for (let offset=0; offset<list.length; offset+=100) {
+        const batch=list.slice(offset,offset+100);
+        const histories=await loadRecentJobs(batch.map(r=>({customer:COLS.customer.d[r.j],companies:historyCompanies(r.j),lobs:historyLobs()})));
+        histories.forEach((history,index)=>{
+          const jobs=history.jobs||[];
+          if(!jobs.length)historyRows.push([history.customer,'','','','','Owner unavailable','No JPR history returned']);
+          else jobs.forEach(job=>historyRows.push([history.customer,job.company,job.job_no,job.job_date,job.lob,job.job_owner,job.owner_status]));
+        });
+      }
+      downloadXlsx('customers_' + fIso(dDate(MAXDATE)) + '.xlsx', [
+        {name:'Customers',freeze:true,filter:true,cols:[42,12,18,12,18,18,16],rows:[['Customer','Shipments','Air chargeable weight (t)','Sea TEUs','Share of shipments','Change vs comparison (shipments)','Last shipment'].map(HDR)].concat(list.map((r,i)=>[COLS.customer.d[r.j],{v:r.cnt,s:3},r.air?{v:+r.air.toFixed(3),s:4}:'',r.sea?{v:Math.round(r.sea),s:3}:'',{f:'B'+(i+2)+'/SUM(B$2:B
+  const tbody = h('tbody'), note = h('p', {class: 'note'});
+  const cols = [{k: 'name', t: 'Customer'}, {k: 'cnt', t: 'Shipments', num: true}, {k: 'air', t: 'Air weight (t)', num: true}, {k: 'sea', t: 'Sea TEUs', num: true}, {k: 'share', t: 'Share', num: true}, {k: 'delta', t: 'Change vs previous', num: true}, {k: 'last', t: 'Last shipment', num: true}, {k:'history',t:'Last 5 jobs',sort:false}];
+  const thead = h('thead'); const draw = () => {
+    const s = S.cust, f = s.sort === 'name' ? (a, b) => COLS.customer.d[a.j].localeCompare(COLS.customer.d[b.j]) : (a, b) => a[s.sort] - b[s.sort]; rows.sort((a, b) => f(a, b) * s.dir);
+    thead.replaceChildren(sortHead(cols, s, draw)); const shown = rows.slice(0, S.def.tableRows);
+    tbody.replaceChildren(...shown.map((r) => h('tr', {class: 'click' + (sel.has(r.j) ? ' on' : ''), onclick: () => toggle(key, r.j)}, h('td', null, COLS.customer.d[r.j]), h('td', {class: 'n'}, fInt(r.cnt)), h('td', {class: 'n'}, r.air ? f1(r.air) : '–'), h('td', {class: 'n'}, r.sea ? fInt(Math.round(r.sea)) : '–'),
+      h('td', {class: 'n'}, fS(r.share)), h('td', {class: 'n ' + (r.delta > 0 ? 'ok' : r.delta < 0 ? 'bad' : '')}, hasPrev ? (r.delta > 0 ? '+' : r.delta < 0 ? '−' : '') + fInt(Math.abs(r.delta)) : '–'), h('td', {class: 'n'}, r.last > 0 ? fDay(r.last) : '–'), h('td', null, h('button',{type:'button',class:'link',onclick:event=>{event.stopPropagation();showRecentJobs(COLS.customer.d[r.j],historyCompanies(r.j));}},'View jobs')))));
+    note.textContent = 'Showing ' + shown.length + ' of ' + fInt(rows.length) + ' customers. Click a row to filter; use View jobs to inspect the last five distinct JPR jobs. Job history uses Job Date and is independent of the dashboard date range. ' + (hasPrev ? 'Change = shipments minus the ' + cmpLabel() + '.' : 'No earlier period exists before this date range, so there is no change to show.'); };
+  draw();
+  // heatmap
+  const topIds = rows.slice().sort((a, b) => b.v - a.v).slice(0, S.def.heatN).map((r) => r.j), months = d3.utcMonth.range(d3.utcMonth.floor(dDate(R.w.from)), dDate(R.w.to + 1)).map((d) => Math.round(+d / DMS)), mi = new Map(months.map((s, i) => [s, i]));
+  const hm = new Map(topIds.map((j) => [j, new Float64Array(months.length)])); let hmax = 0;
+  for (let i = 0; i < N; i++) if (M2[i]) { const a = hm.get(c[i]); if (a) { const b = mi.get(mStart[i]); if (b !== undefined) { a[b] += vi(i); if (a[b] > hmax) hmax = a[b]; } } }
+  const heat = h('div', {class: 'scroll'}, h('table', {class: 'tbl heat'}, h('thead', null, h('tr', null, h('th', null, 'Customer'), months.map((s) => h('th', {class: 'n'}, d3.utcFormat('%b %y')(dDate(s)))))),
+    h('tbody', null, topIds.map((j) => h('tr', null, h('td', {class: 'lab2'}, h('button', {type: 'button', class: 'link', onclick: () => toggle(key, j)}, COLS.customer.d[j])),
+      [...hm.get(j)].map((v, bi) => h('td', {class: 'n hc', title: COLS.customer.d[j] + ' · ' + d3.utcFormat('%b %Y')(dDate(months[bi])) + ': ' + fm(v), style: v ? 'background:rgba(76,120,168,' + (0.12 + 0.75 * v / hmax) + ');color:' + (v / hmax > 0.55 ? '#fff' : 'inherit') : '', onclick: () => { S.sel.customer = new Set([j]); S.rel = null; S.from = Math.max(months[bi], MINDATE); S.to = Math.min(Math.round(+d3.utcMonth.offset(dDate(months[bi]), 1) / DMS) - 1, MAXDATE); renderAll(); }}, v ? (R.useVol ? (R.air ? f1(v) : fInt(Math.round(v))) : fInt(v)) : '')))))));
+  // A customer with shipments before and none now is the biggest possible decline, but has no row above
+  // (rows are customers with shipments now), so add them here for the movers lists only.
+  const lost = []; if (hasPrev) for (let j = 0; j < sz; j++) if (!(cnt[j] > 0 || sel.has(j)) && pc[j] > 0) lost.push({j, cnt: 0, delta: -pc[j]});
+  const mov = hasPrev ? rows.filter((r) => r.delta !== 0).concat(lost) : [], gain = mov.filter((r) => r.delta > 0).sort((a, b) => b.delta - a.delta).slice(0, S.def.topN), lose = mov.filter((r) => r.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, S.def.topN);
+  const moverList = (arr, sign) => arr.length ? h('div', {class: 'rank'}, arr.map((r) => h('button', {type: 'button', class: 'row', onclick: () => toggle(key, r.j)}, h('span', {class: 'lab', title: COLS.customer.d[r.j]}, COLS.customer.d[r.j]), h('span', {class: 'track'}, h('span', {class: 'fill', style: 'width:' + Math.min(100, Math.abs(r.delta) / Math.abs(arr[0].delta) * 100) + '%;background:var(--' + (sign > 0 ? 'ok' : 'bad') + ')'})), h('span', {class: 'val'}, (sign > 0 ? '+' : '−') + fInt(Math.abs(r.delta)) + ' shipments')))) : (hasPrev ? emptyNote() : h('p', {class: 'empty'}, 'No earlier period to compare with. Choose a shorter date range, for example the last 30 days.'));
+  return h('div', null, h('div', {class: 'grid'},
+    card('Customers', null, h('div', null, h('div', {class: 'frow'}, dlButton('Download Excel', exportCust)), note, h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, thead, tbody))), 'full', {metric: 'ops.shipments', dimension: 'customer'}),
+    card('Customer by month', 'Top ' + S.def.heatN + ' customers by ' + (R.useVol ? 'volume' : 'shipments') + '. Click a cell to focus that customer and month.', heat, 'full', {metric: opsVisualMetric(), dimension: 'customer'}),
+    card('Growing accounts', 'Biggest increase in shipments against the ' + cmpLabel() + '.', moverList(gain, 1)),
+    card('Declining accounts', 'Biggest fall in shipments against the ' + cmpLabel() + '.', moverList(lose, -1))));
+}+n+')',s:2},hasPrev?{v:r.delta,s:3}:'',r.last>0?{v:serial(r.last),s:5}:'']))},
+        {name:'Last 5 Jobs',freeze:true,filter:true,cols:[38,12,22,16,28,30,20],rows:historyRows},
+        settingsSheet([[HDR('Range'),fDay(R.w.from)+' to '+fDay(R.w.to)],[HDR('History basis'),'Job Date'],[HDR('History source'),'Current Job Profit Analysis Report'],[HDR('History scope'),'Last five distinct jobs per customer within permitted company and LOB scope. Owner values are JPR source values only.']])
+      ]);
+    } catch(error) { alert('Customer export was not completed: '+error.message); }
+  };
   const tbody = h('tbody'), note = h('p', {class: 'note'});
   const cols = [{k: 'name', t: 'Customer'}, {k: 'cnt', t: 'Shipments', num: true}, {k: 'air', t: 'Air weight (t)', num: true}, {k: 'sea', t: 'Sea TEUs', num: true}, {k: 'share', t: 'Share', num: true}, {k: 'delta', t: 'Change vs previous', num: true}, {k: 'last', t: 'Last shipment', num: true}];
   const thead = h('thead'); const draw = () => {
