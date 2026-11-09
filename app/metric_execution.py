@@ -61,7 +61,7 @@ def aggregate(metric,rows,options=None):
   profits=sorted(grouped.values(),reverse=True);pos=sum(x for x in profits if x>0);cum=n=0
   for x in profits:
    if x>0 and cum<.8*pos:cum+=x;n+=1
-  v={'profit.customers':len(grouped),'profit.customers_80':n,'profit.biggest_customer':profits[0]/(sum(profits) or 1) if profits else None,'profit.loss_customers':sum(x<0 for x in profits)}[metric]
+  v={'profit.customers':len(grouped),'profit.customers_80':n,'profit.biggest_customer':profits[0]/sum(profits) if profits and sum(profits)>0 else None,'profit.loss_customers':sum(x<0 for x in profits)}[metric]
   return dict(value=v,numerator=None,denominator=None)
  if metric=='ops.customer_concentration':
   grouped={};measure=options.get('concentration_measure','count')

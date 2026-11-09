@@ -160,7 +160,7 @@ for key,title,formula,columns in [
 for key,title,formula in [
  ('profit.customers','Customers','COUNT DISTINCT source Organization names in eligible JPR rows'),
  ('profit.customers_80','Customers making 80% of profit','Count largest positive-profit customers until cumulative positive GP reaches 80% of all positive customer GP'),
- ('profit.biggest_customer','Biggest customer share','Largest customer GP / total GP; existing UI denominator fallback to 1 when total GP equals zero'),
+ ('profit.biggest_customer','Biggest customer share','Largest customer GP / total net GP, only when total net GP is positive; unavailable when total net GP is zero or negative'),
  ('profit.loss_customers','Loss-making customers','Count customers with aggregate GP < 0')]:
  DEFINITIONS[key]=MetricDefinition(key,title,'Customer-level grouping of recorded Job Profit Analysis amounts.','Assess customer concentration and profitability.',JPR,('Organization','Income (INR)','Expense (INR)')+JOB_COLUMNS,'Job Date',formula,'GROUP BY source Organization name','Customer rank page deliberately skips its own customer selection, retaining other filters.','Source names are the available identity; verified ERP customer codes are unavailable in the inspected JPR headers.')
 for key,title,formula in [

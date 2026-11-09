@@ -8,6 +8,16 @@ class MetricExecutionTests(unittest.TestCase):
   d=self.fixture();q=dict(metric='profit.jobs',indices=[0,1],previous_indices=[0]);r=X.execute(d,q,M);self.assertEqual(r['current']['value'],2);self.assertEqual(r['difference'],1)
   q['metric']='profit.gp';r=X.execute(d,q,M);self.assertEqual(r['current']['value'],40);self.assertEqual(r['previous']['value'],60)
   q['metric']='profit.margin';r=X.execute(d,q,M);self.assertAlmostEqual(r['current']['value'],40/150)
+ def test_biggest_customer_share_requires_positive_net_gp(self):
+  d=self.fixture();d['cols']['customer']={'d':['Alpha','Beta'],'pc':[0,1]}
+  r=X.execute(d,dict(metric='profit.biggest_customer',indices=[0,1]),M)
+  self.assertAlmostEqual(r['current']['value'],1.5)
+  d['p']['expense']=[100,50]
+  r=X.execute(d,dict(metric='profit.biggest_customer',indices=[0,1]),M)
+  self.assertIsNone(r['current']['value'],'zero net GP has no meaningful concentration denominator')
+  d['p']['expense']=[110,60]
+  r=X.execute(d,dict(metric='profit.biggest_customer',indices=[0,1]),M)
+  self.assertIsNone(r['current']['value'],'negative net GP has no meaningful concentration denominator')
  def test_no_finance_and_invalid_selection(self):
   d=self.fixture();d['user']['finance']=False
   with self.assertRaises(PermissionError):X.execute(d,dict(metric='profit.gp',indices=[0]),M)
