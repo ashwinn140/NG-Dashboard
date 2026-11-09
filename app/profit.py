@@ -16,7 +16,7 @@ from .db import imports, profit_lines
 from .processor import ReportError, _cell, _chunks, _hnorm, _record, _to_dates, historical_freeze, sha256_file
 
 FORMAT = "job_summary_v1"
-_KNOWN = {_hnorm(n): n for n in list(config.PROFIT_REQUIRED) + ["Organization", "Trade Lane", "Commodity"]}
+_KNOWN = {_hnorm(n): n for n in list(config.PROFIT_REQUIRED) + ["Organization", "Trade Lane", "Commodity", "Job Owner"]}
 DATE_COLS = ("Job Date", "Revenue Recognition Date", "Financial Lock Date", "Operation Lock Date", "House Date", "Master Date")
 
 
