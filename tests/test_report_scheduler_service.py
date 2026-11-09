@@ -121,8 +121,8 @@ class SchedulerServiceTests(unittest.TestCase):
         send.assert_called_once()
         sent = send.call_args
         self.assertEqual(sent.args[0], "owner@example.com")
-        self.assertEqual(sent["attachments"][0]["filename"], "shipment_register.xlsx")
-        self.assertEqual(sent["attachments"][0]["content"], b"test-xlsx")
+        self.assertEqual(sent.kwargs["attachments"][0]["filename"], "shipment_register.xlsx")
+        self.assertEqual(sent.kwargs["attachments"][0]["content"], b"test-xlsx")
         history = service.list_runs(self.engine, self.user["id"], schedule["id"])
         self.assertEqual(history[0]["status"], "provider_accepted")
         self.assertEqual(history[0]["freshness"]["status"], "fresh")
