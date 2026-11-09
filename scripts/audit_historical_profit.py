@@ -16,7 +16,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.profit import is_profit_report, read_profit, validate_profit
+from app.profit import profit_layout, read_profit, validate_profit
 
 
 def _hash_file(path: Path) -> str:
@@ -33,7 +33,14 @@ def inspect(root: Path, year: int) -> dict:
         if not path.is_file() or path.suffix.lower() not in {".xlsx", ".xlsm"}:
             continue
         try:
-            if not is_profit_report(str(path)):
+            layout = profit_layout(str(path))
+            if layout is None:
+                continue
+            if layout != "job_summary":
+                results.append({"file": str(path.relative_to(root)),
+                                "layout": layout,
+                                "validation_issues": ["Legacy charge-detail format is not supported for job-summary reconciliation"],
+                                "eligible_for_manual_review": False})
                 continue
             report = read_profit(str(path))
             if not (report.range_from and report.range_to and
@@ -42,6 +49,8 @@ def inspect(root: Path, year: int) -> dict:
                 if report.range_from is not None and report.range_to is not None:
                     continue
             issues = validate_profit(report)
+            if report.range_from is None or report.range_to is None:
+                issues.append("Missing explicit source-report date range; year coverage cannot be verified")
             # A report spanning calendar years must not be mistaken for
             # a report containing only the requested year's jobs.
             import pandas as pd
@@ -58,6 +67,7 @@ def inspect(root: Path, year: int) -> dict:
                 "sha256": _hash_file(path),
                 "company": report.company,
                 "basis": report.basis,
+                "layout": layout,
                 "range_from": report.range_from.isoformat() if report.range_from else None,
                 "range_to": report.range_to.isoformat() if report.range_to else None,
                 "jobs": len(report.df),
@@ -66,7 +76,7 @@ def inspect(root: Path, year: int) -> dict:
                 "totals_in_requested_year": year_amounts,
                 "requires_period_split": len(year_rows) != len(report.df),
                 "validation_issues": issues,
-                "eligible_for_manual_review": not issues,
+                "eligible_for_manual_review": not issues and len(year_rows) > 0,
             })
         except Exception as exc:
             results.append({"file": str(path.relative_to(root)), "error": str(exc),
