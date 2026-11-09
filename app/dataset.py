@@ -237,7 +237,20 @@ def build_full(engine) -> dict:
         else:
             source_values_for_field = source_values
         if field:
-            ps = pd.Series([str(extra[field]).strip() if field in extra else ("" if si < 0 else val) for extra, si, val in zip(source_values_for_field, PD.sidx.tolist(), ps)], dtype=object)
+            # Match optional source headers by normalized name as well as the
+            # canonical spelling. Preserve explicit blanks: a present source
+            # field must not silently fall back to a register value.
+            def source_value(extra, field):
+                if field in extra:
+                    return True, extra[field]
+                target = norm(field)
+                matches = [value for key, value in extra.items() if norm(key) == target]
+                return (True, matches[0]) if len(matches) == 1 else (False, None)
+            ps = pd.Series([
+                str(value).strip() if present else ("" if si < 0 else val)
+                for extra, si, val in zip(source_values_for_field, PD.sidx.tolist(), ps)
+                for present, value in [source_value(extra, field)]
+            ], dtype=object)
         pser[k] = ps
     cust_all = pd.concat([cats["customer"][1].reset_index(drop=True), pser["customer"]], ignore_index=True); cust_c = canon(cust_all)
     cats["customer"] = (cats["customer"][0], cust_c.iloc[:N].reset_index(drop=True)); pser["customer"] = cust_c.iloc[N:].reset_index(drop=True)
