@@ -32,3 +32,8 @@ No new audit changes deployed. Current production remains the verified Customer 
 
 ## Exact next action
 Fetch feature branch server.py and CI workflow; materialize complete feature branch source at the new progress commit; run full backend/frontend baseline; inventory canonical page functions and current exports. Correct registry job identity and stale date-basis caveat from verified canonical code, with regression tests, before implementing shared metric execution and XLSX endpoints. Update this file after each stage. Continue on existing branch and PR #15; never replace production with partial registry-only changes.
+
+## Stage 2–5 implementation in progress
+Implemented shared scoped-record metric execution, snapshot-bound evidence and XLSX endpoints with CSRF/auth checks; reusable calculation drawer (search, sorting, pagination, copy, both periods, export); initial Dashboard and Customer360 KPI hooks; source-accurate no-income status label; operations definitions; composite job identity correction; expected-cost benchmark evidence and cost-coverage calculations.
+Tests: full available suite 75 passed before adding API tests; 6 execution tests passed; 2 API integration tests passed; existing frontend audit 139/139 passed. Dependency packages restored locally after workspace cleanup. No production deployment of this audit work.
+Still pending: exact per-visual contexts for explorer/special KPIs, complete visual inventory, remaining metric coverage, source reconciliation, export/large-data QA, broader UI integration, opportunities audit, release validation.

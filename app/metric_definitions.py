@@ -115,3 +115,18 @@ def get_metric(metric_id: str) -> Optional[MetricDefinition]:
 
 def all_metrics() -> list[dict]:
     return [m.public_dict() for m in DEFINITIONS.values()]
+
+# Versioned additions verified against canonical app_prod.js and dataset.py.
+REGISTRY_VERSION = '2'
+for key,title,column,formula in [
+ ('ops.shipments','Shipments','Shipment No','COUNT DISTINCT(company, department, Shipment No, Shipment Date)'),
+ ('ops.air_weight','Air chargeable weight (tonnes)','Chargeable Wt','SUM(Chargeable Wt / 1000) for Air Export and Air Import registers'),
+ ('ops.teu','Ocean TEUs','TEUs','SUM(TEUs) for Ocean Export and Ocean Import registers'),
+ ('ops.volume','Volume (CBM)','Volume','SUM(Volume) for eligible register rows')]:
+ DEFINITIONS[key]=MetricDefinition(key,title,'Operational measure from accepted Shipment Registers.','Understand the selected operational activity.','Shipment Register',(column,'Shipment No','Shipment Date'),'Shipment Date',formula,'COUNT DISTINCT' if key=='ops.shipments' else 'SUM','Authorized company and department scope; current filter and date window.','Configured source mapping; actual upload header validation remains pending.')
+DEFINITIONS['profit.per_job']=MetricDefinition('profit.per_job','Profit per job','Booked gross profit divided by distinct jobs.','Assess average booked profitability.',JPR,('Income (INR)','Expense (INR)')+JOB_COLUMNS,'Job Date','SUM(Income - Expense) / COUNT DISTINCT(company, LOB, Job No., Job Date)','RATIO OF SUMS','Authorized filtered JPR jobs; blank when no jobs.')
+from dataclasses import replace
+DEFINITIONS['profit.jobs']=replace(DEFINITIONS['profit.jobs'],formula='COUNT DISTINCT(company, LOB, Job No., Job Date)',caveat='Composite identity verified in canonical frontend/app_prod.js; source-level reconciliation remains pending.')
+DEFINITIONS['profit.income']=replace(DEFINITIONS['profit.income'],caveat='Current accepted job-summary reports use Job Date; billing date is unavailable and is not inferred.')
+DEFINITIONS['profit.cost_coverage']=MetricDefinition('profit.cost_coverage','Jobs with cost booked','Share of eligible jobs with positive recorded expenses.','Assess recorded cost coverage.',JPR,('Expense (INR)',)+JOB_COLUMNS,'Job Date','COUNT DISTINCT jobs with Expense > 0 / COUNT DISTINCT jobs','RATIO OF DISTINCT COUNTS','Zero and negative expenses are not counted as positive cost coverage.')
+DEFINITIONS['profit.expected_adjusted']=MetricDefinition('profit.expected_adjusted','Profit after expected costs','Booked GP less modeled costs for positive-income jobs with exactly zero recorded expense.','Estimate how profit could change as missing expenses are booked.',JPR,('Income (INR)','Expense (INR)')+JOB_COLUMNS,'Job Date','SUM(Income - Expense) - SUM(zero-expense positive job income * same-LOB benchmark expense/income ratio)','RATIO OF SUMS benchmark; SUM expected costs','Benchmark uses all authorized loaded positive-income/positive-expense jobs, ignoring selection dates; falls back to overall authorized ratio, then zero if no benchmark.','An estimate, not confirmed GP. Partially booked costs are not estimated; benchmarks can combine authorized companies.','code_verified_source_audit_pending')

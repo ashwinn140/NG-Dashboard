@@ -8,7 +8,7 @@ import pandas as pd
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import select, func, insert, delete, update
-from . import auth, admin_ops as ops, dataset as DS, mailer, master as MST, processor as P, profit as J, metric_definitions as MD
+from . import auth, admin_ops as ops, dataset as DS, mailer, master as MST, processor as P, profit as J, metric_definitions as MD, metric_execution as MX
 from .db import get_engine, imports, uploads, users, prefs, admin_log, shipments, org_master
 
 log = logging.getLogger("app")
@@ -299,19 +299,41 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
     @app.get("/api/metrics/definitions")
     def api_metric_definitions(user: dict = Depends(me)):
         """Source-backed explanation metadata, without exposing restricted financial data."""
-        if not user["finance"]:
-            raise HTTPException(403, "Financial metric definitions require finance access.")
-        return {"metrics": MD.all_metrics(), "source": "code_verified",
+        return {"metrics": [m for m in MD.all_metrics() if user["finance"] or m["id"].startswith("ops.")], "source": "code_verified",
                 "note": "Source headers must also be checked against actual uploaded reports."}
 
     @app.get("/api/metrics/definitions/{metric_id}")
     def api_metric_definition(metric_id: str, user: dict = Depends(me)):
-        if not user["finance"]:
+        if not user["finance"] and metric_id.startswith("profit."):
             raise HTTPException(403, "Financial metric definitions require finance access.")
         metric = MD.get_metric(metric_id)
         if metric is None:
             raise HTTPException(404, "Unknown metric.")
         return metric.public_dict()
+
+    async def metric_evidence(request, user):
+        raw = await request.body()
+        if len(raw) > 8_000_000: raise HTTPException(413, "Selection too large.")
+        try:
+            body = json.loads(raw)
+            if not isinstance(body, dict): raise ValueError("Invalid metric request.")
+            data = json.loads(gzip.decompress(store.dataset_for(user)))
+            return MX.execute(data, body, MD)
+        except PermissionError as e: raise HTTPException(403, str(e))
+        except (ValueError, TypeError, KeyError) as e: raise HTTPException(400, str(e))
+
+    @app.post("/api/metrics/evidence")
+    async def metric_evidence_api(request: Request, user: dict = Depends(unsafe)):
+        return await metric_evidence(request, user)
+
+    @app.post("/api/metrics/export")
+    async def metric_export_api(request: Request, user: dict = Depends(unsafe)):
+        result = await metric_evidence(request, user)
+        return Response(MX.workbook(result), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": 'attachment; filename="metric_reconciliation.xlsx"', "Cache-Control": "private, no-store"})
+
+    @app.get("/assets/metric_trace.js")
+    def metric_trace_script(user: dict = Depends(me)):
+        return Response((WEB / "metric_trace.js").read_text(), media_type="application/javascript", headers={"Cache-Control": "private, no-store"})
 
     @app.get("/api/dataset")
     def api_dataset(user: dict = Depends(me)):
