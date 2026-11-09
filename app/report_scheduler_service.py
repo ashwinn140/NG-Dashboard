@@ -159,7 +159,7 @@ def update_schedule(engine, user: dict, schedule_id: int, payload: dict) -> dict
         if status not in ("active", "paused", "disabled"):
             raise ScheduleValidationError("Schedule status must be active or paused.")
         values["status"] = status
-        if status == "active" and not values.get("next_run_at"):
+        if status == "active":
             values["next_run_at"] = _next_for(definition, now)
     with engine.begin() as conn:
         result = conn.execute(update(report_schedules).where(
@@ -481,7 +481,7 @@ class SchedulerWorker:
                          error_message=str(exc)[:1000])
         except Exception as exc:
             log.exception("Scheduled report run %s failed", run_id)
-            attempts = run["attempts"] + 1
+            attempts = run["attempts"]
             if attempts < 3:
                 self._finish(run_id, status="retry_wait",
                              retry_after=_now() + timedelta(minutes=5 * (2 ** (attempts - 1))),
