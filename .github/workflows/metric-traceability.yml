@@ -25,6 +25,8 @@ jobs:
         run: sh frontend/build.sh
       - name: Backend, permissions and Excel reconciliation
         run: python -m unittest discover -s tests -v
+      - name: Mail provider and attachment transport tests
+        run: python scripts/test_mailer.py
       - name: Build synthetic fixtures
         run: |
           python scripts/build_audit_fixture.py
