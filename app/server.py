@@ -447,7 +447,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             coverage[company] = {
                 "company": company,
                 "visible_lobs": visible_lobs,
-                "promoted_sources": sorted(lob for lob in lob_order if (company, lob) in promoted),
+                "promoted_sources": sorted(lob for lob in visible_lobs if (company, lob) in promoted),
                 "complete_company_scope": source_complete and set(visible_lobs) == set(lob_order),
             }
             signal = cross_lob_customer_activity(
