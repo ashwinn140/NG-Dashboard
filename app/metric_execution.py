@@ -138,7 +138,8 @@ def eligible_records(metric, rows, context):
  'ops.lock_lag':lambda r:r['operations_lock_day']>0 and r['financial_lock_day']>0,
  'ops.invoice_lag':lambda r:r['invoice_count']>0 and r['invoice_day']>0,
  'ops.lock_invoice_lag':lambda r:r['invoice_count']>0 and r['invoice_day']>0 and r['operations_lock_day']>0,
- 'ops.operations_locked':lambda r:r['operations_lock_day']>0,\n 'ops.locked_no_invoice':lambda r:r['operations_lock_day']>0 and r['invoice_count']==0,
+ 'ops.operations_locked':lambda r:r['operations_lock_day']>0,
+ 'ops.locked_no_invoice':lambda r:r['operations_lock_day']>0 and r['invoice_count']==0,
  'ops.overdue_invoice':lambda r:r['operations_lock_day']>0 and r['invoice_count']==0 and today-r['operations_lock_day']>late}
  if metric.startswith('ops.rate_'):
   rows=[r for r in rows if r.get('register_report',-1)%4==0]
