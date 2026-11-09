@@ -14,7 +14,7 @@ from .db import get_engine, imports, uploads, users, prefs, admin_log, shipments
 log = logging.getLogger("app")
 WEB = Path(__file__).parent / "web"
 MAX_UPLOAD = 80 * 1048576
-PREF_NAMES = {"visuals", "views", "defs"}
+PREF_NAMES = {"visuals", "views", "defs", "partner360"}
 
 
 def df_json(df: pd.DataFrame):
@@ -291,6 +291,10 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         resp = JSONResponse({"ok": True}); u2 = auth.user_dict(engine.connect().execute(select(users).where(users.c.id == user["id"])).first()); start_session(u2, "password", resp); return resp
 
     # ------------------------------------------------------------------ the data and the user's own saved things
+    @app.get("/customer360", response_class=HTMLResponse)
+    def customer360_page(user: dict = Depends(me)):
+        return page("customer360.html")
+
     @app.get("/api/dataset")
     def api_dataset(user: dict = Depends(me)):
         return Response(store.dataset_for(user), media_type="application/json", headers={"Content-Encoding": "gzip", "Cache-Control": "private, no-store"})

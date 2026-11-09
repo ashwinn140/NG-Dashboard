@@ -327,7 +327,7 @@ body.ux-dashboard .ux-inspector{z-index:100}
       try { [['visuals', 'ngVisuals'], ['views', 'ngViews'], ['defs', 'ngDefs']].forEach(([n, k]) => { if (prefs[n] !== undefined) localStorage.setItem(k, JSON.stringify(prefs[n])); else localStorage.removeItem(k); }); } catch (e) { /* storage blocked */ }
       const s = document.createElement('script'); s.textContent = document.getElementById('appsrc').textContent; document.body.appendChild(s);
       boot.remove(); if (window.NG_BOOT) window.NG_BOOT();
-      const u = window.__ME, box = document.getElementById('userbox'); box.prepend(Object.assign(document.createElement('span'), {textContent: u.name + ' · ' + u.role}));
+      const u = window.__ME, box = document.getElementById('userbox'); box.append(Object.assign(document.createElement('a'), {href:'/customer360',textContent:'Customer & Partner 360'})); box.prepend(Object.assign(document.createElement('span'), {textContent: u.name + ' · ' + u.role}));
       if (u.role === 'admin') box.append(Object.assign(document.createElement('a'), {href: '/admin', textContent: 'Administration'}));
       const pw = document.createElement('button'); pw.textContent = 'Password'; pw.onclick = async () => { const cur = prompt('Current password (leave empty if you sign in by email link)') || ''; const nw = prompt('New password (10+ characters, letters and a number)'); if (!nw) return;
         const r = await fetch('/api/me/password', {method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json', 'X-CSRF-Token': u.csrf}, body: JSON.stringify({current: cur, new: nw})}); alert(r.ok ? 'Password saved.' : (await r.json()).detail); }; box.append(pw);
@@ -399,6 +399,7 @@ document.body.prepend(rail);
 const nav=rail.querySelector('.ux-nav');
 const destinations=[['⌂','Leadership Overview','summary'],['▤','Operations','ops'],['◫','Profitability','profit'],['▦','My visuals','mine']];
 destinations.forEach(([symbol,label,key])=>{const b=document.createElement('button');b.type='button';b.innerHTML='<span aria-hidden="true">'+symbol+'</span> <span class="ux-label"></span>';b.querySelector('.ux-label').textContent=label;b.onclick=()=>{document.querySelector('#grpSeg [data-v="'+key+'"]')?.click();rail.classList.remove('ux-mobile-open')};nav.append(b);ux.addCommand(label,()=>b.click())});
+const partner=document.createElement('a');partner.href='/customer360';partner.textContent='◈ Customer & Partner 360';partner.className='ux-label';nav.append(partner);ux.addCommand('Customer & Partner 360',()=>location.assign('/customer360'));
 const admin=document.createElement('a');admin.href='/admin';admin.textContent='⚙ Administration';admin.className='ux-label';nav.append(admin);ux.addCommand('Administration',()=>location.assign('/admin'));
 const toggle=rail.querySelector('.ux-rail-toggle');
 toggle.onclick=()=>{if(matchMedia('(max-width:1023px)').matches){rail.classList.toggle('ux-mobile-open')}else{document.body.classList.toggle('ux-rail-collapsed');try{localStorage.setItem('ng.ux.rail',document.body.classList.contains('ux-rail-collapsed')?'collapsed':'expanded')}catch(e){}}};

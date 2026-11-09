@@ -10,7 +10,7 @@ REPS = [("NG", "AE"), ("NG", "AI"), ("NG", "OE"), ("NG", "OI"), ("NCS", "AE"), (
 EXTRAS = ["Sales Person", "Trade Lane Name", "Loading Country", "Discharge Country", "Collection Executive", "Business Dimension", "Inco Terms", "Freight Type", "Contract Type",
           "Commodity Type", "Co-Load Type", "Origin Agent", "Customer Branch", "Document Executive (UDF)", "Place Of Execution", "Container Types"]
 DASHBOARD_COLUMNS = sorted(set(EXTRAS) | {c for cols in CFG.SOURCE_COLUMNS.values() for c in cols} |
-                           {"Booking Thru", "Invoice No. & Date", "Billing Details", "Buy Rate (UDF)", "Sell Rate (UDF)"})
+                           {"Booking Thru", "Invoice No. & Date", "Billing Details", "Buy Rate (UDF)", "Sell Rate (UDF)", "Dest. Agent", "Destination Agent"})
 norm = lambda s: re.sub(r"[^a-z0-9]", "", str(s).lower())
 INV_RE = re.compile(r"([A-Za-z0-9/\-\.]+?)\s*dt\.?\s*(\d{1,2})[-/ ]([A-Za-z]{3})[A-Za-z]*[-/ ](\d{4})", re.I)
 RATE_NUM = re.compile(r"\d[\d,]*\.?\d*")
@@ -138,6 +138,8 @@ def build_full(engine) -> dict:
     _bt = S("Booking Thru"); _cu = cats["customer"][1].fillna("").astype(str)
     _ag = pd.Series(np.where((_bt.str.lower() == "self") | (_bt == ""), _cu, _bt)).map(lambda n: MASTER[norm(n)]["name"] if norm(n) in MASTER else n)
     cats["agent"] = ("Agent", canon(_ag))
+    cats["origin_agent"] = ("Origin agent", S("Origin Agent"))
+    cats["destination_agent"] = ("Destination agent", S("Dest. Agent").where(S("Dest. Agent") != "", S("Destination Agent")))
     sd = pd.to_datetime(A["Shipment Date"]) if N else pd.Series([], dtype="datetime64[ns]")
     ops = pd.to_datetime(A["Operations Locked On"], errors="coerce") if "Operations Locked On" in A.columns else pd.Series([pd.NaT] * N)
     fin = pd.to_datetime(A["Financials Locked On"], errors="coerce") if "Financials Locked On" in A.columns else pd.Series([pd.NaT] * N)
@@ -197,7 +199,7 @@ def build_full(engine) -> dict:
     PD = pd.DataFrame(pl, columns=["co", "sidx", "rt", "branch", "lob", "mode", "direction", "kind", "job", "customer", "charge", "party", "income", "expense", "td", "jd", "plane", "ic"]); NP = len(PD)
     NOMATCH = "(no register match)"
     from_reg = lambda series, idx: pd.Series([series.iloc[i] if i >= 0 else NOMATCH for i in idx], dtype=object)
-    source_map = {"branch": "Location", "customer": "Organization", "shipper": "Shipper", "consignee": "Consignee", "job_owner": "Job Owner", "carrier": "Carrier", "agent": "Overseas Agent", "origin": "Loading Port", "destination": "Discharge Port", "x_salesperson": "Sales Person", "x_tradelanename": "Trade Lane", "x_dischargecountry": "Discharge Country", "cargo": "Cargo Type", "consol": "Consol Type"}
+    source_map = {"branch": "Location", "customer": "Organization", "shipper": "Shipper", "consignee": "Consignee", "job_owner": "Job Owner", "carrier": "Carrier", "agent": "Overseas Agent", "origin_agent": "Origin Agent", "destination_agent": "Dest. Agent", "origin": "Loading Port", "destination": "Discharge Port", "x_salesperson": "Sales Person", "x_tradelanename": "Trade Lane", "x_dischargecountry": "Discharge Country", "x_loadingcountry": "Loading Country", "cargo": "Cargo Type", "consol": "Consol Type"}
     source_values = [x["extra"] or {} for x in pl_rows]
     # Source job attributes take priority, including explicit blanks. Register
     # attributes are only fallbacks for fields absent from the uploaded report.
@@ -208,8 +210,12 @@ def build_full(engine) -> dict:
         if k == "customer": ps = PD.customer.fillna("").astype(str).str.strip().str.replace(r"\s+", " ", regex=True)
         if k == "x_tradelanename": ps = pd.Series([v if v != NOMATCH or not pl_ else (pl_ or NOMATCH) for v, pl_ in zip(ps, PD.plane.fillna("").astype(str))], dtype=object)
         field = source_map.get(k)
+        if k == "destination_agent":
+            source_values_for_field = [dict(extra, **{"Dest. Agent": extra["Destination Agent"]}) if "Dest. Agent" not in extra and "Destination Agent" in extra else extra for extra in source_values]
+        else:
+            source_values_for_field = source_values
         if field:
-            ps = pd.Series([str(extra[field]).strip() if field in extra else ("" if si < 0 else val) for extra, si, val in zip(source_values, PD.sidx.tolist(), ps)], dtype=object)
+            ps = pd.Series([str(extra[field]).strip() if field in extra else ("" if si < 0 else val) for extra, si, val in zip(source_values_for_field, PD.sidx.tolist(), ps)], dtype=object)
         pser[k] = ps
     cust_all = pd.concat([cats["customer"][1].reset_index(drop=True), pser["customer"]], ignore_index=True); cust_c = canon(cust_all)
     cats["customer"] = (cats["customer"][0], cust_c.iloc[:N].reset_index(drop=True)); pser["customer"] = cust_c.iloc[N:].reset_index(drop=True)
