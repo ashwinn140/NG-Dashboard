@@ -650,7 +650,12 @@ function shipTable(M) {
   return {head, rows};
 }
 function csvOf(M) {
-  const t = shipTable(M), esc = (v) => { const raw=v;v = String(v == null ? '' : v);if(typeof raw==='string'&&/^[\s]*[=+@-]|^[\t\r]/.test(v))v="'"+v; return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  const t = shipTable(M), esc = (raw) => {
+    let v = String(raw == null ? '' : raw);
+    // CSV formula injection: neutralise spreadsheet formulas and control prefixes.
+    if (typeof raw === 'string' && /^[\s]*[=+@-]|^[\t\r]/.test(v)) v = "'" + v;
+    return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  };
   return [t.head].concat(t.rows).map((r) => r.map(esc).join(',')).join('\n');
 }
 function pageShip() {
