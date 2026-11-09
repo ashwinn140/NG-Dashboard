@@ -55,11 +55,20 @@ class SchedulerServiceTests(unittest.TestCase):
         schedule = service.create_schedule(self.engine, self.user, self.definition())
         active = service.update_schedule(self.engine, self.user, schedule["id"], {"status": "active"})
         self.assertEqual(active["status"], "active")
+        due = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=1)
+        with self.engine.begin() as conn:
+            conn.execute(update(report_schedules).where(
+                report_schedules.c.id == schedule["id"]
+            ).values(next_run_at=due))
+        self.assertEqual(service.enqueue_due_schedules(self.engine), 1)
         paused = service.update_schedule(self.engine, self.user, schedule["id"], {"status": "paused"})
         self.assertEqual(paused["status"], "paused")
         with patch.dict(os.environ, {"REPORT_SCHEDULER_ENABLED": "false"}):
             queued = service.queue_manual_run(self.engine, self.user, schedule["id"])
         self.assertEqual(queued["status"], "queued")
+        history_before_deactivate = service.list_runs(self.engine, self.user["id"], schedule["id"])
+        self.assertEqual({r["status"] for r in history_before_deactivate}, {"cancelled", "queued"})
+        self.assertEqual(sum(r["status"] == "cancelled" for r in history_before_deactivate), 1)
         self.assertFalse(queued["worker_enabled"])
         deactivated = service.delete_schedule(self.engine, self.user, schedule["id"])
         self.assertEqual(deactivated["status"], "disabled")
