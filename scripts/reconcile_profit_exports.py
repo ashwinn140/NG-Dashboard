@@ -11,7 +11,6 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-from collections import Counter
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -62,8 +61,9 @@ def reconcile(source: Path, database: Path) -> dict:
         return [{"key": list(k), "source": list(map(str, left[k])) if k in left else None,
                  "database": list(map(str, right[k])) if right is not None and k in right else None}
                 for k in keys]
-    return {"status": "matched" if not (missing or extra or changed) else "mismatch",
+    return {"status": "matched" if a and b and not (missing or extra or changed) else "mismatch",
             "source_count": len(a), "database_count": len(b),
+            "empty_input": not a or not b,
             "source_totals": totals(a), "database_totals": totals(b),
             "missing_in_database": rows(missing, a, b),
             "unexpected_in_database": rows(extra, a, b),
