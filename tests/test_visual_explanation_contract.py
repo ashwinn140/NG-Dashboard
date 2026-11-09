@@ -24,8 +24,8 @@ class VisualExplanationContract(unittest.TestCase):
 
     def test_reporting_periods_shown(self):
         self.assertIn("Reporting dates:", APP)
-        self.assertIn("R.w.pfrom", APP)
-        self.assertIn("R.w.pto", APP)
+        self.assertIn("reportingWindow.pfrom", APP)
+        self.assertIn("reportingWindow.pto", APP)
 
     def test_gp_pattern_has_word_boundaries(self):
         self.assertIn(r"/gross profit|\bgp\b/", APP)
