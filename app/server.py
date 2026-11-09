@@ -528,7 +528,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                 select(profit_lines.c.company,
                        extract("year", profit_lines.c.job_date).label("yr"),
                        func.count().label("qty"))
-                .where(profit_lines.c.to_import.is_(None), profit_lines.c.job_date.is_not(None))
+                .where(*J.current_jobs(), profit_lines.c.job_date.is_not(None))
                 .group_by(profit_lines.c.company, extract("year", profit_lines.c.job_date))).all()
             audit = c.execute(
                 select(imports.c.id, imports.c.company, imports.c.report_type,
@@ -537,7 +537,10 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                        imports.c.source, imports.c.new_rows, imports.c.changed_rows,
                        imports.c.ended_rows, imports.c.message)
                 .where(imports.c.company.in_(["NG", "NCS"]),
-                       imports.c.report_type.in_(list(kinds)))
+                       imports.c.report_type.in_(list(kinds)),
+                       (imports.c.report_type != "JP") |
+                       (imports.c.columns.like('%"Job Date"%') &
+                        imports.c.columns.not_like('%"Charge"%')))
                 .order_by(imports.c.id.desc())).mappings().all()
         counts = {}
         for company, kind, yr, qty in ship_counts:
