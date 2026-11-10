@@ -41,7 +41,7 @@ explanation('profit','p_status','Matched to the shipment register','unique match
 n.setGroup('ops');n.S.page='s_score';n.S.sel={};n.renderAll();
 const opsScorecard=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()==='All rows');
 assert.ok(opsScorecard,'Operations scorecard All rows table exists');
-assert.equal(opsScorecard.querySelector('.mt-info')?.dataset.traceMetric,'ops.shipments','Operations scorecard exposes shipment-register calculation and records');
+assert.equal(opsScorecard.querySelector('.mt-info')?.dataset.traceMetric,'profit.gp','finance-authorized scorecard retains finance evidence');
 // Full Operations overview evidence coverage: ageing, owner worklist and KPI tiles.
 n.setGroup('ops');n.S.page='ops';n.S.sel={};n.renderAll();
 let openedEvidence=null;w.MetricTrace={createRequest:(metric,label,patch={})=>({metric,indices:[],previous_indices:[],compare:false,context:{},...patch,context:{...(patch.context||{})}}),openWithRequest:q=>{openedEvidence=q;}};
@@ -209,4 +209,15 @@ for(const title of ['Growing accounts','Declining accounts']){
  assert.equal(q.context.date_basis,'Shipment Date');
 }
 
-assert.deepEqual(errors,[]);w.close();console.log('PASS verified visual explanations: summary, scorecard, agent reports, profitability, billing, variance and source-status pages.');})().catch(e=>{console.error(e);dom.window.close();process.exit(1)});
+assert.deepEqual(errors,[]);w.close();
+// Verify the same scorecard under a genuinely Operations-only dataset, not an admin fixture with its finance flag toggled.
+const Dops=JSON.parse(fs.readFileSync('/tmp/ng-fixture-ops.json','utf8')),opsErrors=[],opsVC=new VirtualConsole();
+opsVC.on('jsdomError',e=>{if(!/navigation|CSS stylesheet/.test(e.message))opsErrors.push(e.message)});
+const opsDom=new JSDOM(fs.readFileSync('app/web/dashboard.html','utf8'),{url:'http://ops-scorecard-evidence.test',runScripts:'dangerously',pretendToBeVisual:true,virtualConsole:opsVC,beforeParse(ow){ow.matchMedia=()=>({matches:false,addEventListener(){}});ow.scrollTo=()=>{};ow.SVGElement.prototype.getComputedTextLength=()=>20;ow.fetch=async u=>({ok:true,status:200,json:async()=>u==='/api/me'?{name:'Ops',csrf:'test',role:'ops'}:u==='/api/dataset'?Dops:{}})}});
+const ow=opsDom.window;for(let i=0;i<100&&!ow.NG;i++)await new Promise(r=>setTimeout(r,20));
+const on=ow.NG;assert.ok(on);on.setGroup('ops');on.S.page='s_score';on.S.sel={};on.renderAll();
+const opsOnlyCard=[...ow.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()==='All rows');
+assert.ok(opsOnlyCard,'Operations-only scorecard All rows table exists');
+assert.equal(opsOnlyCard.querySelector('.mt-info')?.dataset.traceMetric,'ops.shipments','Operations-only scorecard exposes shipment-register calculation and records');
+assert.deepEqual(opsErrors,[]);opsDom.window.close();
+console.log('PASS verified visual explanations: summary, scorecard, agent reports, profitability, billing, variance and source-status pages.');})().catch(e=>{console.error(e);dom.window.close();process.exit(1)});
