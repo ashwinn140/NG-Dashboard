@@ -33,7 +33,8 @@ class MetricDefinitionTests(unittest.TestCase):
             "profit.customers": {"Organization": "profit_lines.customer; blank source values may use a unique current shipment-register customer match"},
             "ops.customer_concentration": {"Customer": "shipments.customer", "Chargeable Wt": "shipments.chargeable_wt", "TEUs": "shipments.teus"},
             "ops.volume": {"Volume": "shipments.volume"},
-            "ops.old_open": {"Operations Locked On": "shipments.ops_locked_on", "Financials Locked On": "shipments.fin_locked_on"},
+            "ops.old_open": {"Operations Locked On": "shipments.ops_locked_on"},
+            "ops.lock_lag": {"Operations Locked On": "shipments.ops_locked_on", "Financials Locked On": "shipments.fin_locked_on"},
             "ops.invoice_lag": {"Invoice No. & Date": "shipments.extra['Invoice No. & Date']; parsed into invoice reference count and first invoice date", "Billing Details": "shipments.extra['Billing Details']; parsed with invoice references and dates"},
         }
         for metric_id, fields in expected.items():
