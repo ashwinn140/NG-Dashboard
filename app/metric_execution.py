@@ -7,6 +7,24 @@ from openpyxl.styles import Font
 VERSION='1'
 EXCEL_ROW_LIMIT=1048576
 def snapshot_id(dataset):
+ # Store.dataset_for attaches a monotonic data_version to each immutable,
+ # permission-scoped snapshot. Hash only that token and its scope instead of
+ # serializing every shipment/JPR row on every evidence and Excel request.
+ version=dataset.get('data_version')
+ if version is not None:
+  user=dataset.get('user',{})
+  scope={
+   'snapshot_version':2,
+   'data_version':version,
+   'built_at':dataset.get('built_at'),
+   'companies':sorted(str(x) for x in (user.get('companies') or [])),
+   'lobs':sorted(str(x) for x in (user.get('lobs') or [])),
+   'finance':bool(user.get('finance')),
+   'register_rows':len(dataset.get('rep',[])),
+   'profit_rows':len(dataset.get('p',{}).get('co',[])),
+  }
+  return hashlib.sha256(json.dumps(scope,separators=(',',':'),sort_keys=True).encode()).hexdigest()
+ # Backward-compatible deterministic fallback for standalone/legacy callers.
  return hashlib.sha256(json.dumps(dataset,separators=(',',':'),sort_keys=True).encode()).hexdigest()
 def value(D,key,i,finance=False):
  c=D.get('cols',{}).get(key,{})
