@@ -675,7 +675,7 @@ def build_report_workbook(D, definition, start, end, freshness, generated_at=Non
         totals = []
         for col in columns:
             if col in ("income", "expense", "profit", "gross_weight_t", "chargeable_weight_t", "teus", "volume_cbm",
-                       "shipments", "air_shipments", "ocean_shipments", "jobs", "air_chargeable_weight_t", "ocean_teus"):
+                       "shipments", "air_shipments", "ocean_shipments", "jobs", "air_chargeable_weight_t", "ocean_teus", "invoice_count"):
                 totals.append(sum(float(r.get(col) or 0) for r in rows))
             elif col == "margin":
                 inc = sum(float(r.get("income") or 0) for r in rows)
@@ -706,8 +706,10 @@ def build_report_workbook(D, definition, start, end, freshness, generated_at=Non
             cell = ws.cell(row=row_idx, column=col_idx)
             if col in ("shipment_date", "job_date", "transaction_date", "invoice_first_date", "operations_locked_on", "financials_locked_on", "last_shipment_date") and cell.value:
                 cell.number_format = "dd-mmm-yyyy"
-            elif col in ("income", "expense", "profit", "buy_rate", "sell_rate"):
+            elif col in ("income", "expense", "profit"):
                 cell.number_format = '"₹"#,##0.00;[Red]-"₹"#,##0.00'
+            elif col in ("buy_rate", "sell_rate"):
+                cell.number_format = "#,##0.000"
             elif col == "margin":
                 cell.number_format = "0.0%"
             elif col in ("gross_weight_t", "chargeable_weight_t", "air_chargeable_weight_t", "teus", "ocean_teus", "volume_cbm"):
