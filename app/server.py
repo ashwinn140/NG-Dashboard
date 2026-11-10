@@ -61,6 +61,7 @@ class Store:
             sig = (self.version, tuple(sorted(user["companies"])), tuple(sorted(user["lobs"])), bool(user["finance"]))
             if sig not in self.cache:
                 D = DS.restrict(self.full, dict(companies=user["companies"], lobs=user["lobs"], finance=user["finance"]))
+                D["data_version"] = self.version
                 D["_snapshot_id"] = MX.snapshot_id(D)
                 if len(self.cache) > 20: self.cache.clear()
                 self.cache[sig] = gzip.compress(json.dumps(D, separators=(",", ":"), ensure_ascii=False).encode(), 6)
