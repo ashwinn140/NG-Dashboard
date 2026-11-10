@@ -82,7 +82,79 @@ def build_recent_jobs(rows, lobs=None, limit=5):
     return result[:max(0, min(int(limit), 5))]
 
 
-def build_last_shipment_owners(shipment_rows, jpr_rows, lobs=None, target_date=None):
+def _report_type_for_lob(lob):
+    value = str(lob or "").strip().upper()
+    mode = "Air" if "AIR" in value else "Sea" if "SEA" in value else "Road" if "ROAD" in value else "Other"
+    direction = "Export" if "EXP" in value else "Import" if "IMP" in value else "Domestic" if "DOM" in value else "Other"
+    return LOB_CODES.get((mode, direction))
+
+
+def _register_match_candidates(by_key, by_no, company, job_no, job_date, report_type):
+    candidates = by_key.get((company, job_no, job_date), [])
+    if not candidates:
+        candidates = by_no.get((company, job_no), [])
+    return [row for row in candidates if row["report_type"] == report_type]
+
+
+def build_customer_history_rows(register_rows, jpr_rows, requested_customer_names):
+    """Return JPR rows by requested customer, including only unique register fallbacks.
+
+    A blank JPR customer may inherit the customer from a uniquely matched
+    current shipment register row, mirroring the dashboard dataset join.
+    Explicit nonblank JPR customer values are never overwritten.
+    """
+    requested = {" ".join(str(name or "").split()).casefold() for name in requested_customer_names}
+    requested.discard("")
+    by_key, by_no = defaultdict(list), defaultdict(list)
+    for row in register_rows:
+        company = str(row.get("company") or "").strip().upper()
+        report_type = str(row.get("report_type") or "").strip().upper()
+        job_no = str(row.get("shipment_no") or "").strip()
+        job_date = _iso_day(row.get("shipment_date"))
+        customer = " ".join(str(row.get("customer") or "").split())
+        if not company or not report_type or not job_no or not job_date:
+            continue
+        item = {"company": company, "report_type": report_type, "customer": customer}
+        by_key[(company, job_no, job_date)].append(item)
+        by_no[(company, job_no)].append(item)
+
+    rows_by_customer = defaultdict(list)
+    all_rows, seen = [], set()
+    for source in jpr_rows:
+        row = dict(source)
+        identity = row.get("id") or (
+            str(row.get("company") or "").strip().upper(),
+            str(row.get("job_no") or "").strip(),
+            _iso_day(row.get("job_date")),
+            str(row.get("lob") or "").strip(),
+        )
+        if identity in seen:
+            continue
+        seen.add(identity)
+        all_rows.append(row)
+        customer = " ".join(str(row.get("customer") or "").split())
+        if customer and customer.casefold() != "(blank)":
+            if customer.casefold() in requested:
+                rows_by_customer[customer.casefold()].append(row)
+            continue
+
+        company = str(row.get("company") or "").strip().upper()
+        job_no = str(row.get("job_no") or "").strip()
+        job_date = _iso_day(row.get("job_date"))
+        report_type = _report_type_for_lob(row.get("lob"))
+        if not company or not job_no or not job_date or not report_type:
+            continue
+        candidates = _register_match_candidates(by_key, by_no, company, job_no, job_date, report_type)
+        if len(candidates) != 1:
+            continue
+        matched_customer = " ".join(str(candidates[0].get("customer") or "").split())
+        if matched_customer and matched_customer.casefold() in requested:
+            row["customer"] = matched_customer
+            rows_by_customer[matched_customer.casefold()].append(row)
+    return dict(rows_by_customer), all_rows
+
+
+def build_last_shipment_owners(shipment_rows, jpr_rows, lobs=None, target_date=None, matching_register_rows=None):
     """Map each customer's latest shipment date to its JPR Job Owner.
 
     Shipment-to-job identity follows the dashboard's existing matching rule:
@@ -94,6 +166,16 @@ def build_last_shipment_owners(shipment_rows, jpr_rows, lobs=None, target_date=N
     target_date = _iso_day(target_date) if target_date else None
     jobs_by_number = defaultdict(list)
     grouped_jobs = {}
+    register_by_key, register_by_no = defaultdict(list), defaultdict(list)
+    for row in (matching_register_rows if matching_register_rows is not None else shipment_rows):
+        company = str(row.get("company") or "").strip().upper()
+        report_type = str(row.get("report_type") or "").strip().upper()
+        number = str(row.get("shipment_no") or "").strip()
+        day = _iso_day(row.get("shipment_date"))
+        if company and report_type and number and day:
+            item = {"report_type": report_type}
+            register_by_key[(company, number, day)].append(item)
+            register_by_no[(company, number)].append(item)
 
     for row in jpr_rows:
         company = str(row.get("company") or "").strip().upper()
@@ -155,13 +237,20 @@ def build_last_shipment_owners(shipment_rows, jpr_rows, lobs=None, target_date=N
             if identity in shipment_ids:
                 continue
             shipment_ids.add(identity)
+            register_candidates = _register_match_candidates(
+                register_by_key, register_by_no, shipment["company"], shipment["shipment_no"],
+                shipment["shipment_date"], shipment["report_type"]
+            )
+            if len(register_candidates) != 1:
+                incomplete = True
+                continue
             candidates = [
                 job for job in jobs_by_number.get((shipment["company"], shipment["shipment_no"]), [])
                 if job["report_type"] == shipment["report_type"]
             ]
             exact = [job for job in candidates if job["job_date"] == shipment["shipment_date"]]
             matched = exact if exact else candidates
-            # Multiple distinct JPR jobs for one shipment are ambiguous; do not guess.
+            # Multiple distinct JPR jobs or register rows for one shipment are ambiguous; do not guess.
             if len(matched) != 1:
                 incomplete = True
                 continue

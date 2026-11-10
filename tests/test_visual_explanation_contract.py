@@ -15,7 +15,9 @@ class VisualExplanationContract(unittest.TestCase):
         self.assertRegex(APP, r"function card\(title, note, body, cls, trace\)\s*\{[\s\S]*?businessMeaning\(title, note, explanation\)")
         self.assertIn("Calculation & records", APP)
         self.assertIn("traceVisual", APP)
-        self.assertIn("aria-label': 'Open calculation and contributing records for ' + title", APP)
+        self.assertIn("const traces = Array.isArray(trace)", APP)
+        self.assertIn("'aria-label': label + ' for ' + title", APP)
+        self.assertIn("actions.length > 1", APP)
 
     def test_shared_kpis_include_explanation(self):
         self.assertIn("businessMeaning(label, note)", APP)

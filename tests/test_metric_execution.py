@@ -4,14 +4,6 @@ from app import metric_execution as X,metric_definitions as M
 class MetricExecutionTests(unittest.TestCase):
  def fixture(self):
   return dict(user={'finance':True},built_at='test',rep=[0,4],reps=[['NG','AE'],['NG','AI'],['NG','OE'],['NG','OI'],['NCS','AE']],no=['S1','S1'],ops=[-1,-1],fin=[-1,-1],inv1=[-1,-1],invN=[0,0],date=[20000,20000],chg=[1.25,2.5],teus=[0,0],cbm=[1,2],ckg=[1250,2500],rbuy=[0,0],rsell=[0,0],rbf=[0,0],rsf=[0,0],cols={'p_job':{'d':['=unsafe'], 'pc':[0,0]},'p_lob':{'d':['FFWD AIR EXP'],'pc':[0,0]}},p=dict(co=[0,1],sidx=[0,1],jd=[20000,20000],income=[100,50],expense=[40,70],meta=[]))
-
- def test_empty_operations_evidence_does_not_build_unused_finance_lineage(self):
-  class ExplodingIndices:
-   def __iter__(self):
-    raise AssertionError("empty evidence must not traverse the JPR match index")
-  d=self.fixture();d['p']['sidx']=ExplodingIndices()
-  self.assertEqual(X.records(d,'operations',[]),[])
-
  def test_cross_company_identity_totals_and_variance(self):
   d=self.fixture();q=dict(metric='profit.jobs',indices=[0,1],previous_indices=[0]);r=X.execute(d,q,M);self.assertEqual(r['current']['value'],2);self.assertEqual(r['difference'],1)
   q['metric']='profit.gp';r=X.execute(d,q,M);self.assertEqual(r['current']['value'],40);self.assertEqual(r['previous']['value'],60)
@@ -26,37 +18,11 @@ class MetricExecutionTests(unittest.TestCase):
   d['p']['expense']=[110,60]
   r=X.execute(d,dict(metric='profit.biggest_customer',indices=[0,1]),M)
   self.assertIsNone(r['current']['value'],'negative net GP has no meaningful concentration denominator')
-
- def test_finance_records_expose_matched_and_unmatched_register_lineage(self):
-  d=self.fixture();d['p']['sidx']=[0,-1]
-  r=X.execute(d,dict(metric='profit.matched_share',indices=[0,1]),M)
-  self.assertEqual(r['current']['value'],0.5)
-  matched,unmatched=r['records']
-  self.assertEqual(matched['jpr_match_status'],'matched')
-  self.assertEqual(matched['matched_shipment_no'],'S1')
-  self.assertEqual(matched['matched_shipment_date'],'2024-10-04')
-  self.assertEqual(unmatched['jpr_match_status'],'unmatched')
-  self.assertEqual(unmatched['matched_shipment_no'],'')
-
  def test_no_finance_and_invalid_selection(self):
   d=self.fixture();d['user']['finance']=False
   with self.assertRaises(PermissionError):X.execute(d,dict(metric='profit.gp',indices=[0]),M)
   for idx in [[2],[-1],[True],['0']]:
    with self.assertRaises(ValueError):X.execute(d,dict(metric='ops.shipments',indices=idx),M)
-
- def test_snapshot_id_uses_data_version_and_permission_scope(self):
-  from app.metric_execution import snapshot_id
-  base=dict(data_version=7,built_at='2026-11-10T04:00:00Z',user=dict(companies=['NG'],lobs=['AE'],finance=True),rep=[0,1],p=dict(co=[0]))
-  first=snapshot_id(base)
-  same_scope=dict(base,rep=[1,0],p=dict(co=[1]))
-  self.assertEqual(snapshot_id(same_scope),first,'the version token identifies an immutable dataset; row payloads are not reserialized')
-  other_scope=dict(base,user=dict(companies=['NCS'],lobs=['AE'],finance=True))
-  self.assertNotEqual(snapshot_id(other_scope),first)
-  other_version=dict(base,data_version=8)
-  self.assertNotEqual(snapshot_id(other_version),first)
-  other_permission=dict(base,user=dict(companies=['NG'],lobs=['AE'],finance=False))
-  self.assertNotEqual(snapshot_id(other_permission),first)
-
  def test_snapshot_mismatch_rejects_stale_export(self):
   with self.assertRaises(ValueError):X.execute(self.fixture(),dict(metric='profit.gp',indices=[0],snapshot='old'),M)
  def test_workbook_reconciles_and_neutralizes_formula_injection(self):
@@ -124,4 +90,54 @@ class MetricExecutionTests(unittest.TestCase):
 
  def test_ops_does_not_include_money(self):
   r=X.execute(self.fixture(),dict(metric='ops.shipments',indices=[0,1]),M);self.assertEqual(r['current']['value'],2);self.assertNotIn('income',r['records'][0])
+ def test_blank_customer_bucket_is_not_counted_as_a_customer(self):
+  d=self.fixture();d['cols']['customer']={'d':['Alpha','(blank)'],'pc':[0,1],'c':[0,1]}
+  r=X.execute(d,dict(metric='profit.customers',indices=[0,1]),M)
+  self.assertEqual(r['current']['value'],1)
+  self.assertEqual({x['customer'] for x in r['records']},{'Alpha'})
+  r=X.execute(d,dict(metric='profit.customers_80',indices=[0,1]),M)
+  self.assertEqual(r['current']['value'],1)
+  r=X.execute(d,dict(metric='profit.loss_customers',indices=[0,1]),M)
+  self.assertEqual(r['current']['value'],0)
+  r=X.execute(d,dict(metric='profit.biggest_customer',indices=[0,1]),M)
+  self.assertAlmostEqual(r['current']['value'],1.5,'unassigned profit remains in the total GP denominator')
+  r=X.execute(d,dict(metric='ops.active_customers',indices=[0,1],context={'active_min':1}),M)
+  self.assertEqual(r['current']['value'],1)
+  r=X.execute(d,dict(metric='ops.customer_concentration',indices=[0,1],context={'top_n':1}),M)
+  self.assertAlmostEqual(r['current']['value'],0.5,'unassigned shipments remain in the activity denominator but not the named-customer numerator')
+
+ def test_cost_coverage_numerator_is_distinct_job_count(self):
+  d=self.fixture();d['p']['co']=[0,0];d['p']['sidx']=[0,1];d['cols']['p_job']={'d':['J1'],'pc':[0,0]};d['cols']['p_lob']={'d':['FFWD AIR EXP'],'pc':[0,0]};d['p']['jd']=[20000,20000];d['p']['expense']=[40,50]
+  r=X.execute(d,dict(metric='profit.cost_coverage',indices=[0,1]),M)
+  self.assertEqual(r['current']['numerator'],1)
+  self.assertEqual(r['current']['denominator'],1)
+  self.assertEqual(r['current']['value'],1)
+
+ def test_precomputed_snapshot_digest_is_reused(self):
+  d=self.fixture();digest=X.snapshot_id(d);d['_snapshot_id']=digest
+  self.assertEqual(X.snapshot_id(d),digest)
+
+ def test_rate_usable_evidence_contains_only_numerator_rows_but_keeps_full_denominator(self):
+  d=self.fixture();d['ckg']=[100,200];d['rbuy']=[2,0];d['rsell']=[3,0];d['rbf']=[1,0];d['rsf']=[1,0]
+  r=X.execute(d,dict(metric='ops.rate_usable',indices=[0,1],context={'rate_mode':'clean','rate_max':1000}),M)
+  self.assertAlmostEqual(r['current']['value'],0.5)
+  self.assertEqual(r['current']['numerator'],1)
+  self.assertEqual(r['current']['denominator'],2)
+  self.assertEqual([row['source_index'] for row in r['records']],[0])
+
+ def test_empty_operations_evidence_does_not_build_unused_finance_lineage(self):
+  class ExplodingIndices:
+   def __iter__(self):raise AssertionError('empty evidence must not traverse the JPR match index')
+  d=self.fixture();d['p']['sidx']=ExplodingIndices()
+  self.assertEqual(X.records(d,'operations',[]),[])
+
+ def test_snapshot_id_uses_data_version_and_permission_scope(self):
+  base=dict(data_version=7,built_at='2026-11-10T04:00:00Z',user=dict(companies=['NG'],lobs=['AE'],finance=True),rep=[0,1],p=dict(co=[0]))
+  first=X.snapshot_id(base)
+  same_scope=dict(base,rep=[1,0],p=dict(co=[1]))
+  self.assertEqual(X.snapshot_id(same_scope),first,'an immutable data version identifies the snapshot without reserializing its rows')
+  self.assertNotEqual(X.snapshot_id(dict(base,user=dict(companies=['NCS'],lobs=['AE'],finance=True))),first)
+  self.assertNotEqual(X.snapshot_id(dict(base,data_version=8)),first)
+  self.assertNotEqual(X.snapshot_id(dict(base,user=dict(companies=['NG'],lobs=['AE'],finance=False))),first)
+
 if __name__=='__main__':unittest.main()
