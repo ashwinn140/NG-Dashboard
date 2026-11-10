@@ -236,18 +236,27 @@ def job_history_data_quality(register_rows, job_rows):
                 stats["job_owner_missing"] += 1
             continue
 
-        is_clearance = _norm(source_lob).startswith("ccl") or "customsclearance" in _norm(source_lob)
-        if is_clearance:
+        expected = _job_report_type(source_lob)
+        # Only Air/Sea Export/Import jobs have a corresponding shipment
+        # register. Road, customs-clearance and general jobs must never inherit
+        # an owner merely because their reference collides with a register row.
+        if expected is None:
             stats["register_not_applicable"] += 1
             stats["job_owner_missing"] += 1
             continue
 
-        candidates = by_key.get((company, number, day), [])
+        # Filter the exact-date candidates before deciding whether to fall
+        # back by number. An unrelated LOB row on the same date must not hide
+        # a unique matching-LOB candidate on another date.
+        candidates = [
+            candidate for candidate in by_key.get((company, number, day), [])
+            if candidate["report_type"] == expected
+        ]
         if not candidates:
-            candidates = by_no.get((company, number), [])
-        expected = _job_report_type(source_lob)
-        if expected:
-            candidates = [candidate for candidate in candidates if candidate["report_type"] == expected]
+            candidates = [
+                candidate for candidate in by_no.get((company, number), [])
+                if candidate["report_type"] == expected
+            ]
 
         if len(candidates) > 1:
             stats["ambiguous_register_matches"] += 1
