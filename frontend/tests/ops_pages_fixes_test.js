@@ -86,4 +86,13 @@ async function boot(mutate){
   if(invoices){invoices.dispatchEvent(new w.MouseEvent('click',{bubbles:true,cancelable:true}));const q=w.__traceRequests.at(-1);check('invoice chart evidence uses first parsed invoice date',q?.metric==='ops.invoiced_count'&&q?.compare===false&&q?.indices?.length>0&&q?.context?.date_basis==='First parsed invoice date',q);}
   dom.window.close()}
 
+
+ // Blank customer buckets remain visible but are excluded from named-customer KPIs.
+ {const {dom,w,d,ng}=await boot(data=>{const c=data.cols.customer;const blank=c.d.length;c.d.push('(blank)');if(c.pc.length)c.pc[0]=blank;if(c.c.length)c.c[0]=blank;});ng.S.sel={};ng.S.rel=null;ng.S.from=null;ng.S.to=null;ng.setGroup('profit');ng.S.page='p_customers';ng.renderAll();
+  const c=ng.D.cols.customer,expected=new Set(ng.D.cols.customer.pc.map(i=>ng.D.cols.customer.d[i]).filter(x=>x&&x.trim()&&x.trim().toLowerCase()!=='(blank)')).size;
+  const kpi=[...d.querySelectorAll('#page .kpi')].find(e=>e.querySelector('.kl')?.textContent.trim()==='Customers');
+  check('named-customer KPI excludes the blank customer bucket',!!kpi&&kpi.textContent.includes(String(expected)),{expected,actual:kpi?.textContent});
+  check('blank customer group remains available in the customer table',[...d.querySelectorAll('#page tbody tr')].some(r=>r.textContent.toLowerCase().includes('(blank)')));
+  dom.window.close()}
+
  console.log(fails?'FAILED '+fails:'ALL PASSED');process.exit(fails?1:0)})().catch(e=>{console.error(e);process.exit(1)});
