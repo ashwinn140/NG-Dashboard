@@ -106,4 +106,13 @@ async function boot(mutate){
   if(action){action.dispatchEvent(new w.MouseEvent('click',{bubbles:true,cancelable:true}));const q=w.__traceRequests.at(-1);check('rate-quality evidence is scoped to the text bucket',q?.metric==='ops.rate_air_exports'&&q?.context?.rate_quality==='text'&&q?.indices?.includes(0),q);}
   dom.window.close()}
 
+
+ // Summary variance rows open the exact current and comparison records.
+ {const {dom,w,d,ng}=await boot();ng.S.sel={};ng.S.rel=null;ng.S.from=null;ng.S.to=null;ng.setGroup('summary');ng.S.page='s_owner';ng.renderAll();
+  const card=[...d.querySelectorAll('#page article')].find(e=>e.querySelector('h2')?.textContent.trim().startsWith('Variance:'));
+  const action=[...(card?.querySelectorAll('button')||[])].find(b=>b.textContent.trim()==='Calculation & records');
+  check('summary variance exposes row-level Calculation & records',!!action);
+  if(action){action.dispatchEvent(new w.MouseEvent('click',{bubbles:true,cancelable:true}));const q=w.__traceRequests.at(-1);check('summary variance evidence includes both comparison periods',!!q?.metric&&q?.compare===true&&Array.isArray(q.indices)&&Array.isArray(q.previous_indices),q);}
+  dom.window.close()}
+
  console.log(fails?'FAILED '+fails:'ALL PASSED');process.exit(fails?1:0)})().catch(e=>{console.error(e);process.exit(1)});
