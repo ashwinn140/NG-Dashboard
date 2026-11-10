@@ -2,10 +2,22 @@
 import unittest
 from datetime import date
 
-from app.customer_history import build_recent_jobs, build_last_shipment_owners, visible_report_types_for_scopes
+from app.customer_history import build_recent_jobs, build_last_shipment_owners, visible_report_types_for_scopes, normalize_customer_sql
+from sqlalchemy import create_engine, literal, select
 
 
 class CustomerHistoryTests(unittest.TestCase):
+    def test_customer_sql_normalization_matches_dashboard_whitespace_rules(self):
+        engine = create_engine("sqlite://")
+        try:
+            with engine.connect() as conn:
+                value = conn.execute(select(normalize_customer_sql(
+                    literal("  Acme\t\u00a0  Logistics\u202f\nIndia   ")
+                ))).scalar_one()
+            self.assertEqual(value, "acme logistics india")
+        finally:
+            engine.dispose()
+
     def test_mixed_customer_history_lob_scopes_use_union_not_intersection(self):
         self.assertEqual(visible_report_types_for_scopes([{"AE"}, {"OE"}]), ["AE", "OE"])
         self.assertEqual(visible_report_types_for_scopes([{"AE"}, set()]), ["AE", "AI", "OE", "OI"])

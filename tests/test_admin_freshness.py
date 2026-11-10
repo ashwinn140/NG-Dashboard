@@ -1,6 +1,7 @@
 """Current JPR diagnostics must exclude retained legacy charge history."""
 import json
 import unittest
+from pathlib import Path
 from datetime import date, datetime
 
 from fastapi.testclient import TestClient
