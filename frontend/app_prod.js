@@ -1646,9 +1646,18 @@ const rateOK = (i) => { if (!(ckg[i] > 0)) return false; const okf = (f) => f ==
 const rmargin = (i) => (rsell[i] - rbuy[i]) * ckg[i];
 const fRate = (v) => (v == null ? '–' : '₹' + v.toFixed(1) + '/kg');
 function ppRates() {
-  const M = mask(), root = h('div'), pr = periods(S.cmp); let nAE = 0, nOK = 0, kg = 0, sellRev = 0, buyCost = 0, mar = 0, neg = 0, negAmt = 0; const bad = {none: 0, text: 0, clean: 0, foreign: 0, lump: 0}, below = [];
-  for (let i = 0; i < N; i++) { if (!M[i] || rtype[i] !== 0) continue; nAE++; if (rbf[i] === 3 || rsf[i] === 3) bad.foreign++; else if (rbf[i] === 0 || rsf[i] === 0) bad.none++; else if (rbuy[i] > S.def.rateMax || rsell[i] > S.def.rateMax) bad.lump++; else if (rateOK(i)) { nOK++; if (rbf[i] === 2 || rsf[i] === 2) bad.text++; else bad.clean++; } else bad.none++;
-    if (rateOK(i)) { const k = ckg[i]; kg += k; sellRev += rsell[i] * k; buyCost += rbuy[i] * k; mar += rmargin(i); if (rsell[i] < rbuy[i]) { neg++; negAmt += rmargin(i); below.push(i); } } }
+  const M = mask(), root = h('div'), pr = periods(S.cmp); let nAE = 0, nOK = 0, kg = 0, sellRev = 0, buyCost = 0, mar = 0, neg = 0, negAmt = 0; const bad = {none: 0, text: 0, clean: 0, foreign: 0, lump: 0}, quality = {none: [], text: [], clean: [], foreign: [], lump: []}, below = [];
+  for (let i = 0; i < N; i++) {
+    if (!M[i] || rtype[i] !== 0) continue;
+    nAE++;
+    let category = 'clean';
+    if (rbf[i] === 3 || rsf[i] === 3) category = 'foreign';
+    else if (!(ckg[i] > 0) || rbf[i] === 0 || rsf[i] === 0 || ![1,2].includes(rbf[i]) || ![1,2].includes(rsf[i]) || !(rbuy[i] > 0) || !(rsell[i] > 0)) category = 'none';
+    else if (rbuy[i] > S.def.rateMax || rsell[i] > S.def.rateMax) category = 'lump';
+    else if (rbf[i] === 2 || rsf[i] === 2) category = 'text';
+    bad[category]++; quality[category].push(i);
+    if (rateOK(i)) { nOK++; const k = ckg[i]; kg += k; sellRev += rsell[i] * k; buyCost += rbuy[i] * k; mar += rmargin(i); if (rsell[i] < rbuy[i]) { neg++; negAmt += rmargin(i); below.push(i); } }
+  }
   const withRateEvidence=(node,metric,label)=>{node.dataset.metricDecorated='1';node.append(h('button',{type:'button',class:'mt-info',style:'margin-top:.4rem','data-trace-metric':metric,'data-metric-id':metric,onclick:(e)=>{e.stopPropagation();const q=window.MetricTrace?.createRequest(metric,label);if(q)window.MetricTrace?.openWithRequest(q);}},'Calculation & records'));return node;};
   const kp = h('div', {class: 'kpis'},
     withRateEvidence(kpi('Air export shipments', fInt(nAE), null, 'The registers record buy and sell rates for air exports only'),'ops.rate_air_exports','Air export shipments'),
