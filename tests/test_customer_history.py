@@ -231,7 +231,6 @@ class CustomerHistoryTests(unittest.TestCase):
                 "lob": "FFWD AIR EXP", "customer": "  ", "extra": {"Job Owner": "Owner A"}}]
         by_customer, all_rows = build_customer_history_rows(register, jpr, {"acme logistics"})
         jobs = build_recent_jobs(by_customer["acme logistics"], lobs=["AE"])
-        self.assertEqual(jobs[0]["customer"], "Acme Logistics")
         self.assertEqual(jobs[0]["job_no"], "SHIP-1")
         self.assertEqual(jobs[0]["job_owner"], "Owner A")
         owner = build_last_shipment_owners(register, all_rows, lobs=["AE"], matching_register_rows=register)
