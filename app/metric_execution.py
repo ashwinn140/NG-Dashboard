@@ -4,7 +4,7 @@ from datetime import date,timedelta
 from openpyxl import Workbook
 from openpyxl.styles import Font
 
-VERSION='2'
+VERSION='3'
 EXCEL_ROW_LIMIT=1048576
 def snapshot_id(dataset):
  cached=dataset.get('_snapshot_id') if isinstance(dataset,dict) else None
