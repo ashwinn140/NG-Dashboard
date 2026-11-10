@@ -36,7 +36,7 @@ const trend=byTitle.get('Trend');assert.ok(trend,'trend has an explicit evidence
 let trendPayload=null;w.NG.traceVisual('ops.shipments',null,'Trend');trendPayload=w.NG.traceVisual('ops.shipments',null,'Trend');
 assert.equal(trendPayload.displayed_value,n.opsFacts(n.mask()).n,'trend evidence total equals its selected shipment scope');
 
-let opened=null;w.MetricTrace={createRequest:(metric,label,patch={})=>{const dimension=patch.context?.segment?.dimension??null;const q=w.NG.traceVisual(metric,dimension,label);return q?{...q,...patch,context:{...q.context,...(patch.context||{})}}:null;},openWithRequest:q=>{opened=q;}};
+let opened=null;w.MetricTrace={openWithRequest:q=>{opened=q;}};
 byTitle.get('Top '+n.S.def.topN+' customers').click();
 assert.equal(opened.metric,'ops.shipments');assert.equal(opened.context.segment.value,n.COLS.customer.d[n.COLS.customer.c[0]],'single selected customer gets item-level evidence');
 assert.ok(opened.indices.every(i=>n.COLS.customer.c[i]===n.COLS.customer.c[0]),'selected-customer evidence contains only that customer');
