@@ -186,3 +186,15 @@ def build_last_shipment_owners(shipment_rows, jpr_rows, lobs=None, target_date=N
             "last_shipment_numbers": sorted({s["shipment_no"] for s in latest["shipments"]}),
         }
     return results
+
+def visible_report_types_for_scopes(lob_scopes):
+    """Return report types needed to validate a mixed customer-history batch.
+
+    Each request may carry a different LOB scope. A blank scope means the
+    caller is unrestricted by LOB, so the batch must inspect all supported
+    operational reports before validating customer visibility.
+    """
+    scopes = [set(scope or []) for scope in lob_scopes]
+    if scopes and all(scopes):
+        return sorted(set.union(*scopes))
+    return ["AE", "AI", "OE", "OI"]
