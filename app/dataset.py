@@ -8,7 +8,7 @@ from .db import imports, shipments, profit_lines, org_master
 
 REPS = [("NG", "AE"), ("NG", "AI"), ("NG", "OE"), ("NG", "OI"), ("NCS", "AE"), ("NCS", "AI"), ("NCS", "OE"), ("NCS", "OI")]
 EXTRAS = ["Sales Person", "Trade Lane Name", "Loading Country", "Discharge Country", "Collection Executive", "Business Dimension", "Inco Terms", "Freight Type", "Contract Type",
-          "Commodity Type", "Co-Load Type", "Origin Agent", "Customer Branch", "Document Executive (UDF)", "Place Of Execution", "Container Types"]
+          "Commodity Type", "Co-Load Type", "Origin Agent", "Customer Branch", "Document Executive (UDF)", "Place Of Execution", "Container Types", "Booking Thru"]
 UNIT_COLUMNS = ["Unit"] + [f"Unit.{i}" for i in range(1, 8)]   # the register repeats "Unit" (weight, packages, volume...)
 DASHBOARD_COLUMNS = sorted(set(EXTRAS) | set(UNIT_COLUMNS) | {"_volume_unit_source"} | {c for cols in CFG.SOURCE_COLUMNS.values() for c in cols} |
                            {"Booking Thru", "Invoice No. & Date", "Billing Details", "Buy Rate (UDF)", "Sell Rate (UDF)", "Dest. Agent", "Destination Agent"})

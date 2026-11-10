@@ -31,13 +31,24 @@ REPORT_CATALOG = {
             "branch", "agent", "salesperson", "job_owner", "origin",
             "destination", "status", "operations_locked_on",
             "financials_locked_on", "gross_weight_t", "chargeable_weight_t",
-            "teus", "volume_cbm",
+            "teus", "volume_cbm", "stage", "shipper", "consignee", "carrier",
+            "origin_agent", "destination_agent", "nomination", "consol_type",
+            "cargo_type", "trade_lane", "loading_country", "discharge_country",
+            "collection_executive", "business_dimension", "incoterms", "freight_type",
+            "contract_type", "commodity_type", "co_load_type", "document_executive",
+            "place_of_execution", "container_types", "customer_branch", "booking_thru",
+            "unit", "unit_1", "unit_2", "unit_3", "unit_4", "unit_5", "unit_6", "unit_7", "invoice_first_date", "invoice_count", "billing_reference_status", "buy_rate", "sell_rate",
         ),
         "summary_columns": (
             "company", "customer", "shipments", "air_shipments", "ocean_shipments",
             "air_chargeable_weight_t", "ocean_teus", "lob_count", "last_shipment_date",
         ),
-        "filters": ("customer", "branch", "agent", "salesperson", "job_owner", "status"),
+        "filters": ("customer", "branch", "agent", "salesperson", "job_owner", "status",
+                    "stage", "shipper", "consignee", "carrier", "origin", "destination",
+                    "origin_agent", "destination_agent", "nomination", "consol_type",
+                    "cargo_type", "trade_lane", "loading_country", "discharge_country",
+                    "collection_executive", "business_dimension", "incoterms", "freight_type",
+                    "contract_type", "commodity_type", "co_load_type", "customer_branch", "booking_thru", "billing_reference_status"),
     },
     "customer_performance": {
         "version": 1, "title": "Customer Shipment Performance", "permission": "operations",
@@ -51,7 +62,13 @@ REPORT_CATALOG = {
             "company", "customer", "shipments", "air_shipments", "ocean_shipments",
             "air_chargeable_weight_t", "ocean_teus", "lob_count", "last_shipment_date",
         ),
-        "filters": ("customer", "branch", "agent", "salesperson", "job_owner"),
+        "filters": ("customer", "branch", "agent", "salesperson", "job_owner", "status",
+                    "stage", "shipper", "consignee", "carrier", "origin", "destination",
+                    "origin_agent", "destination_agent", "nomination", "consol_type",
+                    "cargo_type", "trade_lane", "loading_country", "discharge_country",
+                    "collection_executive", "business_dimension", "incoterms", "freight_type",
+                    "contract_type", "commodity_type", "co_load_type", "booking_thru",
+                    "billing_reference_status"),
     },
     "job_profitability": {
         "version": 1, "title": "Job Profitability", "permission": "finance",
@@ -59,12 +76,13 @@ REPORT_CATALOG = {
         "columns": (
             "company", "lob", "job_no", "job_date", "customer", "branch",
             "mode", "direction", "service", "salesperson", "income", "expense", "profit",
-            "margin",
+            "margin", "trade_lane", "intercompany", "transaction_date",
         ),
         "summary_columns": (
             "company", "lob", "customer", "branch", "jobs", "income", "expense", "profit", "margin",
         ),
-        "filters": ("customer", "branch", "salesperson", "lob", "mode", "direction", "service"),
+        "filters": ("customer", "branch", "salesperson", "lob", "mode", "direction", "service",
+                    "trade_lane", "intercompany"),
     },
 }
 
@@ -192,6 +210,8 @@ def validate_schedule(user: dict, payload: dict) -> dict:
         raise ScheduleValidationError("Choose a report from the enabled catalog.")
     if report["permission"] == "finance" and not user.get("finance"):
         raise PermissionError("Finance permission is required for Job Profitability.")
+    if report_id == "shipment_register" and not user.get("finance") and set(payload.get("columns") or ()) & {"buy_rate", "sell_rate"}:
+        raise PermissionError("Finance permission is required to include shipment buy/sell rates.")
 
     allowed_companies = set(user.get("companies") or COMPANIES)
     allowed_lobs = set(user.get("lobs") or LOBS)
@@ -373,6 +393,33 @@ def _shipment_rows(D, definition, start, end):
             "origin": _column(D, "origin", i),
             "destination": _column(D, "destination", i),
             "status": _column(D, "status", i),
+            "stage": _column(D, "stage", i),
+            "shipper": _column(D, "shipper", i), "consignee": _column(D, "consignee", i),
+            "carrier": _column(D, "carrier", i), "origin_agent": _column(D, "origin_agent", i),
+            "destination_agent": _column(D, "destination_agent", i),
+            "nomination": _column(D, "nomination", i), "consol_type": _column(D, "consol", i),
+            "cargo_type": _column(D, "cargo", i), "trade_lane": _column(D, "x_tradelanename", i),
+            "loading_country": _column(D, "x_loadingcountry", i), "discharge_country": _column(D, "x_dischargecountry", i),
+            "collection_executive": _column(D, "x_collectionexecutive", i),
+            "business_dimension": _column(D, "x_businessdimension", i),
+            "incoterms": _column(D, "x_incoterms", i), "freight_type": _column(D, "x_freighttype", i),
+            "contract_type": _column(D, "x_contracttype", i), "commodity_type": _column(D, "x_commoditytype", i),
+            "co_load_type": _column(D, "x_coloadtype", i),
+            "document_executive": _column(D, "x_documentexecutiveudf", i),
+            "place_of_execution": _column(D, "x_placeofexecution", i),
+            "container_types": _column(D, "x_containertypes", i),
+            "customer_branch": _column(D, "x_customerbranch", i),
+            "unit": _column(D, "x_unit", i),
+            "unit_1": _column(D, "x_unit1", i), "unit_2": _column(D, "x_unit2", i),
+            "unit_3": _column(D, "x_unit3", i), "unit_4": _column(D, "x_unit4", i),
+            "unit_5": _column(D, "x_unit5", i), "unit_6": _column(D, "x_unit6", i),
+            "unit_7": _column(D, "x_unit7", i),
+            "booking_thru": _column(D, "x_bookingthru", i),
+            "invoice_first_date": _day(D.get("inv1", [])[i]),
+            "invoice_count": int(D.get("invN", [])[i] or 0),
+            "billing_reference_status": ("Reference present" if int(D.get("invN", [])[i] or 0) > 0 else "No reference recorded"),
+            "buy_rate": (float(D.get("rbuy", [])[i]) if D.get("user", {}).get("finance") and D.get("rbf", [])[i] in (1, 2) else None),
+            "sell_rate": (float(D.get("rsell", [])[i]) if D.get("user", {}).get("finance") and D.get("rsf", [])[i] in (1, 2) else None),
             "operations_locked_on": _day(D["ops"][i]),
             "financials_locked_on": _day(D["fin"][i]),
             "gross_weight_t": float(D["gross"][i] or 0),
@@ -442,6 +489,9 @@ def _job_rows(D, definition, start, end):
             "direction": _column(D, "p_direction", i, True),
             "service": _column(D, "p_kind", i, True),
             "salesperson": _column(D, "jp_sales_person", i, True),
+            "trade_lane": _column(D, "x_tradelanename", i, True),
+            "intercompany": _column(D, "p_ic", i, True),
+            "transaction_date": _day(P.get("td", [])[i]),
             "income": income, "expense": expense, "profit": profit,
             "margin": profit / income if income > 0 else None,
         }
@@ -639,7 +689,7 @@ def build_report_workbook(D, definition, start, end, freshness, generated_at=Non
         totals = []
         for col in columns:
             if col in ("income", "expense", "profit", "gross_weight_t", "chargeable_weight_t", "teus", "volume_cbm",
-                       "shipments", "air_shipments", "ocean_shipments", "jobs", "air_chargeable_weight_t", "ocean_teus"):
+                       "shipments", "air_shipments", "ocean_shipments", "jobs", "air_chargeable_weight_t", "ocean_teus", "invoice_count"):
                 totals.append(sum(float(r.get(col) or 0) for r in rows))
             elif col == "margin":
                 inc = sum(float(r.get("income") or 0) for r in rows)
@@ -668,10 +718,12 @@ def build_report_workbook(D, definition, start, end, freshness, generated_at=Non
         ws.column_dimensions[letter].width = min(36, max(12, max((len(v) for v in values), default=12) + 2))
         for row_idx in range(7, ws.max_row + 1):
             cell = ws.cell(row=row_idx, column=col_idx)
-            if col in ("shipment_date", "job_date", "operations_locked_on", "financials_locked_on", "last_shipment_date") and cell.value:
+            if col in ("shipment_date", "job_date", "transaction_date", "invoice_first_date", "operations_locked_on", "financials_locked_on", "last_shipment_date") and cell.value:
                 cell.number_format = "dd-mmm-yyyy"
             elif col in ("income", "expense", "profit"):
                 cell.number_format = '"₹"#,##0.00;[Red]-"₹"#,##0.00'
+            elif col in ("buy_rate", "sell_rate"):
+                cell.number_format = "#,##0.000"
             elif col == "margin":
                 cell.number_format = "0.0%"
             elif col in ("gross_weight_t", "chargeable_weight_t", "air_chargeable_weight_t", "teus", "ocean_teus", "volume_cbm"):
