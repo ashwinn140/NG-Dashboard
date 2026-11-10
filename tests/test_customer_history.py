@@ -2,10 +2,14 @@
 import unittest
 from datetime import date
 
-from app.customer_history import build_recent_jobs, build_last_shipment_owners
+from app.customer_history import build_recent_jobs, build_last_shipment_owners, visible_report_types_for_scopes
 
 
 class CustomerHistoryTests(unittest.TestCase):
+    def test_mixed_customer_history_lob_scopes_use_union_not_intersection(self):
+        self.assertEqual(visible_report_types_for_scopes([{"AE"}, {"OE"}]), ["AE", "OE"])
+        self.assertEqual(visible_report_types_for_scopes([{"AE"}, set()]), ["AE", "AI", "OE", "OI"])
+
     def test_returns_five_distinct_jobs_sorted_by_job_date(self):
         rows = [
             {"company": "NG", "customer": "Acme", "job_no": f"J-{n}",
