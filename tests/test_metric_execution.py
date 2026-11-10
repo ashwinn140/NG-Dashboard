@@ -18,7 +18,7 @@ class MetricExecutionTests(unittest.TestCase):
     raise AssertionError("activity evidence must not build the full JPR reverse index")
    def __getitem__(self,index):
     return 0
-  d=self.fixture();d['p']['sidx']=ExplodingIndices()
+  d=self.fixture();d['data_version']=1;d['p']['sidx']=ExplodingIndices()
   result=X.execute(d,dict(metric='ops.shipments',indices=[0]),M,include_operations_links=False)
   self.assertEqual(result['current']['value'],1)
   self.assertEqual(result['records'][0]['source_index'],0)
