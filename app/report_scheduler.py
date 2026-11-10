@@ -37,7 +37,7 @@ REPORT_CATALOG = {
             "collection_executive", "business_dimension", "incoterms", "freight_type",
             "contract_type", "commodity_type", "co_load_type", "document_executive",
             "place_of_execution", "container_types", "booking_thru", "invoice_reference",
-            "billing_details", "buy_rate", "sell_rate",
+            "invoice_first_date", "invoice_count", "buy_rate", "sell_rate",
         ),
         "summary_columns": (
             "company", "customer", "shipments", "air_shipments", "ocean_shipments",
@@ -204,6 +204,8 @@ def validate_schedule(user: dict, payload: dict) -> dict:
         raise ScheduleValidationError("Choose a report from the enabled catalog.")
     if report["permission"] == "finance" and not user.get("finance"):
         raise PermissionError("Finance permission is required for Job Profitability.")
+    if report_id == "shipment_register" and not user.get("finance") and set(payload.get("columns") or ()) & {"buy_rate", "sell_rate"}:
+        raise PermissionError("Finance permission is required to include shipment buy/sell rates.")
 
     allowed_companies = set(user.get("companies") or COMPANIES)
     allowed_lobs = set(user.get("lobs") or LOBS)
@@ -400,11 +402,11 @@ def _shipment_rows(D, definition, start, end):
             "document_executive": _column(D, "x_documentexecutiveudf", i),
             "place_of_execution": _column(D, "x_placeofexecution", i),
             "container_types": _column(D, "x_containertypes", i),
-            "booking_thru": _column(D, "booking_thru", i),
-            "invoice_reference": _column(D, "x_invoicenodate", i),
-            "billing_details": _column(D, "x_billingdetails", i),
-            "buy_rate": _column(D, "buy_rate", i) if D.get("user", {}).get("finance") else None,
-            "sell_rate": _column(D, "sell_rate", i) if D.get("user", {}).get("finance") else None,
+            "booking_thru": _column(D, "x_bookingthru", i),
+            "invoice_first_date": _day(D.get("inv1", [])[i]),
+            "invoice_count": int(D.get("invN", [])[i] or 0),
+            "buy_rate": (float(D.get("rbuy", [])[i]) if D.get("user", {}).get("finance") and D.get("rbf", [])[i] in (1, 2) else None),
+            "sell_rate": (float(D.get("rsell", [])[i]) if D.get("user", {}).get("finance") and D.get("rsf", [])[i] in (1, 2) else None),
             "operations_locked_on": _day(D["ops"][i]),
             "financials_locked_on": _day(D["fin"][i]),
             "gross_weight_t": float(D["gross"][i] or 0),
