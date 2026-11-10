@@ -24,7 +24,7 @@ assert.equal(n.pctOf(10,0),null);assert.equal(n.pctOf(10,null),null);assert.equa
  for(let i=0;i<n.NP;i++){n.pinc[i]=100;n.pexp[i]=100;}n.renderAll();assert.equal(shareText(),'–','zero net GP must not be rendered as a zero or percentage share');assert.equal(n.traceSelection('profit.biggest_customer','Biggest customer').displayed_value,null);
  for(let i=0;i<n.NP;i++){n.pinc[i]=100;n.pexp[i]=110;}n.renderAll();assert.equal(shareText(),'–','negative net GP must not produce a positive-looking concentration share');assert.equal(n.traceSelection('profit.biggest_customer','Biggest customer').displayed_value,null);
  for(let i=0;i<n.NP;i++){n.pinc[i]=100;n.pexp[i]=90;}n.renderAll();assert.notEqual(shareText(),'–','positive net GP retains a calculable share');
- n.setGroup('summary');n.S.page='s_owner';n.S.sel={};n.renderAll();
+ n.setGroup('summary');n.S.page='s_owner';n.S.sel={};n.S.cmp={unit:'month',against:'prev',basis:'full',custom:true,A:{from:day('2026-10-01'),to:day('2026-10-31')},B:{from:day('2026-09-01'),to:day('2026-09-30')}};n.renderAll();
  const varianceCard=[...w.document.querySelectorAll('#page .card')].find(el=>el.querySelector('h2')?.textContent.startsWith('Variance:'));
  assert.ok(varianceCard,'summary period variance table renders');
  const varianceAction=[...varianceCard.querySelectorAll('button')].find(b=>b.textContent.trim()==='Calculation & records');
