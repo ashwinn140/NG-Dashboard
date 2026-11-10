@@ -12,6 +12,18 @@ class MetricExecutionTests(unittest.TestCase):
   d=self.fixture();d['p']['sidx']=ExplodingIndices()
   self.assertEqual(X.records(d,'operations',[]),[])
 
+ def test_activity_evidence_can_skip_expensive_jpr_reverse_lineage(self):
+  class ExplodingIndices:
+   def __iter__(self):
+    raise AssertionError("activity evidence must not build the full JPR reverse index")
+   def __getitem__(self,index):
+    return 0
+  d=self.fixture();d['data_version']=1;d['p']['sidx']=ExplodingIndices()
+  result=X.execute(d,dict(metric='ops.shipments',indices=[0]),M,include_operations_links=False)
+  self.assertEqual(result['current']['value'],1)
+  self.assertEqual(result['records'][0]['source_index'],0)
+  with self.assertRaises(AssertionError):
+   X.records(d,'operations',[0])
  def test_cross_company_identity_totals_and_variance(self):
   d=self.fixture();q=dict(metric='profit.jobs',indices=[0,1],previous_indices=[0]);r=X.execute(d,q,M);self.assertEqual(r['current']['value'],2);self.assertEqual(r['difference'],1)
   q['metric']='profit.gp';r=X.execute(d,q,M);self.assertEqual(r['current']['value'],40);self.assertEqual(r['previous']['value'],60)
