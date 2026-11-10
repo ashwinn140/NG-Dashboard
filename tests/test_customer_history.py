@@ -2,7 +2,7 @@
 import unittest
 from datetime import date
 
-from app.customer_history import build_recent_jobs, build_last_shipment_owners, visible_report_types_for_scopes, normalize_customer_sql
+from app.customer_history import build_recent_jobs, build_last_shipment_owners, build_customer_history_rows, visible_report_types_for_scopes, normalize_customer_sql
 from sqlalchemy import create_engine, literal, select
 
 
@@ -222,6 +222,48 @@ class CustomerHistoryTests(unittest.TestCase):
         ]
         result = build_last_shipment_owners(shipments, jpr, lobs=["AE"])
         self.assertEqual(result["acme"]["last_shipment_job_owner"], "Multiple owners")
+
+
+    def test_blank_jpr_customer_uses_only_a_unique_register_customer_match(self):
+        register = [{"company": "NG", "report_type": "AE", "shipment_no": "SHIP-1",
+                    "shipment_date": date(2026, 11, 7), "customer": "Acme Logistics"}]
+        jpr = [{"id": 1, "company": "NG", "job_no": "SHIP-1", "job_date": date(2026, 11, 7),
+                "lob": "FFWD AIR EXP", "customer": "  ", "extra": {"Job Owner": "Owner A"}}]
+        by_customer, all_rows = build_customer_history_rows(register, jpr, {"acme logistics"})
+        jobs = build_recent_jobs(by_customer["acme logistics"], lobs=["AE"])
+        self.assertEqual(jobs[0]["customer"], "Acme Logistics")
+        self.assertEqual(jobs[0]["job_no"], "SHIP-1")
+        self.assertEqual(jobs[0]["job_owner"], "Owner A")
+        owner = build_last_shipment_owners(register, all_rows, lobs=["AE"], matching_register_rows=register)
+        self.assertEqual(owner["acme logistics"]["last_shipment_job_owner"], "Owner A")
+
+    def test_blank_jpr_customer_does_not_guess_when_register_number_is_reused(self):
+        register = [
+            {"company": "NG", "report_type": "AE", "shipment_no": "REUSED", "shipment_date": date(2026, 11, 5), "customer": "Acme"},
+            {"company": "NG", "report_type": "AE", "shipment_no": "REUSED", "shipment_date": date(2026, 11, 6), "customer": "Other"},
+        ]
+        jpr = [{"id": 2, "company": "NG", "job_no": "REUSED", "job_date": date(2026, 11, 4),
+                "lob": "FFWD AIR EXP", "customer": "", "extra": {"Job Owner": "Owner A"}}]
+        by_customer, _ = build_customer_history_rows(register, jpr, {"acme"})
+        self.assertNotIn("acme", by_customer)
+
+    def test_explicit_jpr_customer_is_never_overwritten_by_register_customer(self):
+        register = [{"company": "NG", "report_type": "AE", "shipment_no": "SHIP-1",
+                     "shipment_date": date(2026, 11, 7), "customer": "Acme"}]
+        jpr = [{"id": 3, "company": "NG", "job_no": "SHIP-1", "job_date": date(2026, 11, 7),
+                "lob": "FFWD AIR EXP", "customer": "Other", "extra": {"Job Owner": "Owner A"}}]
+        by_customer, _ = build_customer_history_rows(register, jpr, {"acme"})
+        self.assertNotIn("acme", by_customer)
+
+    def test_last_shipment_owner_rejects_ambiguous_register_identity(self):
+        visible = [{"company": "NG", "report_type": "AE", "shipment_no": "SHIP-1",
+                    "shipment_date": date(2026, 11, 7), "customer": "Acme"}]
+        matching = visible + [{"company": "NG", "report_type": "AE", "shipment_no": "SHIP-1",
+                               "shipment_date": date(2026, 11, 7), "customer": "Other"}]
+        jpr = [{"company": "NG", "job_no": "SHIP-1", "job_date": date(2026, 11, 7),
+                "lob": "FFWD AIR EXP", "extra": {"Job Owner": "Owner A"}}]
+        result = build_last_shipment_owners(visible, jpr, lobs=["AE"], matching_register_rows=matching)
+        self.assertEqual(result["acme"]["last_shipment_job_owner"], "Owner unavailable")
 
 
 if __name__ == "__main__":
