@@ -18,6 +18,18 @@ class MetricExecutionTests(unittest.TestCase):
   d['p']['expense']=[110,60]
   r=X.execute(d,dict(metric='profit.biggest_customer',indices=[0,1]),M)
   self.assertIsNone(r['current']['value'],'negative net GP has no meaningful concentration denominator')
+
+ def test_finance_records_expose_matched_and_unmatched_register_lineage(self):
+  d=self.fixture();d['p']['sidx']=[0,-1]
+  r=X.execute(d,dict(metric='profit.matched_share',indices=[0,1]),M)
+  self.assertEqual(r['current']['value'],0.5)
+  matched,unmatched=r['records']
+  self.assertEqual(matched['jpr_match_status'],'matched')
+  self.assertEqual(matched['matched_shipment_no'],'S1')
+  self.assertEqual(matched['matched_shipment_date'],'2024-10-04')
+  self.assertEqual(unmatched['jpr_match_status'],'unmatched')
+  self.assertEqual(unmatched['matched_shipment_no'],'')
+
  def test_no_finance_and_invalid_selection(self):
   d=self.fixture();d['user']['finance']=False
   with self.assertRaises(PermissionError):X.execute(d,dict(metric='profit.gp',indices=[0]),M)
