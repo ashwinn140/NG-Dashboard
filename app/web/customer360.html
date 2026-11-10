@@ -85,9 +85,12 @@ function drawActivity(){
   else {const localSelected=scoped?[...new Set(filtered.filter(x=>x.ops&&x.company===r.company&&searchKey(x.customer)===searchKey(r.customer)).map(x=>(x.mode==='Ocean'?'Sea':x.mode)+' '+x.direction))]:[];other=crossLobActivity(r.company,r.customer,activityResult.as_of,localSelected).other_lobs;}
   const summary=other.length?other.map(x=>(x.lob||'LOB')+': '+String(x.status||'unknown').replaceAll('_',' ')+' · last '+(x.last_date||'—')).join('; '):'No other visible LOB activity in loaded history.';
   const wide=signal.company_wide_verified?'Verified inactive in all four LOB snapshots':signal.company_wide_status&&signal.company_wide_status!=='not_verified_incomplete_scope_or_sources'?'Company-wide activity: '+signal.company_wide_status:'Not verified — permission scope or source coverage is incomplete';
-  const jobs=(r.last_five_jobs||[]).map(j=>[j.job_no,j.job_date,j.lob,j.job_owner].filter(Boolean).join(' · '));
-  const jobsText=jobs.length?jobs.join(' | '):'No matching current JPR job history';
-  return '<tr><td>'+esc(r.company)+'</td><td>'+esc(r.customer)+'</td><td>'+esc(labels[status]||String(status).replaceAll('_',' '))+'</td><td>'+esc(summary)+'</td><td>'+esc(wide)+'</td><td>'+esc(jobsText)+'</td><td><button data-activity="'+i+'">Inspect history</button></td></tr>';
+  const jobs=(r.last_five_jobs||[]).map(j=>{
+   const ownerState=j.owner_status==='available'?'Owner: '+(j.job_owner||'Available'):j.owner_status==='conflicting'?'Conflicting Job Owner values in JPR':j.owner_status==='missing'?'Job Owner missing in JPR':'Owner status unavailable';
+   return '<div class="small" style="padding:3px 0;border-bottom:1px solid #edf2f4"><strong>'+esc(j.job_no||'Job unavailable')+'</strong> · '+esc(j.job_date||'Date unavailable')+' · '+esc(j.lob||'LOB unavailable')+'<br>'+esc(ownerState)+'</div>';
+  });
+  const jobsText=jobs.length?jobs.join(''):'No matching current JPR job history';
+  return '<tr><td>'+esc(r.company)+'</td><td>'+esc(r.customer)+'</td><td>'+esc(labels[status]||String(status).replaceAll('_',' '))+'</td><td>'+esc(summary)+'</td><td>'+esc(wide)+'</td><td>'+jobsText+'</td><td><button data-activity="'+i+'">Inspect history</button></td></tr>';
  }).join('')+'</tbody></table>':'';
  $('activityMore').hidden=rows.length<=activityLimit;
  document.querySelectorAll('[data-activity]').forEach(b=>b.onclick=()=>{const r=rows[Number(b.dataset.activity)],signal=r.selected_lob_activity||r;window.MetricTrace?.openWithRequest({metric:'ops.shipments',indices:r.indices,previous_indices:[],snapshot:activityResult.snapshot,displayed_value:r.indices.length,context:{as_of:activityResult.as_of,company:r.company,customer:r.customer,activity_status:signal.classification||signal.status,method:activityResult.method,scope:'Selected relationship evidence; cross-LOB activity and JPR job-owner context are permission-scoped'}});});

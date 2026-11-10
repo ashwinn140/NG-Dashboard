@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 import pandas as pd
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from sqlalchemy import select, func, insert, delete, update
+from sqlalchemy import select, func, insert, delete, update, and_, or_
 from sqlalchemy.exc import IntegrityError
 from . import auth, admin_ops as ops, dataset as DS, mailer, master as MST, processor as P, profit as J, metric_definitions as MD, metric_execution as MX, report_scheduler as RS, report_scheduler_service as RSS
 from .db import get_engine, imports, uploads, users, prefs, admin_log, shipments, profit_lines, org_master
@@ -434,26 +434,30 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         jpr_ms = 0.0
         jpr_row_count = 0
         with engine.connect() as conn:
-            register_rows = conn.execute(select(
-                shipments.c.company, shipments.c.report_type, shipments.c.customer,
-                shipments.c.shipment_date
-            ).where(
-                shipments.c.company.in_(companies),
-                shipments.c.report_type.in_(visible_lobs),
-                normalize_customer_sql(shipments.c.customer).in_(normalized_names),
-                shipments.c.to_import.is_(None),
-                shipments.c.shipment_date.is_not(None),
-                shipments.c.shipment_date <= as_of,
-            )).mappings().all()
-
-            register_row_count = len(register_rows)
-            for row in register_rows:
-                key = (row["company"], normalize_customer(row["customer"]))
-                if key not in customer_keys:
-                    continue
-                lob = row["report_type"]
-                if lob in activity_dates[key] and row["shipment_date"]:
-                    activity_dates[key][lob].append(row["shipment_date"])
+            normalized_register_customer = normalize_customer_sql(shipments.c.customer)
+            pair_list = sorted(customer_keys)
+            for offset in range(0, len(pair_list), 200):
+                pair_batch = pair_list[offset:offset + 200]
+                pair_filter = or_(*[
+                    and_(shipments.c.company == company, normalized_register_customer == customer)
+                    for company, customer in pair_batch
+                ])
+                register_rows = conn.execute(select(
+                    shipments.c.company, shipments.c.report_type, shipments.c.customer,
+                    shipments.c.shipment_date
+                ).where(
+                    pair_filter,
+                    shipments.c.report_type.in_(visible_lobs),
+                    shipments.c.to_import.is_(None),
+                    shipments.c.shipment_date.is_not(None),
+                    shipments.c.shipment_date <= as_of,
+                )).mappings().all()
+                register_row_count += len(register_rows)
+                for row in register_rows:
+                    key = (row["company"], normalize_customer(row["customer"]))
+                    lob = row["report_type"]
+                    if lob in activity_dates[key] and row["shipment_date"]:
+                        activity_dates[key][lob].append(row["shipment_date"])
 
             register_ms = (time.perf_counter() - register_started) * 1000
             import_started = time.perf_counter()
@@ -472,14 +476,18 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             import_ms = (time.perf_counter() - import_started) * 1000
 
             jpr_started = time.perf_counter()
-            for offset in range(0, len(normalized_names), 500):
-                name_batch = normalized_names[offset:offset + 500]
+            normalized_jpr_customer = normalize_customer_sql(profit_lines.c.customer)
+            for offset in range(0, len(pair_list), 200):
+                pair_batch = pair_list[offset:offset + 200]
+                pair_filter = or_(*[
+                    and_(profit_lines.c.company == company, normalized_jpr_customer == customer)
+                    for company, customer in pair_batch
+                ])
                 jpr_rows = conn.execute(select(
                     profit_lines.c.company, profit_lines.c.job_no, profit_lines.c.job_date,
                     profit_lines.c.lob, profit_lines.c.customer, profit_lines.c.extra
                 ).where(
-                    profit_lines.c.company.in_(companies),
-                    normalize_customer_sql(profit_lines.c.customer).in_(name_batch),
+                    pair_filter,
                     *J.current_jobs(),
                 ).order_by(profit_lines.c.job_date.desc(), profit_lines.c.id.desc())).mappings().all()
                 jpr_row_count += len(jpr_rows)
