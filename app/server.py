@@ -366,6 +366,21 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             selected_lobs &= {"AE", "OE"}
         elif direction == "import":
             selected_lobs &= {"AI", "OI"}
+        requested_lobs = (context.get("relationships") or {}).get("lob") or []
+        if isinstance(requested_lobs, (str, bytes)):
+            requested_lobs = [requested_lobs]
+        if requested_lobs:
+            def matches_lob(value, code):
+                value = str(value or "").casefold()
+                return {
+                    "AE": ("air" in value and "export" in value),
+                    "AI": ("air" in value and "import" in value),
+                    "OE": (("ocean" in value or "sea" in value) and "export" in value),
+                    "OI": (("ocean" in value or "sea" in value) and "import" in value),
+                }[code]
+            filtered_lobs = {lob for lob in lob_order if any(matches_lob(value, lob) for value in requested_lobs)}
+            if filtered_lobs:
+                selected_lobs &= filtered_lobs
         selected_lobs &= set(visible_lobs)
         if not selected_lobs:
             selected_lobs = set(visible_lobs)
