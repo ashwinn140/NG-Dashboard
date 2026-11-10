@@ -95,4 +95,15 @@ async function boot(mutate){
   check('blank customer group remains available in the customer table',[...d.querySelectorAll('#page tbody tr')].some(r=>r.textContent.toLowerCase().includes('(blank)')));
   dom.window.close()}
 
+
+ // Rate-quality buckets are independent of the active rate-acceptance mode.
+ {const {dom,w,d,ng}=await boot(data=>{for(let i=0;i<data.rbf.length;i++){data.rbf[i]=1;data.rsf[i]=1;data.rbuy[i]=5;data.rsell[i]=10;data.ckg[i]=100;}data.rep[0]=0;data.rbf[0]=2;data.rsf[0]=2;});ng.S.sel={};ng.S.rel=null;ng.S.from=null;ng.S.to=null;ng.S.def.rateMode='clean';ng.setGroup('profit');ng.S.page='p_rates';ng.renderAll();
+  const card=[...d.querySelectorAll('#page article')].find(e=>e.querySelector('h2')?.textContent.trim()==='How the rates were read');
+  const textRow=[...(card?.querySelectorAll('li')||[])].find(li=>li.textContent.includes('have text such as'));
+  const action=[...(textRow?.querySelectorAll('button')||[])].find(b=>b.textContent.trim()==='Calculation & records');
+  check('text-embedded rate count remains visible in clean-only mode',!!textRow&&textRow.textContent.includes('1 have text'),textRow?.textContent);
+  check('rate-quality text bucket exposes exact source records',!!action);
+  if(action){action.dispatchEvent(new w.MouseEvent('click',{bubbles:true,cancelable:true}));const q=w.__traceRequests.at(-1);check('rate-quality evidence is scoped to the text bucket',q?.metric==='ops.rate_air_exports'&&q?.context?.rate_quality==='text'&&q?.indices?.includes(0),q);}
+  dom.window.close()}
+
  console.log(fails?'FAILED '+fails:'ALL PASSED');process.exit(fails?1:0)})().catch(e=>{console.error(e);process.exit(1)});
