@@ -34,9 +34,9 @@ assert.equal(n.pctOf(10,0),null);assert.equal(n.pctOf(10,null),null);assert.equa
  w.MetricTrace.openWithRequest=openBeforeVariance;
  n.setGroup('ops');n.S.page='status';n.S.sel={};n.renderAll();
  const historyCard=[...w.document.querySelectorAll('#page .card')].find(el=>el.querySelector('h2')?.textContent.trim()==='History by year');
- const statusCard=[...w.document.querySelectorAll('#page .card')].find(el=>el.querySelector('h2')?.textContent.trim()==='Data status');
+ const sourceStatusCard=[...w.document.querySelectorAll('#page .card')].find(el=>el.querySelector('h2')?.textContent.trim()==='Data status');
  assert.ok(historyCard?.querySelector('button.mt-info'),'history-by-year cells expose source-record evidence');
- assert.ok(statusCard?.querySelector('button.mt-info'),'data-status rows expose source-record evidence');
+ assert.ok(sourceStatusCard?.querySelector('button.mt-info'),'data-status rows expose source-record evidence');
  let sourceOpened=null;const openBeforeSource=w.MetricTrace.openWithRequest;w.MetricTrace.openWithRequest=q=>{sourceOpened=q;};
  historyCard.querySelector('button.mt-info').click();assert.equal(sourceOpened.metric,'ops.shipments');assert.ok(sourceOpened.indices.length>0);assert.ok(sourceOpened.context.segment.year);
  w.MetricTrace.openWithRequest=openBeforeSource;
