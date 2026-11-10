@@ -2087,7 +2087,7 @@ function metricTraceValue(metric,m,p) {
  return undefined;
 }
 function metricTraceCategory(metric,key,code){
- const {m,p}=metricTraceMasks(metric,key),codes=COLS[key].pc||COLS[key].c;
+ const {m,p}=metricTraceMasks(metric,key),codes=metric.startsWith('profit.')?(COLS[key].pc||COLS[key].c):COLS[key].c;
  for(let i=0;i<m.length;i++)if(m[i]&&codes[i]!==code)m[i]=0;
  for(let i=0;i<p.length;i++)if(p[i]&&codes[i]!==code)p[i]=0;
  const q=metricTraceSelection(metric,COLS[key].l+': '+(COLS[key].d[code]??code));
