@@ -198,3 +198,17 @@ def visible_report_types_for_scopes(lob_scopes):
     if scopes and all(scopes):
         return sorted(set.union(*scopes))
     return ["AE", "AI", "OE", "OI"]
+
+def normalize_customer_sql(column):
+    """SQL expression matching the dashboard's whitespace-normalized names.
+
+    Keep this portable across SQLite test databases and PostgreSQL production.
+    """
+    from sqlalchemy import func
+    value = column
+    for whitespace in ("\\t", "\\n", "\\r", "\\f", "\\v"):
+        value = func.replace(value, whitespace, " ")
+    value = func.trim(value)
+    for _ in range(8):
+        value = func.replace(value, "  ", " ")
+    return func.lower(func.trim(value))
