@@ -35,6 +35,20 @@ class MetricExecutionTests(unittest.TestCase):
   with self.assertRaises(PermissionError):X.execute(d,dict(metric='profit.gp',indices=[0]),M)
   for idx in [[2],[-1],[True],['0']]:
    with self.assertRaises(ValueError):X.execute(d,dict(metric='ops.shipments',indices=idx),M)
+
+ def test_snapshot_id_uses_data_version_and_permission_scope(self):
+  from app.metric_execution import snapshot_id
+  base=dict(data_version=7,built_at='2026-11-10T04:00:00Z',user=dict(companies=['NG'],lobs=['AE'],finance=True),rep=[0,1],p=dict(co=[0]))
+  first=snapshot_id(base)
+  same_scope=dict(base,rep=[1,0],p=dict(co=[1]))
+  self.assertEqual(snapshot_id(same_scope),first,'the version token identifies an immutable dataset; row payloads are not reserialized')
+  other_scope=dict(base,user=dict(companies=['NCS'],lobs=['AE'],finance=True))
+  self.assertNotEqual(snapshot_id(other_scope),first)
+  other_version=dict(base,data_version=8)
+  self.assertNotEqual(snapshot_id(other_version),first)
+  other_permission=dict(base,user=dict(companies=['NG'],lobs=['AE'],finance=False))
+  self.assertNotEqual(snapshot_id(other_permission),first)
+
  def test_snapshot_mismatch_rejects_stale_export(self):
   with self.assertRaises(ValueError):X.execute(self.fixture(),dict(metric='profit.gp',indices=[0],snapshot='old'),M)
  def test_workbook_reconciles_and_neutralizes_formula_injection(self):
