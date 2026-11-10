@@ -131,4 +131,13 @@ class MetricExecutionTests(unittest.TestCase):
   d=self.fixture();d['p']['sidx']=ExplodingIndices()
   self.assertEqual(X.records(d,'operations',[]),[])
 
+ def test_snapshot_id_uses_data_version_and_permission_scope(self):
+  base=dict(data_version=7,built_at='2026-11-10T04:00:00Z',user=dict(companies=['NG'],lobs=['AE'],finance=True),rep=[0,1],p=dict(co=[0]))
+  first=X.snapshot_id(base)
+  same_scope=dict(base,rep=[1,0],p=dict(co=[1]))
+  self.assertEqual(X.snapshot_id(same_scope),first,'an immutable data version identifies the snapshot without reserializing its rows')
+  self.assertNotEqual(X.snapshot_id(dict(base,user=dict(companies=['NCS'],lobs=['AE'],finance=True))),first)
+  self.assertNotEqual(X.snapshot_id(dict(base,data_version=8)),first)
+  self.assertNotEqual(X.snapshot_id(dict(base,user=dict(companies=['NG'],lobs=['AE'],finance=False))),first)
+
 if __name__=='__main__':unittest.main()
