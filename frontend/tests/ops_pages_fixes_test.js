@@ -62,7 +62,7 @@ async function boot(mutate){
 
 
  // Billing evidence must open the exact locked/uninvoiced shipment subset.
- {const {dom,w,d,ng}=await boot();ng.S.sel={};ng.S.rel=null;ng.S.from=null;ng.S.to=null;ng.setGroup('profit');ng.S.page='p_billing';ng.S.bl.dim='branch';ng.renderAll();
+ {const {dom,w,d,ng}=await boot(data=>{data.ops[0]=Math.max(1,data.date[0]-5);data.invN[0]=0;data.inv1[0]=-1;});ng.S.sel={};ng.S.rel=null;ng.S.from=null;ng.S.to=null;ng.setGroup('profit');ng.S.page='p_billing';ng.S.bl.dim='branch';ng.renderAll();
   const card=[...d.querySelectorAll('#page article')].find(e=>e.querySelector('h2')?.textContent.trim()==='Where billing is slow');
   check('billing worklist exposes Calculation & records',!!card&&!!card.querySelector('.mt-info'));
   const row=[...(card?.querySelectorAll('tbody tr')||[])].find(r=>Number((r.children[3]?.textContent||'').replace(/,/g,''))>0);
