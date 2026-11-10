@@ -316,7 +316,7 @@ function traceExplanation(trace,title) {
   'ops.lock_invoice_lag':'operations-locked shipments with a parsed first invoice date','ops.locked_no_invoice':'operations-locked shipments with no invoice reference',
   'ops.overdue_invoice':'operations-locked shipments with no invoice reference beyond the configured ageing threshold'
  };
- const fin={ 'profit.gp':'gross profit','profit.income':'income','profit.expense':'expense','profit.cost_not_booked_proxy':'jobs with no recorded cost','profit.billing_pending_proxy':'jobs with cost but no income recorded','profit.loss_making':'loss-making jobs','profit.low_margin':'low-margin jobs','profit.negative_income_rows':'negative-income JPR rows','profit.intercompany_proxy':'company-name-matched jobs','profit.expected_cost_only':'estimated unbooked costs' };
+ const fin={ 'profit.gp':'gross profit','profit.income':'income','profit.expense':'expense','profit.cost_not_booked_proxy':'jobs with no recorded cost','profit.billing_pending_proxy':'jobs with cost but no income recorded','profit.loss_making':'loss-making jobs','profit.low_margin':'low-margin jobs','profit.negative_income_rows':'negative-income JPR rows','profit.intercompany_proxy':'company-name-matched jobs','profit.expected_cost_only':'estimated unbooked costs','profit.matched_share':'JPR jobs matched to unique shipment-register identities' };
  if(ops[m]){
   const measure=ops[m],dim=k&&COLS[k]?COLS[k].l.toLowerCase():null;
   const grouping=dim?'Groups selected shipment-register rows by '+dim+' and sums '+measure+'.':'Uses the selected shipment-register rows represented by this visual.';
@@ -374,8 +374,17 @@ function traceExplanation(trace,title) {
  return null;
 }
 function card(title, note, body, cls, trace) {
-  const explanation=traceExplanation(trace,title);
-  const action = explanation ? h('button', {type: 'button', class: 'mt-info', style: 'margin-top:0;white-space:nowrap', 'data-trace-metric': trace.metric, 'data-trace-dimension': trace.dimension || '', title: 'Open calculation and contributing records for ' + title, 'aria-label': 'Open calculation and contributing records for ' + title, onclick: (e) => { e.preventDefault(); e.stopPropagation(); const q = typeof trace.request === 'function' ? trace.request() : window.NG?.traceVisual?.(trace.metric, trace.dimension, title); if (q) window.MetricTrace?.openWithRequest(q); }}, 'Calculation & records') : null;
+  const traces = Array.isArray(trace) ? trace : trace ? [trace] : [];
+  const actions = [], explanations = [];
+  traces.forEach((item) => {
+    const explanation = traceExplanation(item, title);
+    if (!explanation) return;
+    explanations.push(explanation);
+    const label = item.label || 'Calculation & records';
+    actions.push(h('button', {type: 'button', class: 'mt-info', style: 'margin-top:0;white-space:nowrap', 'data-trace-metric': item.metric, 'data-metric-id': item.metric, 'data-trace-dimension': item.dimension || '', title: label + ' for ' + title, 'aria-label': label + ' for ' + title, onclick: (e) => { e.preventDefault(); e.stopPropagation(); const q = typeof item.request === 'function' ? item.request() : window.NG?.traceVisual?.(item.metric, item.dimension, title); if (q) window.MetricTrace?.openWithRequest(q); }}, label));
+  });
+  const action = actions.length === 1 ? actions[0] : actions.length > 1 ? h('div', {class: 'frow', style: 'gap:.35rem;flex-wrap:wrap;justify-content:flex-end'}, ...actions) : null;
+  const explanation = explanations[0] || null;
   const heading = action ? h('div', {style: 'display:flex;align-items:center;justify-content:space-between;gap:.5rem;min-width:0;flex-wrap:wrap'}, h('h2', {class: 'h'}, title), action) : h('h2', {class: 'h'}, title);
   return h('article', {class: 'card ' + (cls || '')}, heading, note ? h('p', {class: 'note'}, note) : null, body, businessMeaning(title, note, explanation));
 }
