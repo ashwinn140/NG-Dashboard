@@ -398,6 +398,15 @@ function traceExplanation(trace,title) {
    m==='profit.low_margin'?'Counts distinct jobs with positive income, non-zero expense, gross profit not below minus INR 1, and margin below the configured low-margin threshold; higher-priority job statuses are excluded.':
    m==='profit.negative_income_rows'?'Counts JPR source rows with negative recorded income. This is a row count, not necessarily a distinct-job count.':
    m==='profit.intercompany_proxy'?'Counts jobs flagged by customer-name matching to the other group company. This is a name-based review flag, not an intercompany elimination.':
+   m==='ops.shipments'?'Counts distinct current shipment identities by company, report type, shipment number and shipment date.':
+   m==='ops.active_customers'?'Counts named customers with at least the configured minimum number of selected shipment records.':
+   m==='ops.customer_concentration'?'Divides the top N named-customer activity totals by all selected activity, including unassigned customer rows.':
+   m==='ops.period_new_customers'?'Counts named customers meeting the minimum in the current period and absent from the comparison period.':
+   m==='ops.period_absent_customers'?'Counts named customers meeting the minimum in the comparison period and absent from the current period.':
+   m==='ops.invoice_reference_count'?'Counts distinct shipment identities with a parsed invoice or billing reference.':
+   m==='ops.invoiced_count'?'Counts distinct shipment identities with a parsed first invoice date in the selected invoice-date window.':
+   m==='ops.operations_locked'?'Counts distinct shipment identities with an Operations Locked On date.':
+   m.startsWith('ops.rate_')?'Uses air-export register rows with positive chargeable weight and valid positive sell and buy rates.':
    'For selected jobs with positive income and zero recorded expense, sums income multiplied by the same-LOB booked expense/income ratio; falls back to the overall authorized ratio, then zero if no benchmark exists. The benchmark uses all authorized loaded JPR jobs and ignores the selected date window. This is an estimate, not booked expense.';
   return ['Shows '+measure+' for the visual and active filters.',formula+(dim&&title!=='Income against margin'?' Groups the eligible rows by '+dim+'.':'')+' The drawer lists the exact contributing job-summary rows, including job number, company, branch, customer, job date, income, expense and profit.'];
  }
