@@ -4,10 +4,16 @@ from datetime import date,timedelta
 from openpyxl import Workbook
 from openpyxl.styles import Font
 
-VERSION='1'
+VERSION='2'
 EXCEL_ROW_LIMIT=1048576
 def snapshot_id(dataset):
+ cached=dataset.get('_snapshot_id') if isinstance(dataset,dict) else None
+ if isinstance(cached,str) and len(cached)==64:return cached
  return hashlib.sha256(json.dumps(dataset,separators=(',',':'),sort_keys=True).encode()).hexdigest()
+
+def known_customer(value):
+ name=' '.join(str(value or '').split())
+ return bool(name) and name.casefold()!='(blank)'
 def value(D,key,i,finance=False):
  c=D.get('cols',{}).get(key,{})
  codes=c.get('pc' if finance else 'c',[])
@@ -64,7 +70,9 @@ def aggregate(metric,rows,options=None):
  if metric in ['profit.air_yield','profit.ocean_yield','profit.matched_share','profit.best_dimension']:
   if metric=='profit.best_dimension':
    grouped={}
-   for r in rows:grouped[r.get('dimension_value','')]=grouped.get(r.get('dimension_value',''),0)+r['profit']
+   for r in rows:
+    label=' '.join(str(r.get('dimension_value','') or '').split())
+    if label and label.casefold()!='(blank)':grouped[label]=grouped.get(label,0)+r['profit']
    return dict(value=max([v for v in grouped.values() if v>0],default=None),numerator=None,denominator=None)
   if metric=='profit.matched_share':num=sum(r['matched_source_index']>=0 for r in rows);den=len(rows)
   else:
@@ -72,7 +80,8 @@ def aggregate(metric,rows,options=None):
   return dict(value=num/den if den>0 else None,numerator=num,denominator=den)
  if metric in ['profit.customers','profit.customers_80','profit.biggest_customer','profit.loss_customers']:
   grouped={}
-  for r in rows:grouped[r['customer']]=grouped.get(r['customer'],0)+r['profit']
+  for r in rows:
+   if known_customer(r.get('customer')):grouped[r['customer']]=grouped.get(r['customer'],0)+r['profit']
   profits=sorted(grouped.values(),reverse=True);pos=sum(x for x in profits if x>0);cum=n=0
   for x in profits:
    if x>0 and cum<.8*pos:cum+=x;n+=1
@@ -80,14 +89,19 @@ def aggregate(metric,rows,options=None):
   return dict(value=v,numerator=None,denominator=None)
  if metric=='ops.customer_concentration':
   grouped={};measure=options.get('concentration_measure','count')
-  for r in rows:grouped[r['customer']]=grouped.get(r['customer'],0)+(1 if measure=='count' else r.get(measure,0))
-  total=sum(grouped.values());num=sum(sorted(grouped.values(),reverse=True)[:max(1,int(options.get('top_n',25)))]);return dict(value=num/total if total else None,numerator=num,denominator=total)
+  for r in rows:
+   amount=1 if measure=='count' else r.get(measure,0)
+   grouped[r['customer']]=grouped.get(r['customer'],0)+amount
+  total=sum(grouped.values())
+  named=sorted((v for k,v in grouped.items() if known_customer(k)),reverse=True)
+  num=sum(named[:max(1,int(options.get('top_n',25)))]);return dict(value=num/total if total else None,numerator=num,denominator=total)
  if metric in ['profit.cost_not_booked_proxy','profit.billing_pending_proxy','profit.loss_making','profit.low_margin','profit.negative_income_rows','profit.intercompany_proxy']:return dict(value=len(rows),numerator=None,denominator=None)
  if metric=='ops.invoice_reference_count' or metric=='profit.rows':return dict(value=len(rows),numerator=None,denominator=None)
  if metric=='ops.invoiced_count':return dict(value=len(rows),numerator=None,denominator=None)
  if metric=='ops.active_customers':
   counts={}
-  for r in rows:counts[r['customer']]=counts.get(r['customer'],0)+1
+  for r in rows:
+   if known_customer(r.get('customer')):counts[r['customer']]=counts.get(r['customer'],0)+1
   return dict(value=sum(n>=max(1,int(options.get('active_min',1))) for n in counts.values()),numerator=None,denominator=None)
  if metric.startswith('ops.') and metric not in ['ops.shipments','ops.air_weight','ops.air_weight_kg','ops.teu','ops.volume','ops.period_new_customers','ops.period_absent_customers']:
   today=int(options.get('age_as_of',0));old=int(options.get('old_days',90));unbilled=int(options.get('unbilled_days',30));eligible=rows;numerator=denominator=None
@@ -103,10 +117,12 @@ def aggregate(metric,rows,options=None):
   elif metric in ['ops.locked_no_invoice','ops.overdue_invoice']:eligible=[r for r in rows if r['operations_lock_day']>0 and r['invoice_count']==0 and (metric=='ops.locked_no_invoice' or today-r['operations_lock_day']>unbilled)];v=len(eligible)
   else:raise ValueError('Unsupported operational metric.')
   return dict(value=v,numerator=numerator,denominator=denominator)
- if metric in ['ops.period_new_customers','ops.period_absent_customers']:return dict(value=len({r['customer'] for r in rows}),numerator=None,denominator=None)
+ if metric in ['ops.period_new_customers','ops.period_absent_customers']:return dict(value=len({r['customer'] for r in rows if known_customer(r.get('customer'))}),numerator=None,denominator=None)
  if metric in ['profit.income','profit.expense','profit.gp']:return {'value':{'profit.income':inc,'profit.expense':exp,'profit.gp':inc-exp}[metric],'numerator':None,'denominator':None}
  if metric=='profit.margin':return dict(value=(inc-exp)/inc if inc>0 else None,numerator=inc-exp,denominator=inc)
- if metric=='profit.cost_coverage':return dict(value=sum(r.get('expense',0)>0 for r in rows)/len(keys) if keys else None,numerator=sum(r.get('expense',0)>0 for r in rows),denominator=len(keys))
+ if metric=='profit.cost_coverage':
+  cost_keys={(r['company'],r['lob'],r['job'],r['date']) for r in rows if r.get('expense',0)>0}
+  return dict(value=len(cost_keys)/len(keys) if keys else None,numerator=len(cost_keys),denominator=len(keys))
  if metric=='profit.expected_adjusted':return dict(value=sum(r.get('profit',0)-r.get('expected_cost',0) for r in rows),numerator=None,denominator=None)
  if metric=='profit.expected_cost_only':return dict(value=sum(r.get('expected_cost',0) for r in rows),numerator=None,denominator=None)
  if metric=='profit.per_job':return dict(value=(inc-exp)/len(keys) if keys else None,numerator=inc-exp,denominator=len(keys))
@@ -145,6 +161,8 @@ def eligible_records(metric, rows, context):
   rows=[r for r in rows if r.get('register_report',-1)%4==0]
   if metric not in ['ops.rate_air_exports','ops.rate_usable']:rows=[r for r in rows if usable_rate(r,context) and (metric!='ops.rate_below_buy' or r['sell_rate']<r['buy_rate'])]
  if metric.startswith('profit.rate_matched_'):rows=[r for r in rows if usable_rate(r,context)]
+ if metric in ['profit.customers','profit.customers_80','profit.biggest_customer','profit.loss_customers','ops.active_customers','ops.period_new_customers','ops.period_absent_customers']:
+  rows=[r for r in rows if known_customer(r.get('customer'))]
  if metric in ['profit.air_yield','profit.ocean_yield']:rows=[r for r in rows if r.get('matched_source_index',-1)>=0 and (r.get('register_report',-1)%4<2)==(metric=='profit.air_yield')]
  return [r for r in rows if predicates[metric](r)] if metric in predicates else rows
 
