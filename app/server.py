@@ -383,7 +383,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             catalog.append({
                 "id": report_id, "title": report["title"], "permission": report["permission"],
                 "date_basis": report["date_basis"], "filters": list(report["filters"]),
-                "detail_columns": list(report["columns"]),
+                "detail_columns": [col for col in report["columns"] if user["finance"] or col not in ("buy_rate", "sell_rate")],
                 "summary_columns": list(report["summary_columns"]),
                 "summary_only": report_id == "customer_performance",
             })
