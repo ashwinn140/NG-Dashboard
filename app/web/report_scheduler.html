@@ -48,7 +48,7 @@ function drawColumns(selection){
  const check=document.createElement("input");check.type="checkbox";check.checked=true;check.setAttribute("aria-label","Include "+name);check.onchange=()=>{item.remove();syncColumnTools()};
  const label=document.createElement("span");label.textContent=name.replaceAll("_"," ");label.style.flex="1";
  const move=document.createElement("span");move.className="move";
- for(const [txt,delta] of [["↑",-1],["↓",1]]){const b=document.createElement("button");b.type="button";b.textContent=txt;b.title=delta<0?"Move up":"Move down";b.onclick=()=>{const n=item[delta<0?"previousElementSibling":"nextElementSibling"];if(n)box.insertBefore(item,delta<0?n:item.nextElementSibling);syncColumnTools()};move.append(b)}
+ for(const [txt,delta] of [["↑",-1],["↓",1]]){const b=document.createElement("button");b.type="button";b.textContent=txt;b.title=delta<0?"Move up":"Move down";b.onclick=()=>{const n=item[delta<0?"previousElementSibling":"nextElementSibling"];if(n)box.insertBefore(item,delta<0?n:n.nextElementSibling);syncColumnTools()};move.append(b)}
  item.append(handle,check,label,move);
  item.addEventListener("dragstart",e=>{item.classList.add("dragging");e.dataTransfer.setData("text/plain",name)});
  item.addEventListener("dragend",()=>{item.classList.remove("dragging");syncColumnTools()});
