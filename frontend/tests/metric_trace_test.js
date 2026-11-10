@@ -34,6 +34,13 @@ assert.equal(n.pctOf(10,0),null);assert.equal(n.pctOf(10,null),null);assert.equa
  const expectedCustomerProfit=expectedCustomerIndices.reduce((sum,i)=>sum+n.pinc[i]-n.pexp[i],0);
  assert.equal(explorerOpened.metric,'profit.gp');assert.deepEqual(Array.from(explorerOpened.indices),expectedCustomerIndices);assert.equal(explorerOpened.displayed_value,expectedCustomerProfit);
  w.MetricTrace.openWithRequest=openBeforeExplorer;
+ n.setGroup('profit');n.S.page='p_billing';n.S.sel={};n.renderAll();
+ const monthlyBars=[...w.document.querySelectorAll('#page [data-evidence-metric="ops.shipments"]')];
+ assert.ok(monthlyBars.length>0,'monthly shipment bars expose keyboard-accessible evidence actions');
+ let billingOpened=null;const openBeforeBilling=w.MetricTrace.openWithRequest;w.MetricTrace.openWithRequest=q=>{billingOpened=q;};
+ monthlyBars[0].dispatchEvent(new w.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
+ assert.equal(billingOpened.metric,'ops.shipments');assert.ok(billingOpened.indices.length>0);assert.equal(billingOpened.displayed_value,billingOpened.indices.length);assert.equal(billingOpened.context.date_basis,'Shipment Date');
+ w.MetricTrace.openWithRequest=openBeforeBilling;
  n.setGroup('profit');n.S.page='p_status';n.S.sel={};n.renderAll();
  const statusCard=[...w.document.querySelectorAll('#page article.card')].find(el=>el.querySelector('h2')?.textContent.trim()==='Profit data status');
  const matchCard=[...w.document.querySelectorAll('#page article.card')].find(el=>el.querySelector('h2')?.textContent.trim()==='Matched to the shipment register');
