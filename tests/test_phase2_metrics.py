@@ -1,7 +1,7 @@
 """Isolated Phase 2 metric contract tests; no database or network required."""
 import unittest
 from datetime import date, timedelta
-from app.phase2_metrics import gp_bridge, customer_activity
+from app.phase2_metrics import gp_bridge, customer_activity, is_named_customer
 
 
 class TestGPBridge(unittest.TestCase):
@@ -48,6 +48,16 @@ class TestActivity(unittest.TestCase):
         r = customer_activity([today + timedelta(days=1)], today)
         self.assertEqual(r["status"], "insufficient_history")
         self.assertIsNone(r["days_since_last"])
+
+
+class TestCustomerLabels(unittest.TestCase):
+    def test_blank_customer_buckets_are_not_named_customers(self):
+        for value in (None, "", "   ", "(blank)", "  (BLANK)  "):
+            self.assertFalse(is_named_customer(value))
+
+    def test_real_customer_names_are_preserved(self):
+        self.assertTrue(is_named_customer("Acme Logistics"))
+        self.assertTrue(is_named_customer("(Blank) Shipping Co"))
 
 
 if __name__ == "__main__":
