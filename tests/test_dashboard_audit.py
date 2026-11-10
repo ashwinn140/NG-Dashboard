@@ -76,8 +76,8 @@ class DashboardAuditTests(unittest.TestCase):
 
     def test_scorecard_evidence_uses_the_user_data_source(self):
         source=(Path(__file__).resolve().parents[1]/'frontend/app_prod.js').read_text()
-        self.assertIn("metric:FIN?'profit.gp':'ops.shipments'",source)
-        self.assertIn("dimension:FIN?key:null",source)
+        self.assertIn("metric:D.user&&D.user.finance?'profit.gp':'ops.shipments'",source)
+        self.assertIn("dimension:D.user&&D.user.finance?key:null",source)
 
     def test_production_build_reproduces_served_asset(self):
         root=Path(__file__).resolve().parents[1]
