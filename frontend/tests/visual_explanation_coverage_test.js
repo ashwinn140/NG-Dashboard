@@ -37,6 +37,11 @@ explanation('profit','p_compare','Variance: change in value and percentage','abs
 explanation('profit','p_status','Profit data status','simple Job Profit Analysis Report');
 explanation('profit','p_status','Matched to the shipment register','unique match');
 
+// Operations scorecard has no finance fields, so its evidence must use shipment-register records.
+n.setGroup('ops');n.S.page='s_score';n.S.sel={};n.renderAll();
+const opsScorecard=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()==='All rows');
+assert.ok(opsScorecard,'Operations scorecard All rows table exists');
+assert.equal(opsScorecard.querySelector('.mt-info')?.dataset.traceMetric,'ops.shipments','Operations scorecard exposes shipment-register calculation and records');
 // Full Operations overview evidence coverage: ageing, owner worklist and KPI tiles.
 n.setGroup('ops');n.S.page='ops';n.S.sel={};n.renderAll();
 let openedEvidence=null;w.MetricTrace={createRequest:(metric,label,patch={})=>({metric,indices:[],previous_indices:[],compare:false,context:{},...patch,context:{...(patch.context||{})}}),openWithRequest:q=>{openedEvidence=q;}};
