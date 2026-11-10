@@ -310,6 +310,7 @@ from datetime import date as _date_cls, timedelta as _timedelta
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
+from openpyxl.chart import BarChart, LineChart, Reference
 
 EPOCH = _date_cls(1970, 1, 1)
 MAX_EXPORT_ROWS = 100_000
@@ -484,6 +485,134 @@ def build_report_rows(D, definition, start, end):
     return _sort_rows(rows, definition)
 
 
+def _add_visuals_sheet(wb, rows, report_id, start, end):
+    """Add chart summaries plus the exact chart data as an accessible table."""
+    ws = wb.create_sheet("Visuals")
+    ws.sheet_view.showGridLines = False
+    ws.append(["Report visuals"])
+    ws["A1"].font = Font(bold=True, size=16, color="FFFFFF")
+    ws["A1"].fill = PatternFill("solid", fgColor="173142")
+    ws.append(["Charts summarize the same filtered rows shown on the Report sheet."])
+    if not rows:
+        ws.append(["No records in the selected period and filters."])
+        return
+
+    if report_id == "job_profitability":
+        by_customer = {}
+        by_month = {}
+        for row in rows:
+            customer = str(row.get("customer") or "(Unspecified)")
+            group = by_customer.setdefault(customer, {"jobs": 0, "income": 0.0, "expense": 0.0, "profit": 0.0})
+            group["jobs"] += 1
+            for key in ("income", "expense", "profit"):
+                group[key] += float(row.get(key) or 0)
+            day = row.get("job_date")
+            if day:
+                month = day.strftime("%Y-%m")
+                m = by_month.setdefault(month, {"income": 0.0, "expense": 0.0, "profit": 0.0})
+                for key in ("income", "expense", "profit"):
+                    m[key] += float(row.get(key) or 0)
+        ws.append([])
+        ws.append(["Top customers by recorded gross profit", "Jobs", "Income (INR)", "Expense (INR)", "Profit (INR)"])
+        top = sorted(by_customer.items(), key=lambda item: item[1]["profit"], reverse=True)[:12]
+        for name, values in top:
+            ws.append([safe_excel_text(name), values["jobs"], values["income"], values["expense"], values["profit"]])
+        if top:
+            chart = BarChart()
+            chart.type = "bar"
+            chart.style = 10
+            chart.title = "Top customers by recorded gross profit"
+            chart.y_axis.title = "Customer"
+            chart.x_axis.title = "INR"
+            chart.height, chart.width = 8, 16
+            chart.add_data(Reference(ws, min_col=5, min_row=4, max_row=3 + len(top)), titles_from_data=False)
+            chart.set_categories(Reference(ws, min_col=1, min_row=4, max_row=3 + len(top)))
+            ws.add_chart(chart, "G3")
+        start_row = max(ws.max_row + 3, 20)
+        ws.cell(start_row, 1, "Monthly profitability trend")
+        ws.cell(start_row + 1, 1, "Month")
+        for j, key in enumerate(("income", "expense", "profit"), 2):
+            ws.cell(start_row + 1, j, key.title() + " (INR)")
+        for i, (month, values) in enumerate(sorted(by_month.items()), start_row + 2):
+            ws.cell(i, 1, month)
+            for j, key in enumerate(("income", "expense", "profit"), 2):
+                ws.cell(i, j, values[key])
+        if by_month:
+            chart = LineChart()
+            chart.title = "Monthly income, expense and gross profit"
+            chart.y_axis.title = "INR"
+            chart.x_axis.title = "Job month"
+            chart.height, chart.width = 8, 16
+            chart.add_data(Reference(ws, min_col=2, max_col=4, min_row=start_row + 1, max_row=start_row + 1 + len(by_month)), titles_from_data=True)
+            chart.set_categories(Reference(ws, min_col=1, min_row=start_row + 2, max_row=start_row + 1 + len(by_month)))
+            ws.add_chart(chart, "G20")
+    else:
+        by_customer = {}
+        by_lob = {}
+        by_month = {}
+        for row in rows:
+            customer = str(row.get("customer") or "(Unspecified)")
+            by_customer[customer] = by_customer.get(customer, 0) + 1
+            lob = str(row.get("lob") or "(Unspecified)")
+            by_lob[lob] = by_lob.get(lob, 0) + 1
+            day = row.get("shipment_date")
+            if day:
+                month = day.strftime("%Y-%m")
+                by_month[month] = by_month.get(month, 0) + 1
+        ws.append([])
+        ws.append(["Top customers by shipments", "Shipments"])
+        top = sorted(by_customer.items(), key=lambda item: item[1], reverse=True)[:12]
+        for name, count in top:
+            ws.append([safe_excel_text(name), count])
+        if top:
+            chart = BarChart()
+            chart.type = "bar"
+            chart.style = 10
+            chart.title = "Top customers by shipments"
+            chart.y_axis.title = "Customer"
+            chart.x_axis.title = "Shipments"
+            chart.height, chart.width = 8, 16
+            chart.add_data(Reference(ws, min_col=2, min_row=4, max_row=3 + len(top)), titles_from_data=False)
+            chart.set_categories(Reference(ws, min_col=1, min_row=4, max_row=3 + len(top)))
+            ws.add_chart(chart, "E3")
+        start_row = max(ws.max_row + 3, 20)
+        ws.cell(start_row, 1, "Shipments by line of business")
+        ws.cell(start_row + 1, 1, "LOB")
+        ws.cell(start_row + 1, 2, "Shipments")
+        for i, (lob, count) in enumerate(sorted(by_lob.items()), start_row + 2):
+            ws.cell(i, 1, lob)
+            ws.cell(i, 2, count)
+        if by_lob:
+            chart = BarChart()
+            chart.title = "Shipments by line of business"
+            chart.y_axis.title = "Shipments"
+            chart.height, chart.width = 8, 12
+            chart.add_data(Reference(ws, min_col=2, min_row=start_row + 1, max_row=start_row + 1 + len(by_lob)), titles_from_data=True)
+            chart.set_categories(Reference(ws, min_col=1, min_row=start_row + 2, max_row=start_row + 1 + len(by_lob)))
+            ws.add_chart(chart, "E20")
+        trend_row = max(ws.max_row + 3, 38)
+        ws.cell(trend_row, 1, "Monthly shipment trend")
+        ws.cell(trend_row + 1, 1, "Month")
+        ws.cell(trend_row + 1, 2, "Shipments")
+        for i, (month, count) in enumerate(sorted(by_month.items()), trend_row + 2):
+            ws.cell(i, 1, month)
+            ws.cell(i, 2, count)
+        if by_month:
+            chart = LineChart()
+            chart.title = "Monthly shipment trend"
+            chart.y_axis.title = "Shipments"
+            chart.x_axis.title = "Shipment month"
+            chart.height, chart.width = 8, 12
+            chart.add_data(Reference(ws, min_col=2, min_row=trend_row + 1, max_row=trend_row + 1 + len(by_month)), titles_from_data=True)
+            chart.set_categories(Reference(ws, min_col=1, min_row=trend_row + 2, max_row=trend_row + 1 + len(by_month)))
+            ws.add_chart(chart, "R3")
+    for row_cells in ws.iter_rows():
+        for cell in row_cells:
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
+    for column in ("A", "B", "C", "D", "E"):
+        ws.column_dimensions[column].width = 24
+
+
 def build_report_workbook(D, definition, start, end, freshness, generated_at=None):
     """Create a formatted, bounded XLSX attachment. No truncation is permitted."""
     from datetime import datetime as _datetime
@@ -550,6 +679,7 @@ def build_report_workbook(D, definition, start, end, freshness, generated_at=Non
     for row_idx in range(7, ws.max_row + 1):
         for cell in ws[row_idx]:
             cell.alignment = Alignment(vertical="top")
+    _add_visuals_sheet(wb, rows, definition["report_id"], start, end)
     output = BytesIO()
     wb.save(output)
     content = output.getvalue()
