@@ -50,6 +50,11 @@ for(const item of requiredEvidence){
   (errors['required-evidence']=errors['required-evidence']||[]).push('Missing Calculation & records action: '+item.label);
  }
 }
+for(const role of ['ops','finance']){
+ if(!rows.some(r=>r.role===role&&r.group==='summary'&&r.page==='s_owner'&&r.title.startsWith('Variance:')&&r.has_reconciliation_action)){
+  (errors['required-evidence']=errors['required-evidence']||[]).push('Missing summary variance evidence action for '+role);
+ }
+}
 fs.mkdirSync('audit',{recursive:true});
 fs.writeFileSync('audit/runtime_visual_inventory.json',JSON.stringify({rows,errors,registered_pages_not_visited:[...unvisited]},null,1));
 const esc=v=>'"'+String(v).replace(/"/g,'""')+'"';const cols=['role','group','page','idx','kind','title','tables','charts','has_explanation','calc_verified','has_reconciliation_action','reconciliation_metric','reconciliation_dimension','what','how'];
