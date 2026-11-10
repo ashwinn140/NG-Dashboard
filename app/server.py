@@ -322,14 +322,14 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             raise HTTPException(404, "Unknown metric.")
         return metric.public_dict()
 
-    async def metric_evidence(request, user):
+    async def metric_evidence(request, user, include_operations_links=True):
         raw = await request.body()
         if len(raw) > 8_000_000: raise HTTPException(413, "Selection too large.")
         try:
             body = json.loads(raw)
             if not isinstance(body, dict): raise ValueError("Invalid metric request.")
             data = json.loads(gzip.decompress(store.dataset_for(user)))
-            return MX.execute(data, body, MD)
+            return MX.execute(data, body, MD, include_operations_links=include_operations_links)
         except PermissionError as e: raise HTTPException(403, str(e))
         except (ValueError, TypeError, KeyError) as e: raise HTTPException(400, str(e))
 
@@ -341,7 +341,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
     async def metric_activity_api(request: Request, user: dict = Depends(unsafe)):
         request_started = time.perf_counter()
         evidence_started = request_started
-        evidence = await metric_evidence(request, user)
+        evidence = await metric_evidence(request, user, include_operations_links=False)
         evidence_ms = (time.perf_counter() - evidence_started) * 1000
         if evidence["metric"]["id"] != "ops.shipments":
             raise HTTPException(400, "Activity requires operational shipment evidence.")
