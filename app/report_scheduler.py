@@ -415,11 +415,11 @@ def _shipment_rows(D, definition, start, end):
             "unit_5": _column(D, "x_unit5", i), "unit_6": _column(D, "x_unit6", i),
             "unit_7": _column(D, "x_unit7", i),
             "booking_thru": _column(D, "x_bookingthru", i),
-            "invoice_first_date": _day(D.get("inv1", [])[i]),
-            "invoice_count": int(D.get("invN", [])[i] or 0),
-            "billing_reference_status": ("Reference present" if int(D.get("invN", [])[i] or 0) > 0 else "No reference recorded"),
-            "buy_rate": (float(D.get("rbuy", [])[i]) if D.get("user", {}).get("finance") and D.get("rbf", [])[i] in (1, 2) else None),
-            "sell_rate": (float(D.get("rsell", [])[i]) if D.get("user", {}).get("finance") and D.get("rsf", [])[i] in (1, 2) else None),
+            "invoice_first_date": _day(D.get("inv1", [None] * len(D["no"]))[i]),
+            "invoice_count": int(D.get("invN", [0] * len(D["no"]))[i] or 0),
+            "billing_reference_status": ("Reference present" if int(D.get("invN", [0] * len(D["no"]))[i] or 0) > 0 else "No reference recorded"),
+            "buy_rate": (float(D.get("rbuy", [0] * len(D["no"]))[i]) if D.get("user", {}).get("finance") and D.get("rbf", [0] * len(D["no"]))[i] in (1, 2) else None),
+            "sell_rate": (float(D.get("rsell", [0] * len(D["no"]))[i]) if D.get("user", {}).get("finance") and D.get("rsf", [0] * len(D["no"]))[i] in (1, 2) else None),
             "operations_locked_on": _day(D["ops"][i]),
             "financials_locked_on": _day(D["fin"][i]),
             "gross_weight_t": float(D["gross"][i] or 0),
@@ -491,7 +491,7 @@ def _job_rows(D, definition, start, end):
             "salesperson": _column(D, "jp_sales_person", i, True),
             "trade_lane": _column(D, "x_tradelanename", i, True),
             "intercompany": _column(D, "p_ic", i, True),
-            "transaction_date": _day(P.get("td", [])[i]),
+            "transaction_date": _day(P.get("td", [-1] * len(P.get("co", [])))[i]),
             "income": income, "expense": expense, "profit": profit,
             "margin": profit / income if income > 0 else None,
         }
@@ -678,7 +678,7 @@ def build_report_workbook(D, definition, start, end, freshness, generated_at=Non
     ws.sheet_view.showGridLines = False
     ws.append([report["title"]])
     ws.append(["Companies", ", ".join(definition["companies"]), "LOBs", ", ".join(definition["lobs"])])
-    ws.append(["Period", f"{start.isoformat()} to {(end - _timedelta(days=1)).isoformat()}", "Date basis", definition["date_basis"]])
+    ws.append(["Period", f"{start.isoformat()} to {(end - _timedelta(days=1)).isoformat()}", "Date basis", definition.get("date_basis") or report.get("date_basis", "Report date")])
     ws.append(["Filters", json.dumps(definition["filters"], ensure_ascii=False, sort_keys=True)])
     ws.append(["Freshness", json.dumps(freshness, ensure_ascii=False, sort_keys=True), "Generated UTC", generated_at.astimezone(UTC).isoformat(timespec="seconds")])
     ws.append([columns_name for columns_name in columns])
@@ -692,7 +692,7 @@ def build_report_workbook(D, definition, start, end, freshness, generated_at=Non
                        "shipments", "air_shipments", "ocean_shipments", "jobs", "air_chargeable_weight_t", "ocean_teus", "invoice_count"):
                 totals.append(sum(float(r.get(col) or 0) for r in rows))
             elif col in ("buy_rate", "sell_rate"):
-                cell.number_format = "#,##0.000"
+                totals.append("")  # Rates are unit values, not additive totals.
             elif col == "margin":
                 inc = sum(float(r.get("income") or 0) for r in rows)
                 gp = sum(float(r.get("profit") or 0) for r in rows)
@@ -724,6 +724,8 @@ def build_report_workbook(D, definition, start, end, freshness, generated_at=Non
                 cell.number_format = "dd-mmm-yyyy"
             elif col in ("income", "expense", "profit"):
                 cell.number_format = '"₹"#,##0.00;[Red]-"₹"#,##0.00'
+            elif col in ("buy_rate", "sell_rate"):
+                cell.number_format = "#,##0.000"
             elif col == "margin":
                 cell.number_format = "0.0%"
             elif col in ("gross_weight_t", "chargeable_weight_t", "air_chargeable_weight_t", "teus", "ocean_teus", "volume_cbm"):
