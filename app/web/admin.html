@@ -68,6 +68,8 @@ body{min-height:100vh}
 .admin-sidebar nav button:hover:not([aria-selected=true]){background:var(--bg)}
 .admin-sidebar nav button::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.45;flex-shrink:0}
 .admin-sidebar nav button[aria-selected=true]::before{opacity:1}
+.admin-scheduler-link{display:flex;align-items:center;gap:.75rem;margin:.65rem .15rem;padding:.75rem .85rem;border:1px solid var(--line);border-radius:10px;color:var(--fg);text-decoration:none;font-weight:650;font-size:.88rem;background:color-mix(in srgb,var(--accent) 5%,var(--panel))}
+.admin-scheduler-link:hover{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--panel))}
 .admin-main{min-width:0}
 .admin-main header{height:var(--header-height);padding:.75rem clamp(1rem,2vw,2rem);margin:0}
 .admin-main main{max-width:none;width:100%;padding:1rem clamp(1rem,2vw,2rem) 3rem}
@@ -130,7 +132,8 @@ body.ux-dashboard.ux-rail-collapsed .ux-rail .ux-label,body.ux-dashboard.ux-rail
 @media(prefers-reduced-motion:reduce){.ux-rail{transition:none}}
 
 </style></head><body>
-<div id="appLoader" role="progressbar" aria-label="Loading application data"></div><div id="sidebarBackdrop" aria-hidden="true"></div><div class="admin-shell"><aside class="admin-sidebar" id="sidebar" aria-label="Administration navigation"><div class="admin-brand"><span class="admin-brand-mark">NG</span><span class="admin-brand-text">Performance Hub</span></div><nav id="nav" role="tablist" aria-label="Administration sections"></nav></aside><div class="admin-main"><header><button class="btn" id="sidebarToggle" aria-label="Toggle navigation" aria-expanded="true" aria-controls="sidebar">☰</button><h1>{{PRODUCT}} · Administration</h1><span id="who" class="muted"></span><a href="/">Dashboard</a><button class="btn" id="out">Sign out</button></header><main id="main" aria-live="polite"></main></div></div><div id="toast" role="status"></div>
+<div id="appLoader" role="progressbar" aria-label="Loading application data"></div><div id="sidebarBackdrop" aria-hidden="true"></div><div class="admin-shell"><aside class="admin-sidebar" id="sidebar" aria-label="Administration navigation"><div class="admin-brand"><span class="admin-brand-mark">NG</span><span class="admin-brand-text">Performance Hub</span></div><nav id="nav" role="tablist" aria-label="Administration sections"></nav>
+<a class="admin-scheduler-link" href="/reports/scheduled">✉ <span>Scheduled email reports</span></a></aside><div class="admin-main"><header><button class="btn" id="sidebarToggle" aria-label="Toggle navigation" aria-expanded="true" aria-controls="sidebar">☰</button><h1>{{PRODUCT}} · Administration</h1><span id="who" class="muted"></span><a href="/">Dashboard</a><button class="btn" id="out">Sign out</button></header><main id="main" aria-live="polite"></main></div></div><div id="toast" role="status"></div>
 <script>
 let CSRF='',ME=null;let pendingRequests=0;const setBusy=()=>document.getElementById('appLoader')?.classList.toggle('active',pendingRequests>0);
 const $=s=>document.querySelector(s);
