@@ -27,7 +27,7 @@ for(const role of ['admin','ops','finance']){
     const isKpi=el.classList.contains('kpi');
     const title=(isKpi?el.querySelector('.kl'):el.querySelector('h2'))?.textContent.trim()||'(untitled)';
     const ex=el.querySelector('details.business-explanation');
-    const action=[...el.querySelectorAll('button')].find(b=>b.textContent.trim()==='Calculation & records');
+    const action=[...el.querySelectorAll('button,a')].find(b=>b.textContent.trim()==='Calculation & records');
     const ps=ex?[...ex.querySelectorAll('p')]:[];
     const what=ps.find(p=>p.textContent.startsWith('What this means'))?.textContent.replace('What this means: ','')||'';
     const how=ps.find(p=>p.textContent.startsWith('How it is calculated'))?.textContent.replace('How it is calculated: ','')||'';
