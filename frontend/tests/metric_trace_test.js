@@ -8,4 +8,16 @@ const dom=new JSDOM(html,{url:'http://metric.test',runScripts:'dangerously',pret
  for(let i=0;i<n.NP;i++){n.pinc[i]=100;n.pexp[i]=100;}n.renderAll();assert.equal(shareText(),'–','zero net GP must not be rendered as a zero or percentage share');assert.equal(n.traceSelection('profit.biggest_customer','Biggest customer').displayed_value,null);
  for(let i=0;i<n.NP;i++){n.pinc[i]=100;n.pexp[i]=110;}n.renderAll();assert.equal(shareText(),'–','negative net GP must not produce a positive-looking concentration share');assert.equal(n.traceSelection('profit.biggest_customer','Biggest customer').displayed_value,null);
  for(let i=0;i<n.NP;i++){n.pinc[i]=100;n.pexp[i]=90;}n.renderAll();assert.notEqual(shareText(),'–','positive net GP retains a calculable share');
+ n.setGroup('profit');n.S.page='p_status';n.S.sel={};n.renderAll();
+ const statusCard=[...w.document.querySelectorAll('#page article.card')].find(el=>el.querySelector('h2')?.textContent.trim()==='Profit data status');
+ const matchCard=[...w.document.querySelectorAll('#page article.card')].find(el=>el.querySelector('h2')?.textContent.trim()==='Matched to the shipment register');
+ assert.ok(statusCard&&matchCard,'finance source status and register-match tables render');
+ const statusButtons=[...statusCard.querySelectorAll('tbody button.mt-info')],matchButtons=[...matchCard.querySelectorAll('tbody button.mt-info')];
+ assert.equal(statusButtons.length,D.p.meta.length,'each company source total has a calculation-and-records action');
+ assert.equal(matchButtons.length,D.p.meta.length,'each company register-match summary has a calculation-and-records action');
+ let opened=null;const originalOpen=w.MetricTrace.openWithRequest;w.MetricTrace.openWithRequest=q=>{opened=q;};
+ const meta=D.p.meta[0],companyCode=meta.co==='NG'?0:1,companyIndices=D.p.co.flatMap((co,i)=>co===companyCode?[i]:[]);
+ statusButtons[0].click();assert.equal(opened.metric,'profit.gp');assert.deepEqual(Array.from(opened.indices),companyIndices);assert.equal(opened.displayed_value,meta.income-meta.expense);assert.equal(opened.context.date_basis,'Job Date');
+ opened=null;matchButtons[0].click();assert.equal(opened.metric,'profit.matched_share');assert.deepEqual(Array.from(opened.indices),companyIndices);assert.equal(opened.displayed_value,meta.jobs?meta.matched/meta.jobs:null);
+ w.MetricTrace.openWithRequest=originalOpen;
  n.S.sel={customer:new w.Set([0])};const original=n.COLS.customer.d[0];n.saveView('Stable identity');const saved=n.viewsGet()['Stable identity'];assert.equal(saved.selNames.customer[0],original);assert.equal(saved.version,2);const dict=n.COLS.customer.d.slice();n.COLS.customer.d=[dict[1],dict[0],...dict.slice(2)];n.applyView('Stable identity');assert.ok(n.S.sel.customer.has(1),'saved names rebind after dictionary reordering');n.COLS.customer.d=dict;assert.deepEqual(errors,[]);w.close();console.log('PASS metric trace selection: scoped masks, numeric values, summary/operations/profit and Explorer contexts.');})().catch(e=>{console.error(e);dom.window.close();process.exit(1)});
