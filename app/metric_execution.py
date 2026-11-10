@@ -7,6 +7,9 @@ from openpyxl.styles import Font
 VERSION='3'
 EXCEL_ROW_LIMIT=1048576
 def snapshot_id(dataset):
+ # Store.data_version is advanced after every accepted import, master refresh and
+ # retention mutation. The cached dataset is immutable for that version/scope.
+ # Keep a full-content fallback for standalone and legacy callers.
  cached=dataset.get('_snapshot_id') if isinstance(dataset,dict) else None
  if isinstance(cached,str) and len(cached)==64:return cached
  version=dataset.get('data_version') if isinstance(dataset,dict) else None
