@@ -742,16 +742,16 @@ function coverageCard() {
   const a = asOfDay(), Y = yearOfDay(a), hy = S.def.historyYears, years = []; for (let y = Y - hy + 1; y <= Y; y++) years.push(y);
   const cnt = new Map(); for (let i = 0; i < N; i++) { const k = rep[i] * 10000 + yearOfDay(date[i]); cnt.set(k, (cnt.get(k) || 0) + 1); }
   const warns = [], rows = D.meta.map((m, i) => {
-    const expired = a > isoD(m.range_to);
+    const expired = !m.restricted && a > isoD(m.range_to);
     if (expired) warns.push(COMP[i < 4 ? 0 : 1] + ' ' + REPN[i % 4] + ' ends ' + fDay(isoD(m.range_to)));
-    return h('tr', null, h('td', null, COMP[i < 4 ? 0 : 1]), h('td', null, REPN[i % 4]), years.map((y) => { const n = cnt.get(i * 10000 + y) || 0; return h('td', {class: 'n ' + (n ? '' : 'bad')}, n ? fInt(n) : 'missing'); }), h('td', {class: expired ? 'bad' : ''}, fDay(isoD(m.range_to)) + (expired ? ' (passed)' : '')));
+    return h('tr', null, h('td', null, COMP[i < 4 ? 0 : 1]), h('td', null, REPN[i % 4]), years.map((y) => { const n = cnt.get(i * 10000 + y) || 0; return h('td', {class: 'n ' + (n ? '' : 'bad')}, m.restricted ? 'Restricted' : n ? fInt(n) : 'missing'); }), h('td', {class: expired ? 'bad' : ''}, m.restricted ? 'Restricted' : fDay(isoD(m.range_to)) + (expired ? ' (passed)' : '')));
   });
   return card('History by year', 'Years expected: ' + yearName(years[0]) + ' to ' + yearName(Y) + ', which is this ' + (FYB() ? 'financial year' : 'year') + ' and ' + (hy - 1) + ' before it. The window moves by itself each January, and an admin sets how many years to keep. A year shows “missing” until its reports are loaded.',
     h('div', null, warns.length ? h('p', {class: 'meta', style: 'color:var(--warn)'}, 'The ERP date range has run out for: ' + warns.join('; ') + '. Change the schedule’s date range in the ERP so new shipments keep arriving.') : null,
       h('div', {class: 'scroll'}, h('table', {class: 'tbl'}, h('thead', null, h('tr', null, ['Company', 'Report'].concat(years.map(yearName), ['ERP report covers up to']).map((t, k) => h('th', {class: k >= 2 && k < 2 + years.length ? 'n' : ''}, t)))), h('tbody', null, rows)))), 'full');
 }
 function pageStatus() {
-  const rows = D.meta.map((m, i) => h('tr', null, h('td', null, COMP[m.co === 'NG' ? 0 : 1]), h('td', null, REPN[i % 4]), h('td', {class: 'n'}, fInt(m.rows)), h('td', null, m.from + ' to ' + m.to), h('td', {class: 'n'}, fInt(m.repeated)), h('td', {class: 'n'}, fInt(m.pend)), h('td', {class: 'n'}, fInt(m.finopen)), h('td', {class: 'n'}, m.runs), h('td', null, asOfDay() > isoD(m.range_to) ? h('span', {class: 'pill warn'}, 'Range ended') : h('span', {class: 'pill ok'}, 'Current'))));
+  const rows = D.meta.map((m, i) => h('tr', null, h('td', null, COMP[m.co === 'NG' ? 0 : 1]), h('td', null, REPN[i % 4]), h('td', {class: 'n'}, m.restricted ? '–' : fInt(m.rows)), h('td', null, m.restricted ? 'Restricted' : m.from + ' to ' + m.to), h('td', {class: 'n'}, m.restricted ? '–' : fInt(m.repeated)), h('td', {class: 'n'}, m.restricted ? '–' : fInt(m.pend)), h('td', {class: 'n'}, m.restricted ? '–' : fInt(m.finopen)), h('td', {class: 'n'}, m.restricted ? '–' : m.runs), h('td', null, m.restricted ? h('span', {class: 'pill'}, 'Restricted') : asOfDay() > isoD(m.range_to) ? h('span', {class: 'pill warn'}, 'Range ended') : h('span', {class: 'pill ok'}, 'Current'))));
   return h('div', {class: 'grid'}, coverageCard(), card('Data status', 'What each report contains in this review file. In the live system this shows the last successful import time and any import errors per report.', h('div', {class: 'scroll'}, h('table', {class: 'tbl'},
     h('thead', null, h('tr', null, ['Company', 'Report', 'Rows', 'Shipment dates', 'Repeated numbers', 'Waiting ops lock', 'Financials open', 'Runs loaded', 'Status'].map((t, i) => h('th', {class: i > 1 && (i < 4 || i > 6) && i !== 3 && i !== 8 ? 'n' : ''}, t)))), h('tbody', null, rows))), 'full'),
     card('How the data is read', null, h('ul', {class: 'notes'},
