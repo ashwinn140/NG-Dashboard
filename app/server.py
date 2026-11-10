@@ -399,6 +399,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
 
         companies = sorted({company for company, _ in groups})
         customer_keys = set(groups)
+        normalized_names = sorted({customer for _, customer in groups})
         activity_dates = {key: {lob: [] for lob in visible_lobs} for key in groups}
         latest_jobs = {key: [] for key in groups}
         promoted = set()
@@ -409,6 +410,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             ).where(
                 shipments.c.company.in_(companies),
                 shipments.c.report_type.in_(visible_lobs),
+                normalize_customer_sql(shipments.c.customer).in_(normalized_names),
                 shipments.c.to_import.is_(None),
                 shipments.c.shipment_date.is_not(None),
                 shipments.c.shipment_date <= as_of,
@@ -431,7 +433,6 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             )).mappings().all()
             promoted.update((row["company"], row["report_type"]) for row in import_rows)
 
-            normalized_names = sorted({customer for _, customer in groups})
             for offset in range(0, len(normalized_names), 500):
                 name_batch = normalized_names[offset:offset + 500]
                 jpr_rows = conn.execute(select(
