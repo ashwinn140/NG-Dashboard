@@ -74,4 +74,16 @@ async function boot(mutate){
    check('unbilled evidence carries exact source indices',q?.indices?.length===Number((row.children[3].textContent||'').replace(/,/g,'')),{indices:q?.indices?.length,displayed:row.children[3].textContent});
   }dom.window.close()}
 
+
+ // Monthly billing chart exposes independent, date-basis-correct source evidence.
+ {const {dom,w,d,ng}=await boot(data=>{data.invN[0]=1;data.inv1[0]=data.date[0];});ng.S.sel={};ng.S.rel=null;ng.S.from=null;ng.S.to=null;ng.setGroup('profit');ng.S.page='p_billing';ng.renderAll();
+  const card=[...d.querySelectorAll('#page article')].find(e=>e.querySelector('h2')?.textContent.trim()==='Shipments against invoices, by month');
+  const actions=[...(card?.querySelectorAll('.mt-info')||[])];
+  const shipments=actions.find(b=>b.textContent.trim()==='Calculation & records · Shipments');
+  const invoices=actions.find(b=>b.textContent.trim()==='Calculation & records · Invoices');
+  check('monthly billing chart exposes separate shipment and invoice evidence actions',!!shipments&&!!invoices,actions.map(b=>b.textContent));
+  if(shipments){shipments.dispatchEvent(new w.MouseEvent('click',{bubbles:true,cancelable:true}));const q=w.__traceRequests.at(-1);check('shipment chart evidence uses shipment date and current source rows',q?.metric==='ops.shipments'&&q?.compare===false&&q?.indices?.length>0&&q?.context?.date_basis==='Shipment Date',q);}
+  if(invoices){invoices.dispatchEvent(new w.MouseEvent('click',{bubbles:true,cancelable:true}));const q=w.__traceRequests.at(-1);check('invoice chart evidence uses first parsed invoice date',q?.metric==='ops.invoiced_count'&&q?.compare===false&&q?.indices?.length>0&&q?.context?.date_basis==='First parsed invoice date',q);}
+  dom.window.close()}
+
  console.log(fails?'FAILED '+fails:'ALL PASSED');process.exit(fails?1:0)})().catch(e=>{console.error(e);process.exit(1)});
