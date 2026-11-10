@@ -118,7 +118,7 @@ class MetricExecutionTests(unittest.TestCase):
   self.assertEqual(X.snapshot_id(d),digest)
 
  def test_rate_usable_evidence_contains_only_numerator_rows_but_keeps_full_denominator(self):
-  d=self.fixture();d['rep']=[0,0];d['ckg']=[100,200];d['rbuy']=[2,0];d['rsell']=[3,0];d['rbf']=[1,0];d['rsf']=[1,0]
+  d=self.fixture();d['ckg']=[100,200];d['rbuy']=[2,0];d['rsell']=[3,0];d['rbf']=[1,0];d['rsf']=[1,0]
   r=X.execute(d,dict(metric='ops.rate_usable',indices=[0,1],context={'rate_mode':'clean','rate_max':1000}),M)
   self.assertAlmostEqual(r['current']['value'],0.5)
   self.assertEqual(r['current']['numerator'],1)
