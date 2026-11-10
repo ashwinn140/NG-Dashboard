@@ -10,6 +10,12 @@ from datetime import date
 from statistics import median
 
 
+def is_named_customer(value: object) -> bool:
+    """Return False for empty customer labels and the dashboard's blank bucket."""
+    name = " ".join(str(value or "").split())
+    return bool(name) and name.casefold() != "(blank)"
+
+
 @dataclass(frozen=True)
 class GPBridge:
     previous_gp: float | None
