@@ -6,7 +6,7 @@ const check=(l,ok,d)=>{console.log((ok?'PASS ':'FAIL ')+l,ok?'':JSON.stringify(d
 async function boot(mutate){
  const data=JSON.parse(fs.readFileSync('/tmp/ng-fixture-admin.json','utf8'));if(mutate)mutate(data);
  const vc=new VirtualConsole();vc.on('jsdomError',()=>{});
- const dom=new JSDOM(html,{url:'http://audit.test/',runScripts:'dangerously',pretendToBeVisual:true,virtualConsole:vc,beforeParse(w){w.SVGElement.prototype.getComputedTextLength=()=>30;w.Blob=global.Blob;w.URL.createObjectURL=()=>'blob:x';w.__recentJobsCalls=0;w.HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','')};w.HTMLDialogElement.prototype.close=function(){this.removeAttribute('open');this.dispatchEvent(new w.Event('close'))};w.fetch=async(url)=>{if(String(url).includes('/api/customers/recent-jobs')){w.__recentJobsCalls++;return {ok:true,status:200,json:async()=>({histories:[{customer:'Fixture customer',jobs:[5,4,3,2,1].map(n=>({company:'NG',job_no:'JOB-'+n,job_date:'2026-01-0'+n,lob:'FFWD AIR EXP',job_owner:'Repeated Owner',owner_status:'available'}))}]})};}return {ok:true,status:200,json:async()=>data,text:async()=>JSON.stringify(data),headers:{get:()=>null}};};}});
+ const dom=new JSDOM(html,{url:'http://audit.test/',runScripts:'dangerously',pretendToBeVisual:true,virtualConsole:vc,beforeParse(w){w.SVGElement.prototype.getComputedTextLength=()=>30;w.Blob=global.Blob;w.URL.createObjectURL=()=>'blob:x';w.__recentJobsCalls=0;w.__traceRequests=[];w.MetricTrace={createRequest:(metric,label,patch={})=>({metric,label,indices:[],previous_indices:[],compare:true,context:{filters:{},...(patch.context||{})},...patch}),openWithRequest:q=>w.__traceRequests.push(q)};w.HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','')};w.HTMLDialogElement.prototype.close=function(){this.removeAttribute('open');this.dispatchEvent(new w.Event('close'))};w.fetch=async(url)=>{if(String(url).includes('/api/customers/recent-jobs')){w.__recentJobsCalls++;return {ok:true,status:200,json:async()=>({histories:[{customer:'Fixture customer',jobs:[5,4,3,2,1].map(n=>({company:'NG',job_no:'JOB-'+n,job_date:'2026-01-0'+n,lob:'FFWD AIR EXP',job_owner:'Repeated Owner',owner_status:'available'}))}]})};}return {ok:true,status:200,json:async()=>data,text:async()=>JSON.stringify(data),headers:{get:()=>null}};};}});
  const w=dom.window;for(let i=0;i<60&&!w.NG;i++)await sleep(100);await sleep(200);return {dom,w,d:w.document,ng:w.NG,data}}
 (async()=>{
  // 1) lanes: with more than 1,000 destination ports, origin 0 -> dest 1000 and origin 1 -> dest 0 are different lanes
@@ -59,5 +59,19 @@ async function boot(mutate){
   check('empty filter search keeps its meaningful empty state',d.querySelector('#ml').textContent.includes('No matching values.'));
   ng.openMenu('__add',anchor);
   check('add-filter menu has no literal null placeholder',!stray().includes('null'),stray());dom.window.close()}
+
+
+ // Billing evidence must open the exact locked/uninvoiced shipment subset.
+ {const {dom,w,d,ng}=await boot();ng.S.sel={};ng.S.rel=null;ng.S.from=null;ng.S.to=null;ng.setGroup('profit');ng.S.page='p_billing';ng.S.bl.dim='branch';ng.renderAll();
+  const card=[...d.querySelectorAll('#page article')].find(e=>e.querySelector('h2')?.textContent.trim()==='Where billing is slow');
+  check('billing worklist exposes Calculation & records',!!card&&!!card.querySelector('.mt-info'));
+  const row=[...(card?.querySelectorAll('tbody tr')||[])].find(r=>Number((r.children[3]?.textContent||'').replace(/,/g,''))>0);
+  const action=[...(row?.querySelectorAll('button')||[])].find(b=>b.textContent.trim()==='Unbilled');
+  check('billing worklist exposes an exact Unbilled drilldown',!!action);
+  if(action){action.dispatchEvent(new w.MouseEvent('click',{bubbles:true,cancelable:true}));const q=w.__traceRequests.at(-1);
+   check('unbilled evidence uses the locked-no-invoice metric',q?.metric==='ops.locked_no_invoice',q);
+   check('unbilled evidence excludes comparison period',q?.compare===false&&q?.previous_indices?.length===0,q);
+   check('unbilled evidence carries exact source indices',q?.indices?.length===Number((row.children[3].textContent||'').replace(/,/g,'')),{indices:q?.indices?.length,displayed:row.children[3].textContent});
+  }dom.window.close()}
 
  console.log(fails?'FAILED '+fails:'ALL PASSED');process.exit(fails?1:0)})().catch(e=>{console.error(e);process.exit(1)});
