@@ -1,5 +1,14 @@
 name: Metric traceability checks
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'app/**'
+      - 'frontend/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - '.github/workflows/metric-traceability.yml'
   pull_request:
     paths:
       - 'app/**'
