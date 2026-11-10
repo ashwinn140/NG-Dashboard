@@ -792,15 +792,18 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             ).where(
                 shipments.c.to_import.is_(None),
                 shipments.c.report_type.in_(("AE", "AI", "OE", "OI"))
-            )).mappings().all()
+            )).mappings().yield_per(5000)
             job_rows = c.execute(select(
                 profit_lines.c.company, profit_lines.c.job_no, profit_lines.c.job_date,
                 profit_lines.c.lob, profit_lines.c.extra
-            ).where(*J.current_jobs())).mappings().all()
+            ).where(*J.current_jobs())).mappings().yield_per(5000)
+            # Consume the large row streams while the connection is open. The
+            # quality helper keeps only compact match indexes and job identities.
+            quality = job_history_data_quality(register_rows, job_rows)
         return {
             "report_fields": report_field_coverage(rows),
             "job_history_fields": job_history_field_coverage(rows),
-            "job_history_quality": job_history_data_quality(register_rows, job_rows),
+            "job_history_quality": quality,
             "note": "Read-only header and aggregate quality checks. No job, customer or owner names are returned. Header presence and nonblank owner coverage do not prove customer identity or complete all-time history."
         }
 
