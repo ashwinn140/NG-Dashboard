@@ -34,7 +34,13 @@ def records(D,source,indices):
   co=p['co'][i] if fin else int(D['rep'][i]>=4);lob=value(D,'p_lob',i,True) if fin else D['reps'][D['rep'][i]][1]
   r=dict(source_index=i,company=['NG','NCS'][co],lob=lob,job=value(D,'p_job',i,True) if fin else D['no'][i],date=iso(p['jd'][i] if fin else D['date'][i]))
   r.update({k:value(D,k,i,fin) for k in ['branch','customer','shipper','consignee','origin_agent','destination_agent','x_salesperson','origin','destination','stage','p_ic']})
-  if fin:r.update(matched_source_index=p['sidx'][i],income=p['income'][i],expense=p['expense'][i],profit=p['income'][i]-p['expense'][i])
+  if fin:
+   si=p['sidx'][i]
+   matched=type(si) is int and 0<=si<len(D.get('no',[]))
+   r.update(matched_source_index=si,jpr_match_status='matched' if matched else 'unmatched',
+            matched_shipment_no=D['no'][si] if matched else '',
+            matched_shipment_date=iso(D['date'][si]) if matched and si<len(D.get('date',[])) else '',
+            income=p['income'][i],expense=p['expense'][i],profit=p['income'][i]-p['expense'][i])
   else:
    links=matched_jpr.get(i,[])
    r.update(shipment_no=D['no'][i],report_index=D['rep'][i],shipment_day=D['date'][i],operations_lock_day=D['ops'][i],financial_lock_day=D['fin'][i],invoice_day=D['inv1'][i],invoice_count=D['invN'][i],first_invoice_date=iso(D['inv1'][i]),operations_lock_date=iso(D['ops'][i]),financial_lock_date=iso(D['fin'][i]),air_weight_t=D['chg'][i] if D['rep'][i]%4<2 else 0,teu=D['teus'][i] if D['rep'][i]%4>=2 else 0,volume_cbm=D['cbm'][i],matched_jpr_job_count=len(links),matched_jpr_job_numbers='; '.join(str(x['job']) for x in links if x['job']),matched_jpr_job_dates='; '.join(x['job_date'] for x in links if x['job_date']),matched_jpr_job_lobs='; '.join(x['lob'] for x in links if x['lob']),matched_jpr_job_owners='; '.join(x['job_owner'] for x in links if x['job_owner']),jpr_match_status=('matched' if links else 'no unique JPR match') if D.get('user',{}).get('finance') else 'not available in finance scope')
