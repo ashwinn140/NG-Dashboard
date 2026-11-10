@@ -33,14 +33,14 @@ class Customer360Tests(unittest.TestCase):
    self.assertEqual(one.get('/api/prefs').json()['partner360'],{'My view':{}});self.assertNotIn('partner360',two.get('/api/prefs').json())
   finally:app.state.store.stop=True;app.state.store.wake.set()
 
-    def test_customer360_company_filter_uses_canonical_dataset_codes(self):
-        from pathlib import Path
-        html = (Path(__file__).parents[1] / "app" / "web" / "customer360.html").read_text()
-        # Dataset report indices map to canonical company IDs NG and NCS.
-        self.assertIn("const rows=[],ops=[];const co=['NG','NCS'],reps=", html)
-        self.assertIn('<option value="NG">NGL · New Globe</option>', html)
-        self.assertIn('<option value="NCS">NCS · Neutral Consolidation</option>', html)
-        self.assertIn("k==='company'&&v[k]==='NGL'?'NG':v[k]||''", html)
+ def test_customer360_company_filter_uses_canonical_dataset_codes(self):
+  from pathlib import Path
+  html = (Path(__file__).parents[1] / "app" / "web" / "customer360.html").read_text()
+  # Dataset report indices map to canonical company IDs NG and NCS.
+  self.assertIn("const rows=[],ops=[];const co=['NG','NCS'],reps=", html)
+  self.assertIn('<option value="NG">NGL · New Globe</option>', html)
+  self.assertIn('<option value="NCS">NCS · Neutral Consolidation</option>', html)
+  self.assertIn("k==='company'&&v[k]==='NGL'?'NG':v[k]||''", html)
 
 
 if __name__=='__main__':unittest.main()
