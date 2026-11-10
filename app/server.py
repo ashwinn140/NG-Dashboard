@@ -513,7 +513,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         Owner/job identity only; no income, expense or profit values. Company
         and LOB scope are checked again on the server for every request.
         """
-        from .customer_history import build_recent_jobs, build_last_shipment_owners, visible_report_types_for_scopes, normalize_customer_sql
+        from .customer_history import build_recent_jobs, build_last_shipment_owners, build_customer_history_rows, visible_report_types_for_scopes, normalize_customer_sql
         raw = await request.body()
         if len(raw) > 1_000_000: raise HTTPException(413, "Selection too large.")
         try:
@@ -536,7 +536,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                 if last_shipment_date:
                     try: date.fromisoformat(last_shipment_date)
                     except ValueError: raise ValueError("Invalid last shipment date.")
-                if not name or len(name) > 300: raise ValueError("Invalid customer name.")
+                if not name or name.casefold() == "(blank)" or len(name) > 300: raise ValueError("Invalid customer name.")
                 if not isinstance(companies, list) or not companies or not set(companies).issubset(allowed_companies):
                     raise PermissionError("The selected company is outside your access scope.")
                 if not isinstance(requested_lobs or [], list) or (allowed_lobs is not None and not lobs.issubset(allowed_lobs)):
@@ -574,7 +574,39 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                     shipments.c.to_import.is_(None),
                     normalize_customer_sql(shipments.c.customer).in_(sorted(all_names))
                 ).order_by(shipments.c.shipment_date.desc(), shipments.c.id.desc())).mappings().all()
-                source_rows = conn.execute(select(
+                shipment_numbers = sorted({
+                    str(row.get("shipment_no") or "").strip()
+                    for row in shipment_rows if str(row.get("shipment_no") or "").strip()
+                })
+                register_candidates = []
+                jpr_candidates = {}
+                # Pull every current register row for the selected shipment
+                # numbers, not just the visible customer's rows. This preserves
+                # the dataset's unique-match rule when job numbers are reused.
+                for offset in range(0, len(shipment_numbers), 500):
+                    batch = shipment_numbers[offset:offset + 500]
+                    register_candidates.extend(conn.execute(select(
+                        shipments.c.company, shipments.c.report_type, shipments.c.shipment_no,
+                        shipments.c.shipment_date, shipments.c.customer
+                    ).where(
+                        shipments.c.company.in_(sorted(all_companies)),
+                        shipments.c.report_type.in_(visible_report_types),
+                        shipments.c.to_import.is_(None),
+                        shipments.c.shipment_no.in_(batch)
+                    )).mappings().all())
+                    for row in conn.execute(select(
+                        profit_lines.c.id, profit_lines.c.company, profit_lines.c.job_no,
+                        profit_lines.c.job_date, profit_lines.c.lob, profit_lines.c.customer,
+                        profit_lines.c.extra
+                    ).where(
+                        profit_lines.c.company.in_(sorted(all_companies)),
+                        profit_lines.c.job_no.in_(batch),
+                        *J.current_jobs()
+                    ).order_by(profit_lines.c.job_date.desc(), profit_lines.c.id.desc())).mappings().all():
+                        jpr_candidates[row["id"]] = dict(row)
+                # Keep direct JPR customer matches even when they have no
+                # shipment-register counterpart.
+                for row in conn.execute(select(
                     profit_lines.c.id, profit_lines.c.company, profit_lines.c.job_no,
                     profit_lines.c.job_date, profit_lines.c.lob, profit_lines.c.customer,
                     profit_lines.c.extra
@@ -582,11 +614,11 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                     profit_lines.c.company.in_(sorted(all_companies)),
                     normalize_customer_sql(profit_lines.c.customer).in_(sorted(all_names)),
                     *J.current_jobs()
-                ).order_by(profit_lines.c.job_date.desc(), profit_lines.c.id.desc())).mappings().all()
-            by_customer = {}
-            for row in source_rows:
-                key = " ".join(str(row["customer"] or "").split()).casefold()
-                by_customer.setdefault(key, []).append(dict(row))
+                ).order_by(profit_lines.c.job_date.desc(), profit_lines.c.id.desc())).mappings().all():
+                    jpr_candidates[row["id"]] = dict(row)
+            by_customer, all_jpr_rows = build_customer_history_rows(
+                register_candidates, list(jpr_candidates.values()), all_names
+            )
             shipments_by_customer = {}
             for row in shipment_rows:
                 key = " ".join(str(row["customer"] or "").split()).casefold()
@@ -597,7 +629,10 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                 rows = [row for row in by_customer.get(key, []) if row["company"] in companies]
                 visible_shipments = [row for row in shipments_by_customer.get(key, []) if row["company"] in companies]
                 jobs = build_recent_jobs(rows, lobs=lobs, limit=5)
-                last_owner = build_last_shipment_owners(visible_shipments, rows, lobs=lobs, target_date=last_shipment_date).get(key)
+                last_owner = build_last_shipment_owners(
+                    visible_shipments, all_jpr_rows, lobs=lobs,
+                    target_date=last_shipment_date, matching_register_rows=register_candidates
+                ).get(key)
                 histories.append({
                     "customer": name,
                     "jobs": jobs,
