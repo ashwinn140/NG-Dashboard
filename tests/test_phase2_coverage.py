@@ -140,6 +140,43 @@ class JobHistoryDataQualityTests(unittest.TestCase):
         self.assertEqual(row["unmatched_register_jobs"], 1)
         self.assertEqual(row["job_owner_missing"], 1)
 
+
+    def test_road_jobs_never_inherit_owner_from_colliding_air_register(self):
+        from datetime import date
+        register = [{
+            "company": "NG", "report_type": "AE", "shipment_no": "ROAD-1",
+            "shipment_date": date(2026, 11, 8), "job_owner": "Unrelated Air Owner"
+        }]
+        jobs = [{
+            "company": "NG", "job_no": "ROAD-1", "job_date": date(2026, 11, 8),
+            "lob": "FFWD ROAD EXPORT", "extra": {}
+        }]
+        rows = job_history_data_quality(register, jobs)
+        row = next(item for item in rows if item["lob"] == "FFWD ROAD EXPORT")
+        self.assertEqual(row["register_not_applicable"], 1)
+        self.assertEqual(row["matched_register_jobs"], 0)
+        self.assertEqual(row["owner_from_register"], 0)
+        self.assertEqual(row["job_owner_missing"], 1)
+
+    def test_expected_lob_fallback_survives_wrong_lob_exact_date_collision(self):
+        from datetime import date
+        register = [
+            {"company": "NG", "report_type": "OE", "shipment_no": "SHARED-1",
+             "shipment_date": date(2026, 11, 8), "job_owner": "Wrong Air Owner"},
+            {"company": "NG", "report_type": "AE", "shipment_no": "SHARED-1",
+             "shipment_date": date(2026, 11, 7), "job_owner": "Correct Sea Owner"},
+        ]
+        jobs = [{
+            "company": "NG", "job_no": "SHARED-1", "job_date": date(2026, 11, 8),
+            "lob": "FFWD AIR EXPORT", "extra": {}
+        }]
+        rows = job_history_data_quality(register, jobs)
+        row = next(item for item in rows if item["lob"] == "Air Export")
+        self.assertEqual(row["matched_register_jobs"], 1)
+        self.assertEqual(row["owner_from_register"], 1)
+        self.assertEqual(row["job_owner_populated"], 1)
+        self.assertEqual(row["job_owner_missing"], 0)
+
     def test_duplicate_jpr_identity_is_flagged_and_output_contains_no_names(self):
         from datetime import date
         job = {"company": "NG", "job_no": "J-1", "job_date": date(2026, 11, 8),
