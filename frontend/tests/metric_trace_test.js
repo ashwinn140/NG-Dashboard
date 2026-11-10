@@ -24,6 +24,16 @@ assert.equal(n.pctOf(10,0),null);assert.equal(n.pctOf(10,null),null);assert.equa
  for(let i=0;i<n.NP;i++){n.pinc[i]=100;n.pexp[i]=100;}n.renderAll();assert.equal(shareText(),'–','zero net GP must not be rendered as a zero or percentage share');assert.equal(n.traceSelection('profit.biggest_customer','Biggest customer').displayed_value,null);
  for(let i=0;i<n.NP;i++){n.pinc[i]=100;n.pexp[i]=110;}n.renderAll();assert.equal(shareText(),'–','negative net GP must not produce a positive-looking concentration share');assert.equal(n.traceSelection('profit.biggest_customer','Biggest customer').displayed_value,null);
  for(let i=0;i<n.NP;i++){n.pinc[i]=100;n.pexp[i]=90;}n.renderAll();assert.notEqual(shareText(),'–','positive net GP retains a calculable share');
+ n.setGroup('profit');n.S.page='p_explorer';n.S.exp.dim=0;n.S.sel={};n.renderAll();
+ const explorerRows=[...w.document.querySelectorAll('#page table.tbl tbody tr')].filter(row=>row.querySelector('button[data-trace-metric="profit.gp"]'));
+ assert.ok(explorerRows.length>0,'profitability by customer rows expose explicit evidence actions');
+ let explorerOpened=null;const openBeforeExplorer=w.MetricTrace.openWithRequest;w.MetricTrace.openWithRequest=q=>{explorerOpened=q;};
+ const firstExplorerRow=explorerRows[0],customerLabel=firstExplorerRow.querySelector('td span')?.textContent;
+ firstExplorerRow.querySelector('button[data-trace-metric="profit.gp"]').click();
+ const customerCode=n.COLS.customer.d.indexOf(customerLabel),customerCodes=n.COLS.customer.pc||n.COLS.customer.c,expectedCustomerIndices=Array.from(n.maskP({skip:'customer'})).flatMap((v,i)=>v&&customerCodes[i]===customerCode?[i]:[]);
+ const expectedCustomerProfit=expectedCustomerIndices.reduce((sum,i)=>sum+n.pinc[i]-n.pexp[i],0);
+ assert.equal(explorerOpened.metric,'profit.gp');assert.deepEqual(Array.from(explorerOpened.indices),expectedCustomerIndices);assert.equal(explorerOpened.displayed_value,expectedCustomerProfit);
+ w.MetricTrace.openWithRequest=openBeforeExplorer;
  n.setGroup('profit');n.S.page='p_status';n.S.sel={};n.renderAll();
  const statusCard=[...w.document.querySelectorAll('#page article.card')].find(el=>el.querySelector('h2')?.textContent.trim()==='Profit data status');
  const matchCard=[...w.document.querySelectorAll('#page article.card')].find(el=>el.querySelector('h2')?.textContent.trim()==='Matched to the shipment register');
