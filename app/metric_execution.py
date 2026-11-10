@@ -95,7 +95,8 @@ def aggregate(metric,rows,options=None):
   profits=sorted(grouped.values(),reverse=True);pos=sum(x for x in profits if x>0);cum=n=0
   for x in profits:
    if x>0 and cum<.8*pos:cum+=x;n+=1
-  v={'profit.customers':len(grouped),'profit.customers_80':n,'profit.biggest_customer':profits[0]/sum(profits) if profits and sum(profits)>0 else None,'profit.loss_customers':sum(x<0 for x in profits)}[metric]
+  total_net_gp=sum(r.get('profit',0) for r in rows)
+  v={'profit.customers':len(grouped),'profit.customers_80':n,'profit.biggest_customer':profits[0]/total_net_gp if profits and total_net_gp>0 else None,'profit.loss_customers':sum(x<0 for x in profits)}[metric]
   return dict(value=v,numerator=None,denominator=None)
  if metric=='ops.customer_concentration':
   grouped={};measure=options.get('concentration_measure','count')
@@ -106,8 +107,8 @@ def aggregate(metric,rows,options=None):
   named=sorted((v for k,v in grouped.items() if known_customer(k)),reverse=True)
   num=sum(named[:max(1,int(options.get('top_n',25)))]);return dict(value=num/total if total else None,numerator=num,denominator=total)
  if metric in ['profit.cost_not_booked_proxy','profit.billing_pending_proxy','profit.loss_making','profit.low_margin','profit.negative_income_rows','profit.intercompany_proxy']:return dict(value=len(rows),numerator=None,denominator=None)
- if metric=='ops.invoice_reference_count' or metric=='profit.rows':return dict(value=len(rows),numerator=None,denominator=None)
- if metric=='ops.invoiced_count':return dict(value=len(rows),numerator=None,denominator=None)
+ if metric in ['ops.invoice_reference_count','ops.invoiced_count']:return dict(value=len(keys),numerator=None,denominator=None)
+ if metric=='profit.rows':return dict(value=len(rows),numerator=None,denominator=None)
  if metric=='ops.active_customers':
   counts={}
   for r in rows:
@@ -120,7 +121,9 @@ def aggregate(metric,rows,options=None):
   elif metric=='ops.old_open':eligible=[r for r in rows if r['stage']!='Closed' and today-r['shipment_day']>old];v=len(eligible)
   elif metric=='ops.oldest_open':eligible=[r for r in rows if r['stage']!='Closed'];v=max([today-r['shipment_day'] for r in eligible]+[0])
   elif metric=='ops.lock_lag':eligible=[r for r in rows if r['operations_lock_day']>0 and r['financial_lock_day']>0];numerator=sum(r['financial_lock_day']-r['operations_lock_day'] for r in eligible);denominator=len(eligible);v=numerator/denominator if denominator else None
-  elif metric=='ops.invoiced_share':numerator=sum(r['invoice_count']>0 for r in rows);denominator=len(rows);v=numerator/denominator if denominator else None
+  elif metric=='ops.invoiced_share':
+   invoice_keys={(r['company'],r['lob'],r['job'],r['date']) for r in rows if r['invoice_count']>0}
+   numerator=len(invoice_keys);denominator=len(keys);v=numerator/denominator if denominator else None
   elif metric in ['ops.invoice_lag','ops.lock_invoice_lag']:
    eligible=[r for r in rows if r['invoice_count']>0 and r['invoice_day']>0 and (metric=='ops.invoice_lag' or r['operations_lock_day']>0)];numerator=sum(r['invoice_day']-(r['shipment_day'] if metric=='ops.invoice_lag' else r['operations_lock_day']) for r in eligible);denominator=len(eligible);v=numerator/denominator if denominator else None
   elif metric=='ops.operations_locked':eligible=[r for r in rows if r['operations_lock_day']>0];v=len(eligible)
@@ -203,9 +206,11 @@ def execute(D,body,definitions):
   if body.get('context',{}).get('dimension_key'):r['dimension_value']=value(D,body['context']['dimension_key'],r['source_index'],source=='profit')
  if metric.id in ['ops.period_new_customers','ops.period_absent_customers']:
   ca={};pa={};minimum=max(1,int(body.get('context',{}).get('active_min',1)))
-  for r in current:ca[r['customer']]=ca.get(r['customer'],0)+1
-  for r in previous:pa[r['customer']]=pa.get(r['customer'],0)+1
-  chosen={c for c,n in (ca if metric.id=='ops.period_new_customers' else pa).items() if n>=minimum and not (pa if metric.id=='ops.period_new_customers' else ca).get(c)}
+  for r in current:
+   if known_customer(r.get('customer')):ca.setdefault(r['customer'],set()).add((r['company'],r['lob'],r['job'],r['date']))
+  for r in previous:
+   if known_customer(r.get('customer')):pa.setdefault(r['customer'],set()).add((r['company'],r['lob'],r['job'],r['date']))
+  chosen={c for c,ids in (ca if metric.id=='ops.period_new_customers' else pa).items() if len(ids)>=minimum and not (pa if metric.id=='ops.period_new_customers' else ca).get(c)}
   current=[r for r in (current if metric.id=='ops.period_new_customers' else previous) if r['customer'] in chosen];previous=[]
  a=aggregate(metric.id,current,body.get('context'));b=aggregate(metric.id,previous,body.get('context'))
  if body.get('compare') is False or metric.id in ['ops.period_new_customers','ops.period_absent_customers']:b=dict(value=None,numerator=None,denominator=None)
