@@ -57,15 +57,23 @@ def usable_rate(r,options):
 
 def aggregate(metric,rows,options=None):
  options=options or {}
+ if metric.startswith('ops.'):
+  unique={}
+  for r in rows:unique.setdefault((r['company'],r['lob'],r['job'],r['date']),r)
+  rows=list(unique.values())
  inc=sum(r.get('income',0) for r in rows);exp=sum(r.get('expense',0) for r in rows)
  keys={(r['company'],r['lob'],r['job'],r['date']) for r in rows}
  if metric.startswith('ops.rate_') or metric.startswith('profit.rate_matched_'):
   ae=[r for r in rows if r.get('register_report',-1)%4==0];eligible=[r for r in ae if usable_rate(r,options)]
   kg=sum(r['chargeable_kg'] for r in eligible);sell=sum(r['sell_rate']*r['chargeable_kg'] for r in eligible);buy=sum(r['buy_rate']*r['chargeable_kg'] for r in eligible);gp=sum(r.get('profit',0) for r in eligible)
-  if metric=='ops.rate_air_exports':v=len(ae);num=den=None
-  elif metric=='ops.rate_usable':num=len(eligible);den=len(ae);v=num/den if den else None
+  if metric=='ops.rate_air_exports':v=len({(r['company'],r['lob'],r['job'],r['date']) for r in ae});num=den=None
+  elif metric=='ops.rate_usable':num=len({(r['company'],r['lob'],r['job'],r['date']) for r in eligible});den=len({(r['company'],r['lob'],r['job'],r['date']) for r in ae});v=num/den if den else None
   elif metric in ['ops.rate_sell','ops.rate_buy','ops.rate_margin_kg']:num=sell if metric=='ops.rate_sell' else buy if metric=='ops.rate_buy' else sell-buy;den=kg;v=num/den if den else None
-  else:num=den=None;v={'ops.rate_margin':sell-buy,'ops.rate_below_buy':sum(r['sell_rate']<r['buy_rate'] for r in eligible),'profit.rate_matched_count':len(eligible),'profit.rate_matched_estimate':sell-buy,'profit.rate_matched_actual':gp,'profit.rate_matched_difference':gp-(sell-buy)}[metric]
+  else:
+   num=den=None
+   if metric=='ops.rate_below_buy':v=len({(r['company'],r['lob'],r['job'],r['date']) for r in eligible if r['sell_rate']<r['buy_rate']})
+   elif metric=='profit.rate_matched_count':v=len({(r['company'],r['lob'],r['job'],r['date']) for r in eligible})
+   else:v={'ops.rate_margin':sell-buy,'profit.rate_matched_estimate':sell-buy,'profit.rate_matched_actual':gp,'profit.rate_matched_difference':gp-(sell-buy)}[metric]
   return dict(value=v,numerator=num,denominator=den)
  if metric in ['profit.air_yield','profit.ocean_yield','profit.matched_share','profit.best_dimension']:
   if metric=='profit.best_dimension':
@@ -74,7 +82,9 @@ def aggregate(metric,rows,options=None):
     label=' '.join(str(r.get('dimension_value','') or '').split())
     if label and label.casefold()!='(blank)':grouped[label]=grouped.get(label,0)+r['profit']
    return dict(value=max([v for v in grouped.values() if v>0],default=None),numerator=None,denominator=None)
-  if metric=='profit.matched_share':num=sum(r['matched_source_index']>=0 for r in rows);den=len(rows)
+  if metric=='profit.matched_share':
+   matched_keys={(r['company'],r['lob'],r['job'],r['date']) for r in rows if r['matched_source_index']>=0}
+   num=len(matched_keys);den=len(keys)
   else:
    air=metric=='profit.air_yield';matched=[r for r in rows if r.get('matched_source_index',-1)>=0 and (r.get('register_report',-1)%4<2)==air];num=sum(r['profit'] for r in matched);den=sum(r.get('matched_air_t' if air else 'matched_teu',0) for r in matched)
   return dict(value=num/den if den>0 else None,numerator=num,denominator=den)
