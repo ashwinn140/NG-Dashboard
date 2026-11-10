@@ -40,7 +40,7 @@ class MetricExecutionTests(unittest.TestCase):
   from app.metric_execution import snapshot_id
   base=dict(data_version=7,built_at='2026-11-10T04:00:00Z',user=dict(companies=['NG'],lobs=['AE'],finance=True),rep=[0,1],p=dict(co=[0]))
   first=snapshot_id(base)
-  same_scope=dict(base,rep=[1,0],p=dict(co=[0,1]))
+  same_scope=dict(base,rep=[1,0],p=dict(co=[1]))
   self.assertEqual(snapshot_id(same_scope),first,'the version token identifies an immutable dataset; row payloads are not reserialized')
   other_scope=dict(base,user=dict(companies=['NCS'],lobs=['AE'],finance=True))
   self.assertNotEqual(snapshot_id(other_scope),first)
