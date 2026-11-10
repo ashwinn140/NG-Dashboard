@@ -1567,7 +1567,7 @@ function ppBilling() {
             if (q.context.filters) { q.context.filters = {...q.context.filters}; delete q.context.filters[vk]; }
             window.MetricTrace?.openWithRequest(q);
           }
-        }}, 'View records'))
+        }}, 'Calculation & records'))
       ));
       vb.replaceChildren(...renderedRows);
     };
@@ -1576,8 +1576,12 @@ function ppBilling() {
     vroot.append(h('p', {class: 'meta'}, h('strong', null, 'Shipments invoiced: ' + fInt(tA) + ' against ' + fInt(tB)), ' (' + (tB > 0 ? fPctS((tA - tB) / tB) : 'no comparison data') + ') · ' + pr.title), cmpControls(),
       h('div', {class: 'frow'}, h('label', {class: 'f'}, h('span', null, 'Rows by'), sel(dims, vk, (v) => { bl.vdim = v; renderAll(); })), h('label', {class: 'f'}, h('span', null, 'Show'), sel([['all', 'All changes'], ['up', 'Increases only'], ['down', 'Decreases only']], bl.vshow, (v) => { bl.vshow = v; renderAll(); })), dlButton('Download Excel', expV)),
       h('p', {class: 'note'}, 'Hides changes smaller than the limits under Definitions: ' + S.def.varMinPct + '% / value ' + S.def.varMinAbs + ' / previous at least ' + S.def.varMinBase + '.'), h('div', {class: 'scroll tall'}, h('table', {class: 'tbl'}, vh, vb))); }
-  const invoiceVarianceTrace = {metric: 'ops.invoiced_count', request: () => window.MetricTrace?.createRequest('ops.invoiced_count','Invoice variance',{compare:true,displayed_value:tA,context:{current_period:pr.cur,previous_period:pr.prev,date_basis:'First parsed invoice date'}})};
-  root.append(h('p', {class: 'meta'}, 'Invoice counts and dates come from the shipment registers, independently of the job-profit snapshots. Invoiced means the register shows an invoice in either “Invoice No. & Date” or “Billing Details”, counted on the earliest date found. About a third of shipments have a document only in Billing Details, so the two columns are read together.'), kp, h('div', {class: 'grid', style: 'margin-top:.9rem'}, ageCard, card('Shipments against invoices, by month', 'The gap between the bars is billing waiting to happen.', chart), slow, card('Variance: shipments invoiced', 'Value and percentage change against the earlier period, by any angle.', vroot, 'full', invoiceVarianceTrace)));
+  const monthChartTraces = [
+    {metric:'ops.shipments',label:'Calculation & records · Shipments',request:()=>{const ids=[];for(let i=0;i<N;i++)if(Ma[i])ids.push(i);const q=window.MetricTrace?.createRequest('ops.shipments','Monthly shipment counts',{indices:ids,previous_indices:[],compare:false,displayed_value:d3.sum(sm.values()),context:{date_basis:'Shipment Date',segment:{series:'Shipments by month'}}});return q;}},
+    {metric:'ops.invoiced_count',label:'Calculation & records · Invoices',request:()=>{const ids=[];for(let i=0;i<N;i++)if(Ma[i]&&inv1[i]>0)ids.push(i);const q=window.MetricTrace?.createRequest('ops.invoiced_count','Monthly invoice counts',{indices:ids,previous_indices:[],compare:false,displayed_value:d3.sum(im.values()),context:{date_basis:'First parsed invoice date',segment:{series:'Shipments invoiced by month'}}});return q;}}
+  ];
+  const invoiceVarianceTrace = pr.err ? null : {metric: 'ops.invoiced_count', request: () => window.MetricTrace?.createRequest('ops.invoiced_count','Invoice variance',{compare:true,displayed_value:tA,context:{current_period:pr.cur,previous_period:pr.prev,date_basis:'First parsed invoice date'}})};
+  root.append(h('p', {class: 'meta'}, 'Invoice counts and dates come from the shipment registers, independently of the job-profit snapshots. Invoiced means the register shows an invoice in either “Invoice No. & Date” or “Billing Details”, counted on the earliest date found. About a third of shipments have a document only in Billing Details, so the two columns are read together.'), kp, h('div', {class: 'grid', style: 'margin-top:.9rem'}, ageCard, card('Shipments against invoices, by month', 'The gap between the bars is billing waiting to happen.', chart, null, monthChartTraces), slow, card('Variance: shipments invoiced', 'Value and percentage change against the earlier period, by any angle.', vroot, 'full', invoiceVarianceTrace)));
   return root;
 }
 // who needs to book costs: jobs with income and no cost yet, by the people and places that own them
