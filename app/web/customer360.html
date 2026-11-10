@@ -81,7 +81,7 @@ function drawActivity(){
   const labels={active_in_selected_scope:'Active in selected scope',inactive_in_selected_lob_active_elsewhere:'Inactive in selected LOB; active elsewhere',inactive_in_selected_lob_no_other_visible_activity:'Inactive in selected LOB; no other visible activity',verified_company_wide_inactivity:'Verified inactivity in loaded company-wide snapshots',insufficient_history:'Insufficient history'};
   const selected=signal.selected_lobs||[];
   let other=[];
-  if(signal.per_lob){other=Object.entries(signal.per_lob).filter(([lob])=>!selected.includes(lob)).map(([lob,x])=>({lob:lobNames[lob]||lob,status:x.status,last_date:x.last_shipment,days_since_last:x.days_since_last}));}
+  if(signal.per_lob){other=Object.entries(signal.per_lob).filter(([lob])=>!scoped||!selected.includes(lob)).map(([lob,x])=>({lob:lobNames[lob]||lob,status:x.status,last_date:x.last_shipment,days_since_last:x.days_since_last}));}
   else {const localSelected=scoped?[...new Set(filtered.filter(x=>x.ops&&x.company===r.company&&searchKey(x.customer)===searchKey(r.customer)).map(x=>(x.mode==='Ocean'?'Sea':x.mode)+' '+x.direction))]:[];other=crossLobActivity(r.company,r.customer,activityResult.as_of,localSelected).other_lobs;}
   const summary=other.length?other.map(x=>(x.lob||'LOB')+': '+String(x.status||'unknown').replaceAll('_',' ')+' · last '+(x.last_date||'—')).join('; '):'No other visible LOB activity in loaded history.';
   const wide=signal.company_wide_verified?'Verified inactive in all four LOB snapshots':signal.company_wide_status&&signal.company_wide_status!=='not_verified_incomplete_scope_or_sources'?'Company-wide activity: '+signal.company_wide_status:'Not verified — permission scope or source coverage is incomplete';
