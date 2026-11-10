@@ -31,7 +31,7 @@ def value(D,key,i,finance=False):
  codes=c.get('pc' if finance else 'c',[])
  return c.get('d',[])[codes[i]] if i<len(codes) else ''
 def iso(d):return (date(1970,1,1)+timedelta(days=d)).isoformat() if d is not None and d>=0 else ''
-def records(D,source,indices):
+def records(D,source,indices,include_operations_links=True):
  fin=source=='profit';p=D.get('p',{});n=len(p.get('co',[])) if fin else len(D.get('rep',[]))
  if not isinstance(indices,list) or len(indices)>n or any(type(i)is not int or i<0 or i>=n for i in indices):raise ValueError('Invalid scoped record selection.')
  if not indices:return []
@@ -39,7 +39,7 @@ def records(D,source,indices):
  # Reverse only the selected, already-validated unique JPR -> register matches.
  # Empty selections must not build a full cross-dataset lineage index.
  matched_jpr={}
- if not fin and D.get('user',{}).get('finance') and indices:
+ if not fin and include_operations_links and D.get('user',{}).get('finance') and indices:
   jp=D.get('p',{});needed=set(indices)
   for j,si in enumerate(jp.get('sidx',[])):
    if type(si) is int and si in needed:
@@ -173,7 +173,7 @@ def eligible_records(metric, rows, context):
  if metric in ['profit.air_yield','profit.ocean_yield']:rows=[r for r in rows if r.get('matched_source_index',-1)>=0 and (r.get('register_report',-1)%4<2)==(metric=='profit.air_yield')]
  return [r for r in rows if predicates[metric](r)] if metric in predicates else rows
 
-def execute(D,body,definitions):
+def execute(D,body,definitions,include_operations_links=True):
  if not isinstance(body,dict) or not isinstance(body.get('context',{}),dict):raise ValueError('Metric context must be an object.')
  displayed=body.get('displayed_value')
  if displayed is not None and (type(displayed) not in (int,float) or not math.isfinite(displayed)):raise ValueError('Displayed value must be a finite number or null.')
@@ -187,7 +187,7 @@ def execute(D,body,definitions):
  if body.get('dataset_built_at') and body['dataset_built_at']!=D.get('built_at'):raise ValueError('Dashboard data changed. Reload before inspecting records.')
  snap=snapshot_id(D)
  if body.get('snapshot') and body['snapshot']!=snap:raise ValueError('Data snapshot changed. Reload before inspecting or exporting.')
- current=eligible_records(metric.id,records(D,source,body.get('indices',[])),body.get('context',{}));previous=eligible_records(metric.id,records(D,source,body.get('previous_indices',[])),body.get('context',{}));operations_records=records(D,'operations',body.get('ops_indices',[]));benchmark=[]
+ current=eligible_records(metric.id,records(D,source,body.get('indices',[]),include_operations_links=include_operations_links),body.get('context',{}));previous=eligible_records(metric.id,records(D,source,body.get('previous_indices',[]),include_operations_links=include_operations_links),body.get('context',{}));operations_records=records(D,'operations',body.get('ops_indices',[]),include_operations_links=include_operations_links);benchmark=[]
  if metric.id in ['profit.expected_adjusted','profit.expected_cost_only']:
   benchmark=[r for r in records(D,'profit',list(range(len(D['p']['co'])))) if r['income']>0 and r['expense']>0]
   ratios={};ti=te=0
