@@ -7,6 +7,24 @@ from openpyxl.styles import Font
 VERSION='1'
 EXCEL_ROW_LIMIT=1048576
 def snapshot_id(dataset):
+ # Store.dataset_for attaches a monotonic data_version to each immutable,
+ # permission-scoped snapshot. Hash only that token and its scope instead of
+ # serializing every shipment/JPR row on every evidence and Excel request.
+ version=dataset.get('data_version')
+ if version is not None:
+  user=dataset.get('user',{})
+  scope={
+   'snapshot_version':2,
+   'data_version':version,
+   'built_at':dataset.get('built_at'),
+   'companies':sorted(str(x) for x in (user.get('companies') or [])),
+   'lobs':sorted(str(x) for x in (user.get('lobs') or [])),
+   'finance':bool(user.get('finance')),
+   'register_rows':len(dataset.get('rep',[])),
+   'profit_rows':len(dataset.get('p',{}).get('co',[])),
+  }
+  return hashlib.sha256(json.dumps(scope,separators=(',',':'),sort_keys=True).encode()).hexdigest()
+ # Backward-compatible deterministic fallback for standalone/legacy callers.
  return hashlib.sha256(json.dumps(dataset,separators=(',',':'),sort_keys=True).encode()).hexdigest()
 def value(D,key,i,finance=False):
  c=D.get('cols',{}).get(key,{})
@@ -16,14 +34,15 @@ def iso(d):return (date(1970,1,1)+timedelta(days=d)).isoformat() if d is not Non
 def records(D,source,indices):
  fin=source=='profit';p=D.get('p',{});n=len(p.get('co',[])) if fin else len(D.get('rep',[]))
  if not isinstance(indices,list) or len(indices)>n or any(type(i)is not int or i<0 or i>=n for i in indices):raise ValueError('Invalid scoped record selection.')
+ if not indices:return []
  rows=[]
- # Reverse the dataset's already-validated unique JPR -> shipment-register match.
- # This is an evidence link only; it does not create a new or guessed match.
+ # Reverse only the selected, already-validated unique JPR -> register matches.
+ # Empty selections must not build a full cross-dataset lineage index.
  matched_jpr={}
- if not fin and D.get('user',{}).get('finance'):
-  jp=D.get('p',{})
+ if not fin and D.get('user',{}).get('finance') and indices:
+  jp=D.get('p',{});needed=set(indices)
   for j,si in enumerate(jp.get('sidx',[])):
-   if type(si) is int and si>=0:
+   if type(si) is int and si in needed:
     matched_jpr.setdefault(si,[]).append({
      'job':value(D,'p_job',j,True),
      'job_date':iso(jp.get('jd',[])[j] if j<len(jp.get('jd',[])) else -1),
