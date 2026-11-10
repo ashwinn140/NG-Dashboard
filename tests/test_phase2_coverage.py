@@ -177,6 +177,23 @@ class JobHistoryDataQualityTests(unittest.TestCase):
         self.assertEqual(row["job_owner_populated"], 1)
         self.assertEqual(row["job_owner_missing"], 0)
 
+
+    def test_job_history_quality_accepts_one_pass_row_iterators(self):
+        from datetime import date
+        register = [{
+            "company": "NG", "report_type": "AE", "shipment_no": "STREAM-1",
+            "shipment_date": date(2026, 11, 8), "job_owner": "Owner A"
+        }]
+        jobs = [{
+            "company": "NG", "job_no": "STREAM-1", "job_date": date(2026, 11, 8),
+            "lob": "FFWD AIR EXP", "extra": {}
+        }]
+        result = job_history_data_quality(iter(register), iter(jobs))
+        row = next(x for x in result if x["company"] == "NG" and x["lob"] == "Air Export")
+        self.assertEqual(row["matched_register_jobs"], 1)
+        self.assertEqual(row["owner_from_register"], 1)
+        self.assertEqual(row["status"], "ready")
+
     def test_duplicate_jpr_identity_is_flagged_and_output_contains_no_names(self):
         from datetime import date
         job = {"company": "NG", "job_no": "J-1", "job_date": date(2026, 11, 8),
