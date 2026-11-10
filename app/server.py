@@ -518,7 +518,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             with engine.connect() as conn:
                 # A caller may request only customers already present in the
                 # current operational register within their authorized scope.
-                visible_report_types = sorted(set.intersection(*[set(lobs) for _, _, lobs, _ in normalized]) if normalized and all(lobs for _, _, lobs, _ in normalized) else {"AE", "AI", "OE", "OI"})
+                visible_report_types = sorted(set.union(*[set(lobs) for _, _, lobs, _ in normalized]) if normalized and all(lobs for _, _, lobs, _ in normalized) else {"AE", "AI", "OE", "OI"})
                 visible_rows = conn.execute(select(
                     shipments.c.company, shipments.c.customer
                 ).where(
