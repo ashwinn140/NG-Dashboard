@@ -339,7 +339,10 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
 
     @app.post("/api/metrics/activity")
     async def metric_activity_api(request: Request, user: dict = Depends(unsafe)):
+        request_started = time.perf_counter()
+        evidence_started = request_started
         evidence = await metric_evidence(request, user)
+        evidence_ms = (time.perf_counter() - evidence_started) * 1000
         if evidence["metric"]["id"] != "ops.shipments":
             raise HTTPException(400, "Activity requires operational shipment evidence.")
         from .phase2_metrics import cross_lob_customer_activity
@@ -405,7 +408,13 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             })
             group["indices"].append(row["source_index"])
 
+        grouping_ms = (time.perf_counter() - evidence_started) * 1000 - evidence_ms
         if not groups:
+            log.info(
+                "customer360_activity_profile evidence_ms=%.1f grouping_ms=%.1f "
+                "customers=0 total_ms=%.1f",
+                evidence_ms, grouping_ms, (time.perf_counter() - request_started) * 1000,
+            )
             return {
                 "as_of": as_of.isoformat(), "customers": [],
                 "snapshot": evidence["snapshot"], "coverage": [],
@@ -418,6 +427,12 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         activity_dates = {key: {lob: [] for lob in visible_lobs} for key in groups}
         latest_jobs = {key: [] for key in groups}
         promoted = set()
+        register_started = time.perf_counter()
+        register_row_count = 0
+        register_ms = 0.0
+        import_ms = 0.0
+        jpr_ms = 0.0
+        jpr_row_count = 0
         with engine.connect() as conn:
             register_rows = conn.execute(select(
                 shipments.c.company, shipments.c.report_type, shipments.c.customer,
@@ -431,6 +446,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                 shipments.c.shipment_date <= as_of,
             )).mappings().all()
 
+            register_row_count = len(register_rows)
             for row in register_rows:
                 key = (row["company"], normalize_customer(row["customer"]))
                 if key not in customer_keys:
@@ -439,6 +455,8 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                 if lob in activity_dates[key] and row["shipment_date"]:
                     activity_dates[key][lob].append(row["shipment_date"])
 
+            register_ms = (time.perf_counter() - register_started) * 1000
+            import_started = time.perf_counter()
             import_rows = conn.execute(select(
                 imports.c.company, imports.c.report_type, imports.c.status, imports.c.id
             ).where(
@@ -451,7 +469,9 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                 if key not in latest_import_status:
                     latest_import_status[key] = row["status"]
             promoted.update(key for key, status in latest_import_status.items() if status == "promoted")
+            import_ms = (time.perf_counter() - import_started) * 1000
 
+            jpr_started = time.perf_counter()
             for offset in range(0, len(normalized_names), 500):
                 name_batch = normalized_names[offset:offset + 500]
                 jpr_rows = conn.execute(select(
@@ -462,10 +482,12 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                     normalize_customer_sql(profit_lines.c.customer).in_(name_batch),
                     *J.current_jobs(),
                 ).order_by(profit_lines.c.job_date.desc(), profit_lines.c.id.desc())).mappings().all()
+                jpr_row_count += len(jpr_rows)
                 for row in jpr_rows:
                     key = (row["company"], normalize_customer(row["customer"]))
                     if key in latest_jobs:
                         latest_jobs[key].append(dict(row))
+            jpr_ms = (time.perf_counter() - jpr_started) * 1000
 
         result = []
         coverage = {}
@@ -498,6 +520,13 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             -(row["selected_lob_activity"]["company_wide_activity"].get("days_since_last") or 0),
             row["company"], row["customer"].casefold(),
         ))
+        log.info(
+            "customer360_activity_profile evidence_ms=%.1f grouping_ms=%.1f "
+            "register_ms=%.1f register_rows=%d import_ms=%.1f jpr_ms=%.1f "
+            "jpr_rows=%d customers=%d total_ms=%.1f",
+            evidence_ms, grouping_ms, register_ms, register_row_count, import_ms,
+            jpr_ms, jpr_row_count, len(result), (time.perf_counter() - request_started) * 1000,
+        )
         return {
             "as_of": as_of.isoformat(), "customers": result,
             "snapshot": evidence["snapshot"], "coverage": list(coverage.values()),
