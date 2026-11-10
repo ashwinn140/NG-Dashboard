@@ -9,6 +9,16 @@ EXCEL_ROW_LIMIT=1048576
 def snapshot_id(dataset):
  cached=dataset.get('_snapshot_id') if isinstance(dataset,dict) else None
  if isinstance(cached,str) and len(cached)==64:return cached
+ version=dataset.get('data_version') if isinstance(dataset,dict) else None
+ if version is not None:
+  user=dataset.get('user',{})
+  scope={'snapshot_version':3,'data_version':version,'built_at':dataset.get('built_at'),
+   'companies':sorted(str(x) for x in (user.get('companies') or [])),
+   'lobs':sorted(str(x) for x in (user.get('lobs') or [])),
+   'finance':bool(user.get('finance')),
+   'register_rows':len(dataset.get('rep',[])),
+   'profit_rows':len(dataset.get('p',{}).get('co',[]))}
+  return hashlib.sha256(json.dumps(scope,separators=(',',':'),sort_keys=True).encode()).hexdigest()
  return hashlib.sha256(json.dumps(dataset,separators=(',',':'),sort_keys=True).encode()).hexdigest()
 
 def known_customer(value):
