@@ -33,6 +33,8 @@ class Store:
             self.upload_warning = f"The upload folder {upload_dir} cannot be written ({e}). Files are kept in a temporary folder and will be lost at the next restart. Attach a volume at /data."
             log.error(self.upload_warning)
         self.lock = threading.RLock(); self.full = None; self.version = int(ops.get_flag(engine, "data_version", "0") or 0); self.full_version = -1
+        self.has_current_rows = None; self.has_current_version = -1
+        self.phase2_cache = None; self.phase2_cache_version = -1; self.phase2_cache_lock = threading.Lock()
         self.cache: dict = {}; self.wake = threading.Event(); self.idle = threading.Event(); self.idle.set(); self.stop = False; self.building = False
         with engine.begin() as c: c.execute(update(uploads).where(uploads.c.status == "processing").values(status="queued"))          # a crash mid-load: try again
         if start_worker:
@@ -46,15 +48,20 @@ class Store:
     # ---- dataset
     def dataset_for(self, user: dict) -> bytes:
         with self.lock:
-            with self.engine.connect() as c:
-                has = c.execute(select(func.count()).select_from(shipments).where(shipments.c.to_import.is_(None)).limit(1)).scalar()
-            if not has:                         # nothing loaded yet: say so instead of failing
+            if self.has_current_version != self.version:
+                with self.engine.connect() as c:
+                    self.has_current_rows = c.execute(
+                        select(shipments.c.id).where(shipments.c.to_import.is_(None)).limit(1)
+                    ).first() is not None
+                self.has_current_version = self.version
+            if not self.has_current_rows:       # nothing loaded yet: say so instead of failing
                 return gzip.compress(json.dumps({"empty": True, "user": {"finance": bool(user["finance"]), "companies": user["companies"], "lobs": user["lobs"]}}).encode(), 6)
             if self.full is None or self.full_version != self.version:
                 self.full = DS.build_full(self.engine); self.full_version = self.version; self.cache.clear()
             sig = (self.version, tuple(sorted(user["companies"])), tuple(sorted(user["lobs"])), bool(user["finance"]))
             if sig not in self.cache:
                 D = DS.restrict(self.full, dict(companies=user["companies"], lobs=user["lobs"], finance=user["finance"]))
+                D["_snapshot_id"] = MX.snapshot_id(D)
                 if len(self.cache) > 20: self.cache.clear()
                 self.cache[sig] = gzip.compress(json.dumps(D, separators=(",", ":"), ensure_ascii=False).encode(), 6)
             return self.cache[sig]
@@ -63,9 +70,14 @@ class Store:
         """Builds the dashboard data ahead of time, so the first person after a load does not wait."""
         try:
             with self.lock:
-                with self.engine.connect() as c:
-                    if not c.execute(select(func.count()).select_from(shipments).where(shipments.c.to_import.is_(None)).limit(1)).scalar():
-                        return                      # nothing loaded yet: nothing to prepare (and no error to log)
+                if self.has_current_version != self.version:
+                    with self.engine.connect() as c:
+                        self.has_current_rows = c.execute(
+                            select(shipments.c.id).where(shipments.c.to_import.is_(None)).limit(1)
+                        ).first() is not None
+                    self.has_current_version = self.version
+                if not self.has_current_rows:
+                    return                      # nothing loaded yet: nothing to prepare (and no error to log)
                 if self.full is None or self.full_version != self.version:
                     self.full = DS.build_full(self.engine); self.full_version = self.version; self.cache.clear()
         except Exception:
@@ -73,7 +85,10 @@ class Store:
 
     def bump(self):
         with self.lock:
-            self.version += 1; ops.set_flag(self.engine, "data_version", str(self.version))
+            self.version += 1
+            self.has_current_rows = None; self.has_current_version = -1
+            self.phase2_cache = None; self.phase2_cache_version = -1
+            ops.set_flag(self.engine, "data_version", str(self.version))
 
     # ---- worker
     def enqueue(self, **v) -> int:
@@ -327,8 +342,19 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         try:
             body = json.loads(raw)
             if not isinstance(body, dict): raise ValueError("Invalid metric request.")
-            data = json.loads(gzip.decompress(store.dataset_for(user)))
-            return MX.execute(data, body, MD)
+            compressed = store.dataset_for(user)
+            decoded_at = time.perf_counter()
+            data = json.loads(gzip.decompress(compressed))
+            decoded = time.perf_counter()
+            result = MX.execute(data, body, MD)
+            finished = time.perf_counter()
+            log.info(
+                "metric_evidence metric=%s compressed_bytes=%d decode_ms=%d execute_ms=%d records=%d comparison_records=%d snapshot_cached=%s",
+                result["metric"]["id"], len(compressed), round((decoded-decoded_at)*1000),
+                round((finished-decoded)*1000), len(result.get("records", [])),
+                len(result.get("comparison_records", [])), bool(data.get("_snapshot_id"))
+            )
+            return result
         except PermissionError as e: raise HTTPException(403, str(e))
         except (ValueError, TypeError, KeyError) as e: raise HTTPException(400, str(e))
 
@@ -340,12 +366,12 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
     async def metric_activity_api(request: Request, user: dict = Depends(unsafe)):
         evidence = await metric_evidence(request, user)
         if evidence['metric']['id'] != 'ops.shipments': raise HTTPException(400, "Activity requires operational shipment evidence.")
-        from .phase2_metrics import customer_activity
+        from .phase2_metrics import customer_activity, is_named_customer
         groups = {}
         try: as_of = date.fromisoformat(evidence['context']['as_of'])
         except (ValueError, KeyError, TypeError): raise HTTPException(400, "A valid activity as-of date is required.")
         for row in evidence['records']:
-            if not row['customer'] or not row['date'] or row['date'] > as_of.isoformat(): continue
+            if not is_named_customer(row.get('customer')) or not row['date'] or row['date'] > as_of.isoformat(): continue
             key = (row['company'], row['customer'])
             group = groups.setdefault(key, dict(company=key[0], customer=key[1], dates=[], indices=[]))
             group['dates'].append(date.fromisoformat(row['date']));group['indices'].append(row['source_index'])
@@ -359,7 +385,12 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
     @app.post("/api/metrics/export")
     async def metric_export_api(request: Request, user: dict = Depends(unsafe)):
         result = await metric_evidence(request, user)
-        return Response(MX.workbook(result), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": 'attachment; filename="metric_reconciliation.xlsx"', "Cache-Control": "private, no-store"})
+        started = time.perf_counter()
+        content = MX.workbook(result)
+        log.info("metric_export metric=%s records=%d comparison_records=%d workbook_ms=%d bytes=%d",
+                 result["metric"]["id"], len(result.get("records", [])),
+                 len(result.get("comparison_records", [])), round((time.perf_counter()-started)*1000), len(content))
+        return Response(content, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": 'attachment; filename="metric_reconciliation.xlsx"', "Cache-Control": "private, no-store"})
 
     @app.get("/assets/metric_trace.js")
     def metric_trace_script(user: dict = Depends(me)):
@@ -782,27 +813,41 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
     def phase2_source_readiness(user: dict = Depends(admin)):
         """Read-only Phase 2 field and aggregate data-quality diagnostics."""
         from .phase2_coverage import report_field_coverage, job_history_field_coverage, job_history_data_quality
-        with engine.connect() as c:
-            rows = c.execute(select(imports.c.id, imports.c.company,
-                imports.c.report_type, imports.c.columns).where(
-                imports.c.status == "promoted")).mappings().all()
-            register_rows = c.execute(select(
-                shipments.c.company, shipments.c.report_type, shipments.c.shipment_no,
-                shipments.c.shipment_date, shipments.c.job_owner
-            ).where(
-                shipments.c.to_import.is_(None),
-                shipments.c.report_type.in_(("AE", "AI", "OE", "OI"))
-            )).mappings().all()
-            job_rows = c.execute(select(
-                profit_lines.c.company, profit_lines.c.job_no, profit_lines.c.job_date,
-                profit_lines.c.lob, profit_lines.c.extra
-            ).where(*J.current_jobs())).mappings().all()
-        return {
-            "report_fields": report_field_coverage(rows),
-            "job_history_fields": job_history_field_coverage(rows),
-            "job_history_quality": job_history_data_quality(register_rows, job_rows),
-            "note": "Read-only header and aggregate quality checks. No job, customer or owner names are returned. Header presence and nonblank owner coverage do not prove customer identity or complete all-time history."
-        }
+        started = time.perf_counter()
+        # Source-readiness changes only after an accepted import. Serialize this
+        # expensive diagnostic refresh so concurrent admin page loads do not
+        # each materialize the full register and JPR history.
+        with store.phase2_cache_lock:
+            version = store.version
+            if store.phase2_cache_version == version and store.phase2_cache is not None:
+                log.info("phase2_source_readiness cache_hit=true")
+                return store.phase2_cache
+            with engine.connect() as c:
+                rows = c.execute(select(imports.c.id, imports.c.company,
+                    imports.c.report_type, imports.c.columns).where(
+                    imports.c.status == "promoted")).mappings().all()
+                register_rows = c.execute(select(
+                    shipments.c.company, shipments.c.report_type, shipments.c.shipment_no,
+                    shipments.c.shipment_date, shipments.c.job_owner
+                ).where(
+                    shipments.c.to_import.is_(None),
+                    shipments.c.report_type.in_(("AE", "AI", "OE", "OI"))
+                )).mappings().yield_per(2000)
+                job_rows = c.execute(select(
+                    profit_lines.c.company, profit_lines.c.job_no, profit_lines.c.job_date,
+                    profit_lines.c.lob, profit_lines.c.extra
+                ).where(*J.current_jobs())).mappings().yield_per(2000)
+                result = {
+                    "report_fields": report_field_coverage(rows),
+                    "job_history_fields": job_history_field_coverage(rows),
+                    "job_history_quality": job_history_data_quality(register_rows, job_rows),
+                    "note": "Read-only header and aggregate quality checks. No job, customer or owner names are returned. Header presence and nonblank owner coverage do not prove customer identity or complete all-time history."
+                }
+            if store.version == version:
+                store.phase2_cache = result
+                store.phase2_cache_version = version
+            log.info("phase2_source_readiness cache_hit=false elapsed_ms=%d", round((time.perf_counter()-started)*1000))
+            return result
 
     @app.get("/phase2/intelligence", response_class=HTMLResponse)
     def phase2_intelligence_page(user: dict = Depends(me)):
