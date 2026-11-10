@@ -27,7 +27,7 @@ for(const role of ['admin','ops','finance']){
     const isKpi=el.classList.contains('kpi');
     const title=(isKpi?el.querySelector('.kl'):el.querySelector('h2'))?.textContent.trim()||'(untitled)';
     const ex=el.querySelector('details.business-explanation');
-    const action=[...el.querySelectorAll('button,a')].find(b=>b.textContent.trim()==='Calculation & records');
+    const action=[...el.querySelectorAll('button,a')].find(b=>b.textContent.trim().startsWith('Calculation & records'));
     const ps=ex?[...ex.querySelectorAll('p')]:[];
     const what=ps.find(p=>p.textContent.startsWith('What this means'))?.textContent.replace('What this means: ','')||'';
     const how=ps.find(p=>p.textContent.startsWith('How it is calculated'))?.textContent.replace('How it is calculated: ','')||'';
@@ -38,6 +38,23 @@ for(const role of ['admin','ops','finance']){
    });
   }}
  if(errs.length)errors[role+':jsdom']=errs;dom.window.close();}
+const requiredEvidence = [
+ {role:'ops',group:'summary',page:'s_score',title:'All rows',label:'operations scorecard rows'},
+ {role:'finance',group:'summary',page:'s_score',title:'All rows',label:'combined scorecard rows'},
+ {role:'finance',group:'profit',page:'p_status',title:'Profit data status',label:'profit data status'},
+ {role:'finance',group:'profit',page:'p_status',title:'Matched to the shipment register',label:'JPR/register match coverage'},
+ {role:'finance',group:'profit',page:'p_billing',title:'Shipments against invoices, by month',label:'monthly shipment/invoice chart'}
+];
+for(const item of requiredEvidence){
+ if(!rows.some(r=>r.role===item.role&&r.group===item.group&&r.page===item.page&&r.title===item.title&&r.has_reconciliation_action)){
+  (errors['required-evidence']=errors['required-evidence']||[]).push('Missing Calculation & records action: '+item.label);
+ }
+}
+for(const role of ['ops','finance']){
+ if(!rows.some(r=>r.role===role&&r.group==='summary'&&r.page==='s_owner'&&r.title.startsWith('Variance:')&&r.has_reconciliation_action)){
+  (errors['required-evidence']=errors['required-evidence']||[]).push('Missing summary variance evidence action for '+role);
+ }
+}
 fs.mkdirSync('audit',{recursive:true});
 fs.writeFileSync('audit/runtime_visual_inventory.json',JSON.stringify({rows,errors,registered_pages_not_visited:[...unvisited]},null,1));
 const esc=v=>'"'+String(v).replace(/"/g,'""')+'"';const cols=['role','group','page','idx','kind','title','tables','charts','has_explanation','calc_verified','has_reconciliation_action','reconciliation_metric','reconciliation_dimension','what','how'];
