@@ -482,7 +482,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         Owner/job identity only; no income, expense or profit values. Company
         and LOB scope are checked again on the server for every request.
         """
-        from .customer_history import build_recent_jobs, build_last_shipment_owners
+        from .customer_history import build_recent_jobs, build_last_shipment_owners, visible_report_types_for_scopes
         raw = await request.body()
         if len(raw) > 1_000_000: raise HTTPException(413, "Selection too large.")
         try:
@@ -518,7 +518,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             with engine.connect() as conn:
                 # A caller may request only customers already present in the
                 # current operational register within their authorized scope.
-                visible_report_types = sorted(set.intersection(*[set(lobs) for _, _, lobs, _ in normalized]) if normalized and all(lobs for _, _, lobs, _ in normalized) else {"AE", "AI", "OE", "OI"})
+                visible_report_types = visible_report_types_for_scopes(lobs for _, _, lobs, _ in normalized)
                 visible_rows = conn.execute(select(
                     shipments.c.company, shipments.c.customer
                 ).where(
