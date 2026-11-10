@@ -125,4 +125,10 @@ class MetricExecutionTests(unittest.TestCase):
   self.assertEqual(r['current']['denominator'],2)
   self.assertEqual([row['source_index'] for row in r['records']],[0])
 
+ def test_empty_operations_evidence_does_not_build_unused_finance_lineage(self):
+  class ExplodingIndices:
+   def __iter__(self):raise AssertionError('empty evidence must not traverse the JPR match index')
+  d=self.fixture();d['p']['sidx']=ExplodingIndices()
+  self.assertEqual(X.records(d,'operations',[]),[])
+
 if __name__=='__main__':unittest.main()
