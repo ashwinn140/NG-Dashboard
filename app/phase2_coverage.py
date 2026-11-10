@@ -179,13 +179,13 @@ def job_history_data_quality(register_rows, job_rows):
         if company not in EXPECTED or report not in LOBS or not number or not day:
             continue
         item = {"report_type": report, "job_owner": owner}
-        by_key[(company, number, day)].append(item)
-        by_no[(company, number)].append(item)
+        by_key[(company, number, day)].append((report, owner))
+        by_no[(company, number)].append((report, owner))
         stats = register_stats[(company, report)]
         stats["rows"] += 1
         stats["owner_populated"] += bool(owner)
 
-    grouped = defaultdict(list)
+    grouped = {}
     invalid = defaultdict(int)
     for row in job_rows:
         company = str(row.get("company") or "").strip().upper()
@@ -198,7 +198,11 @@ def job_history_data_quality(register_rows, job_rows):
         if not number or not day or not lob:
             invalid[group_key] += 1
             continue
-        grouped[(company, lob, number, day)].append(row)
+        key = (company, lob, number, day)
+        entry = grouped.setdefault(key, {"count": 0, "extra": None})
+        entry["count"] += 1
+        if entry["count"] == 1:
+            entry["extra"] = row.get("extra")
 
     results = {}
     def bucket(company, lob):
@@ -214,17 +218,16 @@ def job_history_data_quality(register_rows, job_rows):
             "register_rows": 0, "register_owner_populated": 0,
         })
 
-    for (company, source_lob, number, day), rows in grouped.items():
+    for (company, source_lob, number, day), job in grouped.items():
         lob = _job_lob_label(source_lob)
         stats = bucket(company, lob)
         stats["job_count"] += 1
-        if len(rows) != 1:
+        if job["count"] != 1:
             stats["duplicate_job_identities"] += 1
             stats["job_owner_missing"] += 1
             continue
 
-        row = rows[0]
-        extra = row.get("extra") if isinstance(row.get("extra"), dict) else {}
+        extra = job["extra"] if isinstance(job["extra"], dict) else {}
         owner_key = next((k for k in extra if _norm(k) == "jobowner"), None)
         if owner_key is not None:
             owner = str(extra.get(owner_key) or "").strip()
@@ -250,12 +253,12 @@ def job_history_data_quality(register_rows, job_rows):
         # a unique matching-LOB candidate on another date.
         candidates = [
             candidate for candidate in by_key.get((company, number, day), [])
-            if candidate["report_type"] == expected
+            if candidate[0] == expected
         ]
         if not candidates:
             candidates = [
                 candidate for candidate in by_no.get((company, number), [])
-                if candidate["report_type"] == expected
+                if candidate[0] == expected
             ]
 
         if len(candidates) > 1:
@@ -266,7 +269,7 @@ def job_history_data_quality(register_rows, job_rows):
             stats["job_owner_missing"] += 1
         else:
             stats["matched_register_jobs"] += 1
-            if candidates[0]["job_owner"]:
+            if candidates[0][1]:
                 stats["owner_from_register"] += 1
                 stats["job_owner_populated"] += 1
             else:
