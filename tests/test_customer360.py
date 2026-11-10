@@ -40,6 +40,7 @@ class Customer360Tests(unittest.TestCase):
         self.assertIn("const rows=[],ops=[];const co=['NG','NCS'],reps=", html)
         self.assertIn('<option value="NG">NGL · New Globe</option>', html)
         self.assertIn('<option value="NCS">NCS · Neutral Consolidation</option>', html)
+        self.assertIn("k==='company'&&v[k]==='NGL'?'NG':v[k]||''", html)
 
 
 if __name__=='__main__':unittest.main()
