@@ -310,13 +310,20 @@ function traceExplanation(trace,title) {
  const m=trace.metric,k=trace.dimension;
  if(k&&!COLS[k])return null;
  const ops={
-  'ops.shipments':'shipment records','ops.air_weight':'air chargeable weight (tonnes)','ops.teu':'ocean TEUs',
-  'ops.invoiced_count':'shipments invoiced by first invoice date','ops.invoiced_share':'shipment-register rows with invoice references','ops.invoice_lag':'invoiced shipments with a parsed first invoice date',
+  'ops.shipments':'shipment records','ops.air_weight':'air chargeable weight (tonnes)','ops.air_weight_kg':'air chargeable weight (kg)','ops.teu':'ocean TEUs','ops.volume':'volume (CBM)',
+  'ops.active_customers':'active named customers','ops.customer_concentration':'top named-customer share of selected activity','ops.period_new_customers':'named customers observed only in the current period','ops.period_absent_customers':'named customers observed only in the comparison period',
+  'ops.invoiced_count':'shipments invoiced by first invoice date','ops.invoice_reference_count':'shipments with invoice or billing references','ops.invoiced_share':'shipment-register rows with invoice references','ops.invoice_lag':'invoiced shipments with a parsed first invoice date',
   'ops.waiting_lock':'shipments awaiting operations lock','ops.financials_open':'operations-locked shipments awaiting financial lock','ops.old_open':'open shipments beyond the configured age limit','ops.oldest_open':'age of the oldest open shipment','ops.lock_lag':'days between operations and financial lock',
-  'ops.lock_invoice_lag':'operations-locked shipments with a parsed first invoice date','ops.locked_no_invoice':'operations-locked shipments with no invoice reference',
+  'ops.operations_locked':'shipments with an operations-lock date','ops.lock_invoice_lag':'operations-locked shipments with a parsed first invoice date','ops.locked_no_invoice':'operations-locked shipments with no invoice reference',
   'ops.overdue_invoice':'operations-locked shipments with no invoice reference beyond the configured ageing threshold'
  };
- const fin={ 'profit.gp':'gross profit','profit.income':'income','profit.expense':'expense','profit.cost_not_booked_proxy':'jobs with no recorded cost','profit.billing_pending_proxy':'jobs with cost but no income recorded','profit.loss_making':'loss-making jobs','profit.low_margin':'low-margin jobs','profit.negative_income_rows':'negative-income JPR rows','profit.intercompany_proxy':'company-name-matched jobs','profit.expected_cost_only':'estimated unbooked costs','profit.matched_share':'JPR jobs matched to unique shipment-register identities' };
+ const fin={
+  'profit.gp':'gross profit','profit.income':'income','profit.expense':'expense','profit.jobs':'distinct JPR jobs','profit.rows':'JPR source rows','profit.margin':'gross profit margin','profit.per_job':'profit per distinct job','profit.cost_coverage':'jobs with positive recorded expense',
+  'profit.customers':'named customers','profit.customers_80':'named customers making 80% of positive GP','profit.biggest_customer':'biggest named-customer share','profit.loss_customers':'loss-making named customers','profit.best_dimension':'best nonblank source dimension',
+  'profit.air_yield':'air profit per matched tonne','profit.ocean_yield':'ocean profit per matched TEU','profit.matched_share':'JPR jobs matched to unique shipment-register identities',
+  'profit.rate_matched_count':'matched air-export jobs with usable rates','profit.rate_matched_estimate':'estimated freight margin on matched jobs','profit.rate_matched_actual':'actual profit on matched jobs','profit.rate_matched_difference':'actual profit less estimated freight margin',
+  'profit.cost_not_booked_proxy':'jobs with no recorded cost','profit.billing_pending_proxy':'jobs with cost but no income recorded','profit.loss_making':'loss-making jobs','profit.low_margin':'low-margin jobs','profit.negative_income_rows':'negative-income JPR rows','profit.intercompany_proxy':'company-name-matched jobs','profit.expected_adjusted':'profit after expected costs','profit.expected_cost_only':'estimated unbooked costs'
+ };
  if(ops[m]){
   const measure=ops[m],dim=k&&COLS[k]?COLS[k].l.toLowerCase():null;
   const grouping=dim?'Groups selected shipment-register rows by '+dim+' and sums '+measure+'.':'Uses the selected shipment-register rows represented by this visual.';
@@ -325,6 +332,13 @@ function traceExplanation(trace,title) {
    'ops.air_weight':'Sums Chargeable Wt for air export and import records, expressed in tonnes.',
    'ops.teu':'Sums recorded TEUs for ocean export and import records.',
    'ops.invoiced_share':'Invoice reference means a parsed invoice in either Invoice No. & Date or Billing Details; it does not prove accounting settlement.',
+   'ops.invoice_reference_count':'Counts distinct shipment identities with an invoice or billing reference; a reference does not prove collection.',
+   'ops.invoiced_count':'Uses the first parsed invoice date as its reporting date; an invoice reference does not prove payment.',
+   'ops.active_customers':'Excludes blank customer labels; the minimum is applied to selected shipment records.',
+   'ops.customer_concentration':'Blank customer rows remain in the activity denominator but cannot rank among named customers.',
+   'ops.period_new_customers':'Excludes blank customer labels; this is observed period activity, not proof of a lifetime-new customer.',
+   'ops.period_absent_customers':'Excludes blank customer labels; absence in the comparison window does not prove lost business.',
+   'ops.operations_locked':'Counts shipment-register records with a parsed Operations Locked On date.',
    'ops.waiting_lock':'Counts shipments whose operations-lock stage is still pending; uses all shipment dates.',
    'ops.financials_open':'Counts shipments with operations locked but financials not yet locked; uses all shipment dates.',
    'ops.old_open':'Counts shipments not fully closed whose age from Shipment Date exceeds the configured old-shipment threshold.',
@@ -359,6 +373,22 @@ function traceExplanation(trace,title) {
    title==='New Globe against Neutral Consolidation'?'Groups booked gross profit by Branch and Company. The chart compares New Globe and Neutral Consolidation separately; select a bar to filter to that company and branch before opening the contributing jobs.':
    title==='All rows'?'Lists JPR job-summary records for the finance columns in this combined scorecard. Income, expense, profit, margin and job counts come from JPR by Job Date; shipment, volume and operational-lock columns are sourced separately and are not part of this finance evidence export.':
    title==='Estimated against actual'?'Shows only JPR jobs uniquely matched to air-export shipment-register rows with usable buy and sell rates. Estimated freight margin is (Sell Rate − Buy Rate) × chargeable weight; actual profit is JPR income minus JPR expense across all job charges. Difference is actual job profit less estimated freight-only margin; these measures are not like-for-like.':
+   m==='profit.matched_share'?'Divides distinct JPR job identities with one unique current shipment-register match by all eligible JPR job identities. Matching requires company, job number, date and expected line of business; ambiguous matches are not guessed.':
+   m==='profit.customers'?'Counts distinct named Organization values. Blank customer rows remain in overall profit but are excluded from the customer count.':
+   m==='profit.customers_80'?'Counts named positive-profit customers until their cumulative gross profit reaches 80% of positive gross profit for named customers; the blank bucket is excluded.':
+   m==='profit.biggest_customer'?'Divides the largest named customer gross profit by total net gross profit. Blank-customer profit remains in the total denominator.':
+   m==='profit.loss_customers'?'Counts named customers whose aggregated gross profit is negative; blank customer values are excluded.':
+   m==='profit.best_dimension'?'Returns the highest positive gross profit among nonblank values of the selected source dimension.':
+   m==='profit.cost_coverage'?'Divides distinct job identities with positive recorded expense by distinct eligible job identities.':
+   m==='profit.jobs'?'Counts distinct JPR job identities using company, LOB, job number and job date.':
+   m==='profit.margin'?'Divides total gross profit by total income; it is a ratio of sums, not an average of job margins.':
+   m==='profit.per_job'?'Divides total booked gross profit by distinct eligible JPR job identities.':
+   m==='profit.air_yield'?'Divides gross profit on uniquely matched air jobs by matched air chargeable tonnes.':
+   m==='profit.ocean_yield'?'Divides gross profit on uniquely matched ocean jobs by matched ocean TEUs.':
+   m==='profit.rate_matched_count'?'Counts distinct JPR jobs uniquely matched to air-export register rows with usable buy and sell rates.':
+   m==='profit.rate_matched_estimate'?'Sums (Sell Rate − Buy Rate) × Chargeable Weight once per matched JPR job.':
+   m==='profit.rate_matched_actual'?'Sums booked JPR income less expense for matched jobs with usable air-export rates.':
+   m==='profit.rate_matched_difference'?'Subtracts estimated freight-only margin from actual booked JPR gross profit; these are not like-for-like measures.':
    m==='profit.gp'?'Sums Income less Expense (INR) across eligible Job Profit Analysis rows.':
    m==='profit.income'?'Sums Income (INR) across eligible Job Profit Analysis rows.':
    m==='profit.expense'?'Sums Expense (INR) across eligible Job Profit Analysis rows.':
