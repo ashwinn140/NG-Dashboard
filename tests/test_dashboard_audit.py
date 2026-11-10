@@ -73,6 +73,16 @@ class DashboardAuditTests(unittest.TestCase):
         finally:
             app.state.store.stop=True; app.state.store.wake.set()
 
+
+    def test_production_image_builds_dashboard_from_canonical_frontend(self):
+        root=Path(__file__).resolve().parents[1]
+        dockerfile=(root/'Dockerfile').read_text()
+        self.assertIn('COPY frontend ./frontend',dockerfile)
+        self.assertIn('RUN sh frontend/build.sh',dockerfile)
+        self.assertLess(dockerfile.index('COPY app ./app'),dockerfile.index('COPY frontend ./frontend'))
+        self.assertLess(dockerfile.index('COPY frontend ./frontend'),dockerfile.index('RUN sh frontend/build.sh'))
+        self.assertLess(dockerfile.index('RUN sh frontend/build.sh'),dockerfile.index('COPY entrypoint.sh /entrypoint.sh'))
+
     def test_production_build_reproduces_served_asset(self):
         root=Path(__file__).resolve().parents[1]
         page=(root/'frontend/production_shell.html').read_text()
