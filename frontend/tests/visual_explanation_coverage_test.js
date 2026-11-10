@@ -8,6 +8,21 @@ explanation('summary','s_owner','What needs your attention','independent checks'
 explanation('summary','s_owner','Top '+n.S.def.topN+' customers by profit','simple JPR');
 explanation('summary','s_owner','Shipments by month','Shipment Date');
 explanation('summary','s_score','Scorecard by customer','Job Date');
+n.setGroup('summary');n.S.page='s_owner';n.S.sel={};n.renderAll();
+const summaryVariance=[...w.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim().startsWith('Variance:'));
+assert.ok(summaryVariance,'summary period variance table exists');
+const varianceRows=[...summaryVariance.querySelectorAll('tbody tr')];
+assert.ok(varianceRows.length>0,'summary variance table has measures');
+let varianceRequest=null;const originalVarianceOpen=w.MetricTrace.openWithRequest;w.MetricTrace.openWithRequest=q=>{varianceRequest=q;};
+const varianceMetricByLabel={'Shipments':'ops.shipments','Air chargeable tonnes':'ops.air_weight','Sea TEUs':'ops.teu','Active customers':'ops.active_customers','Shipments invoiced':'ops.invoiced_count','Est. freight margin (air export)':'ops.rate_margin','Income':'profit.income','Expense':'profit.expense','Profit':'profit.gp','Margin':'profit.margin','Jobs in the profit report':'profit.jobs'};
+for(const row of varianceRows){
+ const button=row.querySelector('td:first-child button.link');assert.ok(button,'each variance measure has a record action');
+ const label=button.textContent.replace(/\s*↗$/,'').trim();button.click();
+ assert.equal(varianceRequest?.metric,varianceMetricByLabel[label],'variance evidence maps to the correct source metric: '+label);
+ assert.ok(Array.isArray(varianceRequest.indices)&&Array.isArray(varianceRequest.previous_indices),'variance evidence contains both comparison-period record selections: '+label);
+}
+w.MetricTrace.openWithRequest=originalVarianceOpen;
+
 explanation('ops','o_agents','Agent variation report','Booking Thru');
 explanation('ops','o_sales','Sales performance report','Booking Thru');
 explanation('profit','p_explorer','Profitability by customer','simple JPR');
