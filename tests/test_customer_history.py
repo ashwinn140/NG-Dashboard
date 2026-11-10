@@ -12,7 +12,7 @@ class CustomerHistoryTests(unittest.TestCase):
         try:
             with engine.connect() as conn:
                 value = conn.execute(select(normalize_customer_sql(
-                    literal("  Acme\\t  Logistics\\nIndia   ")
+                    literal("  Acme\t\u00a0  Logistics\u202f\nIndia   ")
                 ))).scalar_one()
             self.assertEqual(value, "acme logistics india")
         finally:
