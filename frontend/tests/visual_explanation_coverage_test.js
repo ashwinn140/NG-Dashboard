@@ -228,7 +228,7 @@ assert.deepEqual(errors,[]);w.close();
 // Verify the same scorecard under a genuinely Operations-only dataset, not an admin fixture with its finance flag toggled.
 const Dops=JSON.parse(fs.readFileSync('/tmp/ng-fixture-ops.json','utf8')),opsErrors=[],opsVC=new VirtualConsole();
 opsVC.on('jsdomError',e=>{if(!/navigation|CSS stylesheet/.test(e.message))opsErrors.push(e.message)});
-const opsDom=new JSDOM(fs.readFileSync('app/web/dashboard.html','utf8'),{url:'http://ops-scorecard-evidence.test',runScripts:'dangerously',pretendToBeVisual:true,virtualConsole:opsVC,beforeParse(ow){ow.matchMedia=()=>({matches:false,addEventListener(){}});ow.scrollTo=()=>{};ow.SVGElement.prototype.getComputedTextLength=()=>20;ow.fetch=async u=>({ok:true,status:200,json:async()=>u==='/api/me'?{name:'Ops',csrf:'test',role:'ops'}:u==='/api/dataset'?Dops:{}})}});
+const opsDom=new JSDOM(fs.readFileSync('app/web/dashboard.html','utf8'),{url:'http://ops-scorecard-evidence.test',runScripts:'dangerously',pretendToBeVisual:true,virtualConsole:opsVC,beforeParse(ow){ow.__ME={name:'Ops',csrf:'test',role:'ops'};ow.__D=Dops;ow.matchMedia=()=>({matches:false,addEventListener(){}});ow.scrollTo=()=>{};ow.SVGElement.prototype.getComputedTextLength=()=>20;ow.fetch=async u=>({ok:true,status:200,json:async()=>u==='/api/me'?{name:'Ops',csrf:'test',role:'ops'}:u==='/api/dataset'?Dops:{}})}});
 const ow=opsDom.window;for(let i=0;i<100&&!ow.NG;i++)await new Promise(r=>setTimeout(r,20));
 const on=ow.NG;assert.ok(on);on.setGroup('ops');on.S.page='s_score';on.S.sel={};on.renderAll();
 const opsOnlyCard=[...ow.document.querySelectorAll('#page .card')].find(x=>x.querySelector('h2')?.textContent.trim()==='All rows');
