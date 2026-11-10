@@ -440,13 +440,17 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                     activity_dates[key][lob].append(row["shipment_date"])
 
             import_rows = conn.execute(select(
-                imports.c.company, imports.c.report_type
+                imports.c.company, imports.c.report_type, imports.c.status, imports.c.id
             ).where(
                 imports.c.company.in_(companies),
                 imports.c.report_type.in_(lob_order),
-                imports.c.status == "promoted",
-            )).mappings().all()
-            promoted.update((row["company"], row["report_type"]) for row in import_rows)
+            ).order_by(imports.c.id.desc())).mappings().all()
+            latest_import_status = {}
+            for row in import_rows:
+                key = (row["company"], row["report_type"])
+                if key not in latest_import_status:
+                    latest_import_status[key] = row["status"]
+            promoted.update(key for key, status in latest_import_status.items() if status == "promoted")
 
             for offset in range(0, len(normalized_names), 500):
                 name_batch = normalized_names[offset:offset + 500]
