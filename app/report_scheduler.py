@@ -36,8 +36,7 @@ REPORT_CATALOG = {
             "cargo_type", "trade_lane", "loading_country", "discharge_country",
             "collection_executive", "business_dimension", "incoterms", "freight_type",
             "contract_type", "commodity_type", "co_load_type", "document_executive",
-            "place_of_execution", "container_types", "booking_thru", "invoice_reference",
-            "invoice_first_date", "invoice_count", "buy_rate", "sell_rate",
+            "place_of_execution", "container_types", "booking_thru", "invoice_first_date", "invoice_count", "buy_rate", "sell_rate",
         ),
         "summary_columns": (
             "company", "customer", "shipments", "air_shipments", "ocean_shipments",
@@ -70,13 +69,13 @@ REPORT_CATALOG = {
         "columns": (
             "company", "lob", "job_no", "job_date", "customer", "branch",
             "mode", "direction", "service", "salesperson", "income", "expense", "profit",
-            "margin",
+            "margin", "trade_lane", "intercompany", "transaction_date",
         ),
         "summary_columns": (
             "company", "lob", "customer", "branch", "jobs", "income", "expense", "profit", "margin",
         ),
         "filters": ("customer", "branch", "salesperson", "lob", "mode", "direction", "service",
-                    "trade_lane", "intercompany", "charge", "party"),
+                    "trade_lane", "intercompany"),
     },
 }
 
@@ -476,9 +475,8 @@ def _job_rows(D, definition, start, end):
             "direction": _column(D, "p_direction", i, True),
             "service": _column(D, "p_kind", i, True),
             "salesperson": _column(D, "jp_sales_person", i, True),
-            "trade_lane": _column(D, "p_x_tradelanename", i, True),
+            "trade_lane": _column(D, "x_tradelanename", i, True),
             "intercompany": _column(D, "p_ic", i, True),
-            "charge": _column(D, "p_charge", i, True), "party": _column(D, "p_party", i, True),
             "transaction_date": _day(P.get("td", [])[i]),
             "income": income, "expense": expense, "profit": profit,
             "margin": profit / income if income > 0 else None,
@@ -706,9 +704,9 @@ def build_report_workbook(D, definition, start, end, freshness, generated_at=Non
         ws.column_dimensions[letter].width = min(36, max(12, max((len(v) for v in values), default=12) + 2))
         for row_idx in range(7, ws.max_row + 1):
             cell = ws.cell(row=row_idx, column=col_idx)
-            if col in ("shipment_date", "job_date", "operations_locked_on", "financials_locked_on", "last_shipment_date") and cell.value:
+            if col in ("shipment_date", "job_date", "transaction_date", "invoice_first_date", "operations_locked_on", "financials_locked_on", "last_shipment_date") and cell.value:
                 cell.number_format = "dd-mmm-yyyy"
-            elif col in ("income", "expense", "profit"):
+            elif col in ("income", "expense", "profit", "buy_rate", "sell_rate"):
                 cell.number_format = '"₹"#,##0.00;[Red]-"₹"#,##0.00'
             elif col == "margin":
                 cell.number_format = "0.0%"
