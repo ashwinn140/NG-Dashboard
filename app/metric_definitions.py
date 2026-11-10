@@ -150,7 +150,7 @@ def all_metrics() -> list[dict]:
     return [m.public_dict() for m in DEFINITIONS.values()]
 
 # Versioned additions verified against canonical app_prod.js and dataset.py.
-REGISTRY_VERSION = '2'
+REGISTRY_VERSION = '3'
 for key,title,column,formula in [
  ('ops.shipments','Shipments','Shipment No','COUNT DISTINCT(company, report_type, Shipment No, Shipment Date)'),
  ('ops.air_weight','Air chargeable weight (tonnes)','Chargeable Wt','SUM(Chargeable Wt / 1000) for Air Export and Air Import registers'),
