@@ -74,4 +74,45 @@ async function boot(mutate){
    check('unbilled evidence carries exact source indices',q?.indices?.length===Number((row.children[3].textContent||'').replace(/,/g,'')),{indices:q?.indices?.length,displayed:row.children[3].textContent});
   }dom.window.close()}
 
+
+ // Monthly billing chart exposes independent, date-basis-correct source evidence.
+ {const {dom,w,d,ng}=await boot(data=>{data.invN[0]=1;data.inv1[0]=data.date[0];});ng.S.sel={};ng.S.rel=null;ng.S.from=null;ng.S.to=null;ng.setGroup('profit');ng.S.page='p_billing';ng.renderAll();
+  const card=[...d.querySelectorAll('#page article')].find(e=>e.querySelector('h2')?.textContent.trim()==='Shipments against invoices, by month');
+  const actions=[...(card?.querySelectorAll('.mt-info')||[])];
+  const shipments=actions.find(b=>b.textContent.trim()==='Calculation & records · Shipments');
+  const invoices=actions.find(b=>b.textContent.trim()==='Calculation & records · Invoices');
+  check('monthly billing chart exposes separate shipment and invoice evidence actions',!!shipments&&!!invoices,actions.map(b=>b.textContent));
+  if(shipments){shipments.dispatchEvent(new w.MouseEvent('click',{bubbles:true,cancelable:true}));const q=w.__traceRequests.at(-1);check('shipment chart evidence uses shipment date and current source rows',q?.metric==='ops.shipments'&&q?.compare===false&&q?.indices?.length>0&&q?.context?.date_basis==='Shipment Date',q);}
+  if(invoices){invoices.dispatchEvent(new w.MouseEvent('click',{bubbles:true,cancelable:true}));const q=w.__traceRequests.at(-1);check('invoice chart evidence uses first parsed invoice date',q?.metric==='ops.invoiced_count'&&q?.compare===false&&q?.indices?.length>0&&q?.context?.date_basis==='First parsed invoice date',q);}
+  dom.window.close()}
+
+
+ // Blank customer buckets remain visible but are excluded from named-customer KPIs.
+ {const {dom,w,d,ng}=await boot(data=>{const c=data.cols.customer;const blank=c.d.length;c.d.push('(blank)');if(c.pc.length)c.pc[0]=blank;if(c.c.length)c.c[0]=blank;});ng.S.sel={};ng.S.rel=null;ng.S.from=null;ng.S.to=null;ng.setGroup('profit');ng.S.page='p_customers';ng.renderAll();
+  const c=ng.D.cols.customer,expected=new Set(ng.D.cols.customer.pc.map(i=>ng.D.cols.customer.d[i]).filter(x=>x&&x.trim()&&x.trim().toLowerCase()!=='(blank)')).size;
+  const kpi=[...d.querySelectorAll('#page .kpi')].find(e=>e.querySelector('.kl')?.textContent.trim()==='Customers');
+  check('named-customer KPI excludes the blank customer bucket',!!kpi&&kpi.textContent.includes(String(expected)),{expected,actual:kpi?.textContent});
+  check('blank customer group remains available in the customer table',[...d.querySelectorAll('#page tbody tr')].some(r=>r.textContent.toLowerCase().includes('(blank)')));
+  dom.window.close()}
+
+
+ // Rate-quality buckets are independent of the active rate-acceptance mode.
+ {const {dom,w,d,ng}=await boot(data=>{for(let i=0;i<data.rbf.length;i++){data.rbf[i]=1;data.rsf[i]=1;data.rbuy[i]=5;data.rsell[i]=10;data.ckg[i]=100;}data.rep[0]=0;data.rbf[0]=2;data.rsf[0]=2;});ng.S.sel={};ng.S.rel=null;ng.S.from=null;ng.S.to=null;ng.S.def.rateMode='clean';ng.setGroup('profit');ng.S.page='p_rates';ng.renderAll();
+  const card=[...d.querySelectorAll('#page article')].find(e=>e.querySelector('h2')?.textContent.trim()==='How the rates were read');
+  const textRow=[...(card?.querySelectorAll('li')||[])].find(li=>li.textContent.includes('have text such as'));
+  const action=[...(textRow?.querySelectorAll('button')||[])].find(b=>b.textContent.trim()==='Calculation & records');
+  check('text-embedded rate count remains visible in clean-only mode',!!textRow&&textRow.textContent.includes('1 have text'),textRow?.textContent);
+  check('rate-quality text bucket exposes exact source records',!!action);
+  if(action){action.dispatchEvent(new w.MouseEvent('click',{bubbles:true,cancelable:true}));const q=w.__traceRequests.at(-1);check('rate-quality evidence is scoped to the text bucket',q?.metric==='ops.rate_air_exports'&&q?.context?.rate_quality==='text'&&q?.indices?.includes(0),q);}
+  dom.window.close()}
+
+
+ // Summary variance rows open the exact current and comparison records.
+ {const {dom,w,d,ng}=await boot();ng.S.sel={};ng.S.rel=null;ng.S.from=null;ng.S.to=null;ng.setGroup('summary');ng.S.page='s_owner';ng.renderAll();
+  const card=[...d.querySelectorAll('#page article')].find(e=>e.querySelector('h2')?.textContent.trim().startsWith('Variance:'));
+  const action=[...(card?.querySelectorAll('button')||[])].find(b=>b.textContent.trim()==='Calculation & records');
+  check('summary variance exposes row-level Calculation & records',!!action);
+  if(action){action.dispatchEvent(new w.MouseEvent('click',{bubbles:true,cancelable:true}));const q=w.__traceRequests.at(-1);check('summary variance evidence includes both comparison periods',!!q?.metric&&q?.compare===true&&Array.isArray(q.indices)&&Array.isArray(q.previous_indices),q);}
+  dom.window.close()}
+
  console.log(fails?'FAILED '+fails:'ALL PASSED');process.exit(fails?1:0)})().catch(e=>{console.error(e);process.exit(1)});
