@@ -55,3 +55,69 @@ def customer_activity(shipment_dates: list[date], as_of: date) -> dict:
     days = (as_of - dates[-1]).days
     status = "active" if days <= threshold else "at_risk" if days <= threshold * 1.5 else "inactive"
     return {"status": status, "threshold_days": threshold, "days_since_last": days}
+
+LOB_ORDER = ("AE", "AI", "OE", "OI")
+
+
+def cross_lob_customer_activity(dates_by_lob: dict, as_of: date,
+                                selected_lobs: list[str],
+                                visible_lobs: list[str],
+                                complete_company_sources: bool) -> dict:
+    """Classify selected-LOB inactivity without overstating company-wide loss.
+
+    Dates are supplied from permission-scoped current shipment registers.
+    Company-wide inactivity is eligible only when all four LOBs are visible
+    and each has a promoted source snapshot. The result is bounded by loaded
+    snapshot history, not an all-time guarantee.
+    """
+    visible_set = set(visible_lobs)
+    visible = [lob for lob in LOB_ORDER if lob in visible_set]
+    selected_set = set(selected_lobs)
+    selected = [lob for lob in LOB_ORDER if lob in selected_set and lob in visible]
+    if not selected:
+        selected = visible
+
+    per_lob = {}
+    all_dates = set()
+    for lob in visible:
+        dates = sorted({d for d in dates_by_lob.get(lob, []) if isinstance(d, date) and d <= as_of})
+        all_dates.update(dates)
+        per_lob[lob] = {
+            **customer_activity(dates, as_of),
+            "last_shipment": dates[-1].isoformat() if dates else None,
+        }
+
+    overall = customer_activity(sorted(all_dates), as_of)
+    inactive_selected = [lob for lob in selected if per_lob[lob]["status"] == "inactive"]
+    active_selected = [lob for lob in selected if per_lob[lob]["status"] in ("active", "at_risk")]
+    active_elsewhere = [
+        lob for lob in visible if lob not in selected
+        and per_lob[lob]["status"] in ("active", "at_risk")
+    ]
+    complete = bool(complete_company_sources and set(visible) == set(LOB_ORDER))
+
+    if active_selected:
+        classification = "active_in_selected_scope"
+    elif inactive_selected and active_elsewhere:
+        classification = "inactive_in_selected_lob_active_elsewhere"
+    elif complete and overall["status"] == "inactive":
+        classification = "verified_company_wide_inactivity"
+    elif inactive_selected:
+        classification = "inactive_in_selected_lob_no_other_visible_activity"
+    else:
+        classification = "insufficient_history"
+
+    company_wide_status = overall["status"] if complete else "not_verified_incomplete_scope_or_sources"
+    return {
+        "classification": classification,
+        "selected_lobs": selected,
+        "inactive_selected_lobs": inactive_selected,
+        "active_selected_lobs": active_selected,
+        "active_elsewhere_lobs": active_elsewhere,
+        "per_lob": per_lob,
+        "company_wide_status": company_wide_status,
+        "company_wide_verified": complete and overall["status"] == "inactive",
+        "company_wide_activity": overall,
+        "visible_lobs": visible,
+        "source_coverage_complete": complete,
+    }

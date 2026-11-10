@@ -340,22 +340,182 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
     @app.post("/api/metrics/activity")
     async def metric_activity_api(request: Request, user: dict = Depends(unsafe)):
         evidence = await metric_evidence(request, user)
-        if evidence['metric']['id'] != 'ops.shipments': raise HTTPException(400, "Activity requires operational shipment evidence.")
-        from .phase2_metrics import customer_activity
+        if evidence["metric"]["id"] != "ops.shipments":
+            raise HTTPException(400, "Activity requires operational shipment evidence.")
+        from .phase2_metrics import cross_lob_customer_activity
+        from .customer_history import build_recent_jobs, normalize_customer_sql
+
+        try:
+            as_of = date.fromisoformat(evidence["context"]["as_of"])
+        except (ValueError, KeyError, TypeError):
+            raise HTTPException(400, "A valid activity as-of date is required.")
+
+        lob_order = ("AE", "AI", "OE", "OI")
+        visible_lobs = list(user["lobs"]) if user["lobs"] else list(lob_order)
+        visible_lobs = [lob for lob in lob_order if lob in visible_lobs]
+        allowed_companies = list(user["companies"]) if user["companies"] else ["NG", "NCS"]
+        context = evidence.get("context") or {}
+        selected_lobs = set(lob_order)
+        mode = str(context.get("mode") or "").strip().casefold()
+        direction = str(context.get("direction") or "").strip().casefold()
+        if mode == "air":
+            selected_lobs &= {"AE", "AI"}
+        elif mode in ("ocean", "sea"):
+            selected_lobs &= {"OE", "OI"}
+        if direction == "export":
+            selected_lobs &= {"AE", "OE"}
+        elif direction == "import":
+            selected_lobs &= {"AI", "OI"}
+        requested_lobs = (context.get("relationships") or {}).get("lob") or []
+        if isinstance(requested_lobs, (str, bytes)):
+            requested_lobs = [requested_lobs]
+        if requested_lobs:
+            def matches_lob(value, code):
+                value = str(value or "").casefold()
+                return {
+                    "AE": ("air" in value and "export" in value),
+                    "AI": ("air" in value and "import" in value),
+                    "OE": (("ocean" in value or "sea" in value) and "export" in value),
+                    "OI": (("ocean" in value or "sea" in value) and "import" in value),
+                }[code]
+            filtered_lobs = {lob for lob in lob_order if any(matches_lob(value, lob) for value in requested_lobs)}
+            if filtered_lobs:
+                selected_lobs &= filtered_lobs
+        selected_lobs &= set(visible_lobs)
+        if not selected_lobs:
+            selected_lobs = set(visible_lobs)
+
+        normalize_customer = lambda value: " ".join(str(value or "").split()).casefold()
         groups = {}
-        try: as_of = date.fromisoformat(evidence['context']['as_of'])
-        except (ValueError, KeyError, TypeError): raise HTTPException(400, "A valid activity as-of date is required.")
-        for row in evidence['records']:
-            if not row['customer'] or not row['date'] or row['date'] > as_of.isoformat(): continue
-            key = (row['company'], row['customer'])
-            group = groups.setdefault(key, dict(company=key[0], customer=key[1], dates=[], indices=[]))
-            group['dates'].append(date.fromisoformat(row['date']));group['indices'].append(row['source_index'])
+        for row in evidence["records"]:
+            customer = " ".join(str(row.get("customer") or "").split())
+            company = str(row.get("company") or "").strip().upper()
+            if not customer or company not in allowed_companies or not row.get("date"):
+                continue
+            try:
+                shipment_day = date.fromisoformat(row["date"])
+            except (ValueError, TypeError):
+                continue
+            if shipment_day > as_of:
+                continue
+            key = (company, normalize_customer(customer))
+            group = groups.setdefault(key, {
+                "company": company, "customer": customer, "indices": [],
+                "selected_lobs": set(selected_lobs),
+            })
+            group["indices"].append(row["source_index"])
+
+        if not groups:
+            return {
+                "as_of": as_of.isoformat(), "customers": [],
+                "snapshot": evidence["snapshot"], "coverage": [],
+                "method": "No customers match the selected, permission-scoped relationship filters.",
+            }
+
+        companies = sorted({company for company, _ in groups})
+        customer_keys = set(groups)
+        normalized_names = sorted({customer for _, customer in groups})
+        activity_dates = {key: {lob: [] for lob in visible_lobs} for key in groups}
+        latest_jobs = {key: [] for key in groups}
+        promoted = set()
+        with engine.connect() as conn:
+            register_rows = conn.execute(select(
+                shipments.c.company, shipments.c.report_type, shipments.c.customer,
+                shipments.c.shipment_date
+            ).where(
+                shipments.c.company.in_(companies),
+                shipments.c.report_type.in_(visible_lobs),
+                normalize_customer_sql(shipments.c.customer).in_(normalized_names),
+                shipments.c.to_import.is_(None),
+                shipments.c.shipment_date.is_not(None),
+                shipments.c.shipment_date <= as_of,
+            )).mappings().all()
+
+            for row in register_rows:
+                key = (row["company"], normalize_customer(row["customer"]))
+                if key not in customer_keys:
+                    continue
+                lob = row["report_type"]
+                if lob in activity_dates[key] and row["shipment_date"]:
+                    activity_dates[key][lob].append(row["shipment_date"])
+
+            import_rows = conn.execute(select(
+                imports.c.company, imports.c.report_type, imports.c.status, imports.c.id
+            ).where(
+                imports.c.company.in_(companies),
+                imports.c.report_type.in_(lob_order),
+            ).order_by(imports.c.id.desc())).mappings().all()
+            latest_import_status = {}
+            for row in import_rows:
+                key = (row["company"], row["report_type"])
+                if key not in latest_import_status:
+                    latest_import_status[key] = row["status"]
+            promoted.update(key for key, status in latest_import_status.items() if status == "promoted")
+
+            for offset in range(0, len(normalized_names), 500):
+                name_batch = normalized_names[offset:offset + 500]
+                jpr_rows = conn.execute(select(
+                    profit_lines.c.company, profit_lines.c.job_no, profit_lines.c.job_date,
+                    profit_lines.c.lob, profit_lines.c.customer, profit_lines.c.extra
+                ).where(
+                    profit_lines.c.company.in_(companies),
+                    normalize_customer_sql(profit_lines.c.customer).in_(name_batch),
+                    *J.current_jobs(),
+                ).order_by(profit_lines.c.job_date.desc(), profit_lines.c.id.desc())).mappings().all()
+                for row in jpr_rows:
+                    key = (row["company"], normalize_customer(row["customer"]))
+                    if key in latest_jobs:
+                        latest_jobs[key].append(dict(row))
+
         result = []
-        for group in groups.values():
-            signal = customer_activity(group.pop('dates'), as_of)
-            result.append(dict(group, **signal))
-        result.sort(key=lambda r: (r['status']=='active', -(r['days_since_last'] or 0), r['customer']))
-        return {"as_of": as_of.isoformat(), "customers": result, "snapshot": evidence['snapshot'], "method": "Median inter-shipment-date interval: <=14 days uses 30-day threshold, <=30 uses 60, otherwise 90; >=3 distinct dates required. At risk after threshold, inactive after 1.5 times threshold. Review signals, not confirmed lost business."}
+        coverage = {}
+        for key, group in groups.items():
+            company = group["company"]
+            source_complete = all((company, lob) in promoted for lob in lob_order)
+            coverage[company] = {
+                "company": company,
+                "visible_lobs": visible_lobs,
+                "promoted_sources": sorted(lob for lob in visible_lobs if (company, lob) in promoted),
+                "complete_company_scope": source_complete and set(visible_lobs) == set(lob_order),
+            }
+            signal = cross_lob_customer_activity(
+                activity_dates[key], as_of,
+                sorted(group["selected_lobs"]), visible_lobs, source_complete,
+            )
+            jobs = build_recent_jobs(latest_jobs[key], lobs=visible_lobs, limit=5)
+            result.append({
+                "company": company,
+                "customer": group["customer"],
+                "indices": sorted(set(group["indices"])),
+                "selected_lob_activity": signal,
+                "last_five_jobs": jobs,
+                "identity_basis": "exact source customer name, case/whitespace normalized",
+            })
+
+        result.sort(key=lambda row: (
+            row["selected_lob_activity"]["classification"] in
+            ("active_in_selected_scope", "insufficient_history"),
+            -(row["selected_lob_activity"]["company_wide_activity"].get("days_since_last") or 0),
+            row["company"], row["customer"].casefold(),
+        ))
+        return {
+            "as_of": as_of.isoformat(), "customers": result,
+            "snapshot": evidence["snapshot"], "coverage": list(coverage.values()),
+            "method": (
+                "Adaptive cadence uses the median interval between distinct shipment dates: "
+                "<=14 days => 30-day threshold; <=30 => 60; otherwise 90 days. "
+                "At risk after the threshold; inactive after 1.5x the threshold; at least "
+                "three distinct dates are required. Activity is checked across all LOBs "
+                "visible to the signed-in user, independently of the selected dashboard "
+                "date start. Company-wide inactivity is asserted only when all four LOBs "
+                "are authorized and each has a promoted source snapshot. It describes "
+                "loaded snapshot history, not an all-time guarantee. Customer matching "
+                "uses exact source names with case/whitespace normalization because a "
+                "verified customer-code key is not yet available across all current reports. "
+                "Job-owner history uses current JPR records only; missing/conflicting owners "
+                "are never guessed."
+            ),
+        }
 
     @app.post("/api/metrics/export")
     async def metric_export_api(request: Request, user: dict = Depends(unsafe)):
