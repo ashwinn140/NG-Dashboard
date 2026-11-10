@@ -482,7 +482,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         Owner/job identity only; no income, expense or profit values. Company
         and LOB scope are checked again on the server for every request.
         """
-        from .customer_history import build_recent_jobs, build_last_shipment_owners, visible_report_types_for_scopes
+        from .customer_history import build_recent_jobs, build_last_shipment_owners, visible_report_types_for_scopes, normalize_customer_sql
         raw = await request.body()
         if len(raw) > 1_000_000: raise HTTPException(413, "Selection too large.")
         try:
@@ -525,7 +525,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                     shipments.c.company.in_(sorted(all_companies)),
                     shipments.c.report_type.in_(visible_report_types),
                     shipments.c.to_import.is_(None),
-                    func.lower(func.trim(shipments.c.customer)).in_(sorted(all_names))
+                    normalize_customer_sql(shipments.c.customer).in_(sorted(all_names))
                 )).all()
                 visible = {
                     (company, " ".join(str(customer or "").split()).casefold())
@@ -541,7 +541,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                     shipments.c.company.in_(sorted(all_companies)),
                     shipments.c.report_type.in_(visible_report_types),
                     shipments.c.to_import.is_(None),
-                    func.lower(func.trim(shipments.c.customer)).in_(sorted(all_names))
+                    normalize_customer_sql(shipments.c.customer).in_(sorted(all_names))
                 ).order_by(shipments.c.shipment_date.desc(), shipments.c.id.desc())).mappings().all()
                 source_rows = conn.execute(select(
                     profit_lines.c.id, profit_lines.c.company, profit_lines.c.job_no,
@@ -549,7 +549,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                     profit_lines.c.extra
                 ).where(
                     profit_lines.c.company.in_(sorted(all_companies)),
-                    func.lower(func.trim(profit_lines.c.customer)).in_(sorted(all_names)),
+                    normalize_customer_sql(profit_lines.c.customer).in_(sorted(all_names)),
                     *J.current_jobs()
                 ).order_by(profit_lines.c.job_date.desc(), profit_lines.c.id.desc())).mappings().all()
             by_customer = {}
