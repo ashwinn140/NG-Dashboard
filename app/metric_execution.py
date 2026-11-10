@@ -172,7 +172,7 @@ def eligible_records(metric, rows, context):
  'ops.overdue_invoice':lambda r:r['operations_lock_day']>0 and r['invoice_count']==0 and today-r['operations_lock_day']>late}
  if metric.startswith('ops.rate_'):
   rows=[r for r in rows if r.get('register_report',-1)%4==0]
-  if metric not in ['ops.rate_air_exports','ops.rate_usable']:rows=[r for r in rows if usable_rate(r,context) and (metric!='ops.rate_below_buy' or r['sell_rate']<r['buy_rate'])]
+  if metric!='ops.rate_air_exports':rows=[r for r in rows if usable_rate(r,context) and (metric!='ops.rate_below_buy' or r['sell_rate']<r['buy_rate'])]
  if metric.startswith('profit.rate_matched_'):rows=[r for r in rows if usable_rate(r,context)]
  if metric in ['profit.customers','profit.customers_80','profit.loss_customers','ops.active_customers','ops.period_new_customers','ops.period_absent_customers']:
   rows=[r for r in rows if known_customer(r.get('customer'))]
@@ -193,7 +193,11 @@ def execute(D,body,definitions):
  if body.get('dataset_built_at') and body['dataset_built_at']!=D.get('built_at'):raise ValueError('Dashboard data changed. Reload before inspecting records.')
  snap=snapshot_id(D)
  if body.get('snapshot') and body['snapshot']!=snap:raise ValueError('Data snapshot changed. Reload before inspecting or exporting.')
- current=eligible_records(metric.id,records(D,source,body.get('indices',[])),body.get('context',{}));previous=eligible_records(metric.id,records(D,source,body.get('previous_indices',[])),body.get('context',{}));operations_records=records(D,'operations',body.get('ops_indices',[]));benchmark=[]
+ current_raw=records(D,source,body.get('indices',[]));previous_raw=records(D,source,body.get('previous_indices',[]))
+ current=eligible_records(metric.id,current_raw,body.get('context',{}));previous=eligible_records(metric.id,previous_raw,body.get('context',{}))
+ aggregate_current=current_raw if metric.id=='ops.rate_usable' else current
+ aggregate_previous=previous_raw if metric.id=='ops.rate_usable' else previous
+ operations_records=records(D,'operations',body.get('ops_indices',[]));benchmark=[]
  if metric.id in ['profit.expected_adjusted','profit.expected_cost_only']:
   benchmark=[r for r in records(D,'profit',list(range(len(D['p']['co'])))) if r['income']>0 and r['expense']>0]
   ratios={};ti=te=0
@@ -212,7 +216,7 @@ def execute(D,body,definitions):
    if known_customer(r.get('customer')):pa.setdefault(r['customer'],set()).add((r['company'],r['lob'],r['job'],r['date']))
   chosen={c for c,ids in (ca if metric.id=='ops.period_new_customers' else pa).items() if len(ids)>=minimum and not (pa if metric.id=='ops.period_new_customers' else ca).get(c)}
   current=[r for r in (current if metric.id=='ops.period_new_customers' else previous) if r['customer'] in chosen];previous=[]
- a=aggregate(metric.id,current,body.get('context'));b=aggregate(metric.id,previous,body.get('context'))
+ a=aggregate(metric.id,aggregate_current,body.get('context'));b=aggregate(metric.id,aggregate_previous,body.get('context'))
  if body.get('compare') is False or metric.id in ['ops.period_new_customers','ops.period_absent_customers']:b=dict(value=None,numerator=None,denominator=None)
  av,bv=a['value'],b['value'];delta=None if av is None or bv is None else av-bv
  displayed=body.get('displayed_value',a['value']);difference=None if displayed is None or a['value'] is None else displayed-a['value']
