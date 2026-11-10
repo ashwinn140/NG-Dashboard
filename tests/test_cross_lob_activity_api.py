@@ -82,6 +82,28 @@ class CrossLobActivityApiTests(unittest.TestCase):
         self.assertEqual(signal["active_elsewhere_lobs"], ["OI"])
         self.assertFalse(signal["company_wide_verified"])
 
+    def test_latest_unpromoted_import_blocks_company_wide_verification(self):
+        self.seed()
+        with self.fixture.engine.begin() as conn:
+            conn.execute(insert(imports).values(
+                company="NG", report_type="OI", received_at=self.fixture.clock,
+                report_time=self.fixture.clock, file_name="OI-latest-failed.xlsx",
+                status="failed", row_count=0, range_from=date(2026, 1, 1),
+                range_to=date(2026, 12, 31),
+                columns=json.dumps(["Shipment No", "Shipment Date", "Customer"]),
+                source="manual",
+            ))
+        self.app = create_app(self.fixture.engine, self.fixture.tmp.name + "/uploads")
+        from fastapi.testclient import TestClient
+        client = TestClient(self.app)
+        csrf = self.login(client, "latest-failed@example.test", ["AE", "AI", "OE", "OI"])
+        response = self.activity(client, csrf)
+        self.assertEqual(response.status_code, 200, response.text)
+        signal = response.json()["customers"][0]["selected_lob_activity"]
+        self.assertFalse(signal["source_coverage_complete"])
+        self.assertFalse(signal["company_wide_verified"])
+        self.assertEqual(signal["company_wide_status"], "not_verified_incomplete_scope_or_sources")
+
     def test_restricted_user_cannot_learn_other_lob_activity(self):
         self.seed()
         self.app = create_app(self.fixture.engine, self.fixture.tmp.name + "/uploads")
