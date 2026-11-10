@@ -161,7 +161,7 @@ def eligible_records(metric, rows, context):
   rows=[r for r in rows if r.get('register_report',-1)%4==0]
   if metric not in ['ops.rate_air_exports','ops.rate_usable']:rows=[r for r in rows if usable_rate(r,context) and (metric!='ops.rate_below_buy' or r['sell_rate']<r['buy_rate'])]
  if metric.startswith('profit.rate_matched_'):rows=[r for r in rows if usable_rate(r,context)]
- if metric in ['profit.customers','profit.customers_80','profit.biggest_customer','profit.loss_customers','ops.active_customers','ops.period_new_customers','ops.period_absent_customers']:
+ if metric in ['profit.customers','profit.customers_80','profit.loss_customers','ops.active_customers','ops.period_new_customers','ops.period_absent_customers']:
   rows=[r for r in rows if known_customer(r.get('customer'))]
  if metric in ['profit.air_yield','profit.ocean_yield']:rows=[r for r in rows if r.get('matched_source_index',-1)>=0 and (r.get('register_report',-1)%4<2)==(metric=='profit.air_yield')]
  return [r for r in rows if predicates[metric](r)] if metric in predicates else rows
