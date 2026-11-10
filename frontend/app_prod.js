@@ -1334,11 +1334,26 @@ function ppExplorer() {
 }
 // ================================================================ profit data status (with the register join)
 function ppStatus() {
-  const M_ = D.p.meta; const rows = M_.map(mm => h('tr', null, h('td',null,COMP[mm.co === 'NG' ? 0 : 1]), h('td',null,mm.range_from + ' to ' + mm.range_to), h('td',null,'Job Date'), h('td',{class:'n'},fInt(mm.jobs)), h('td',{class:'n'},money(mm.income)), h('td',{class:'n'},money(mm.expense)), h('td',null,'Source totals validated at import')));
-  const join = M_.map((mm) => h('tr', null, h('td', null, COMP[mm.co === 'NG' ? 0 : 1]), h('td', {class: 'n'}, fInt(mm.jobs)), h('td', {class: 'n'}, fInt(mm.matched)), h('td', {class: 'n'}, fP0(mm.matched / mm.jobs)), h('td', null, Object.entries(mm.unmatched_by_lob).map(([k, v]) => k + ': ' + v).join(' · ') || 'none')));
+  const M_ = D.p.meta;
+  const evidence = (mm, metric, label, displayed) => {
+    const companyCode = mm.co === 'NG' ? 0 : 1;
+    const indices = [];
+    for (let i = 0; i < D.p.co.length; i++) if (D.p.co[i] === companyCode) indices.push(i);
+    return h('button', {type:'button',class:'mt-info','data-trace-metric':metric,'data-metric-id':metric,title:'Inspect the calculation and current JPR source rows for '+label,onclick:(e)=>{
+      e.stopPropagation();
+      const q=window.MetricTrace?.createRequest(metric,label,{indices,previous_indices:[],compare:false,displayed_value:displayed,context:{
+        date_basis:'Job Date',
+        period:{basis:'All current accepted JPR job rows',range_from:mm.range_from,range_to:mm.range_to},
+        segment:{company:mm.co,scope:'All current accepted JPR job rows',jobs:mm.jobs,matched_jobs:mm.matched,unmatched_by_lob:mm.unmatched_by_lob||{}}
+      }});
+      if(q){q.indices=indices;q.previous_indices=[];q.compare=false;q.displayed_value=displayed;q.context.filters={company:[mm.co]};window.MetricTrace?.openWithRequest(q);}
+    }},'Calculation & records');
+  };
+  const rows = M_.map(mm => h('tr', null, h('td',null,COMP[mm.co === 'NG' ? 0 : 1]), h('td',null,mm.range_from + ' to ' + mm.range_to), h('td',null,'Job Date'), h('td',{class:'n'},fInt(mm.jobs)), h('td',{class:'n'},money(mm.income)), h('td',{class:'n'},money(mm.expense)), h('td',null,'Source totals validated at import'),h('td',null,evidence(mm,'profit.gp','Profit data · '+mm.co,mm.income-mm.expense))));
+  const join = M_.map((mm) => h('tr', null, h('td', null, COMP[mm.co === 'NG' ? 0 : 1]), h('td', {class: 'n'}, fInt(mm.jobs)), h('td', {class: 'n'}, fInt(mm.matched)), h('td', {class: 'n'}, fP0(mm.matched / mm.jobs)), h('td', null, Object.entries(mm.unmatched_by_lob).map(([k, v]) => k + ': ' + v).join(' · ') || 'none'),h('td',null,evidence(mm,'profit.matched_share','Register matching · '+mm.co,mm.jobs?mm.matched/mm.jobs:null))));
   const cols = h('div', {class: 'scroll'}, h('table', {class: 'tbl'}, h('thead', null, h('tr', null, h('th', null, 'Company'), h('th', null, 'Columns found in the report (any order)'))), h('tbody', null, M_.map((mm) => h('tr', null, h('td', null, COMP[mm.co === 'NG' ? 0 : 1]), h('td', null, mm.columns.join(' · ')))))));
-  return h('div', {class: 'grid'}, card('Profit data status', 'Each report states its own grand total. The job records must add up to it, otherwise the file is rejected. In the live system this page also shows the last successful import time and any errors.', h('div', {class: 'scroll'}, h('table', {class: 'tbl'}, h('thead', null, h('tr', null, ['Company', 'Report covers', 'Basis', 'Jobs', 'Income', 'Expense', 'Import validation'].map((x, k) => h('th', {class: k > 2 && k < 8 ? 'n' : ''}, x)))), h('tbody', null, rows))), 'full'),
-    card('Matched to the shipment register', 'Job-report attributes are used directly. A unique register match supplies missing attributes and register weights; unmatched and customs jobs retain their finance totals.', h('div', {class: 'scroll'}, h('table', {class: 'tbl'}, h('thead', null, h('tr', null, ['Company', 'Jobs', 'Matched', 'Share matched', 'Not matched, by line of business'].map((x, k) => h('th', {class: k > 0 && k < 4 ? 'n' : ''}, x)))), h('tbody', null, join))), 'full'),
+  return h('div', {class: 'grid'}, card('Profit data status', 'Each company total reconciles to its current accepted Job Profit Analysis rows. Use Calculation & records to inspect the contributing jobs and recalculate gross profit from income less expense.', h('div', {class: 'scroll'}, h('table', {class: 'tbl'}, h('thead', null, h('tr', null, ['Company', 'Report covers', 'Basis', 'Jobs', 'Income', 'Expense', 'Import validation','Evidence'].map((x, k) => h('th', {class: k > 2 && k < 8 ? 'n' : ''}, x)))), h('tbody', null, rows))), 'full'),
+    card('Matched to the shipment register', 'Job-report attributes are used directly. A unique register match supplies missing attributes and register weights; unmatched and customs jobs retain their finance totals. Open the evidence to inspect every current JPR row and its matched/unmatched shipment reference.', h('div', {class: 'scroll'}, h('table', {class: 'tbl'}, h('thead', null, h('tr', null, ['Company', 'Jobs', 'Matched', 'Share matched', 'Not matched, by line of business','Evidence'].map((x, k) => h('th', {class: k > 0 && k < 4 ? 'n' : ''}, x)))), h('tbody', null, join))), 'full'),
     card('How the numbers are worked out', null, h('ul', {class: 'notes'},
       h('li', null, 'Each record contains the total income and expense of one job. Profit is income minus expense; margin is profit divided by income.'),
       h('li', null, 'The report contains one row per job. All finance filters and comparisons use Job Date. It includes the income and expense booked against those jobs, regardless of invoice date.'),
