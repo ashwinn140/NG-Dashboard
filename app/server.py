@@ -346,7 +346,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         if evidence["metric"]["id"] != "ops.shipments":
             raise HTTPException(400, "Activity requires operational shipment evidence.")
         from .phase2_metrics import cross_lob_customer_activity
-        from .customer_history import build_recent_jobs, normalize_customer_sql
+        from .customer_history import build_recent_jobs, normalize_customer_sql, is_named_customer
 
         try:
             as_of = date.fromisoformat(evidence["context"]["as_of"])
@@ -393,7 +393,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         for row in evidence["records"]:
             customer = " ".join(str(row.get("customer") or "").split())
             company = str(row.get("company") or "").strip().upper()
-            if not customer or company not in allowed_companies or not row.get("date"):
+            if not is_named_customer(customer) or company not in allowed_companies or not row.get("date"):
                 continue
             try:
                 shipment_day = date.fromisoformat(row["date"])
@@ -680,7 +680,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         Owner/job identity only; no income, expense or profit values. Company
         and LOB scope are checked again on the server for every request.
         """
-        from .customer_history import build_recent_jobs, build_last_shipment_owners, visible_report_types_for_scopes, normalize_customer_sql
+        from .customer_history import build_recent_jobs, build_last_shipment_owners, visible_report_types_for_scopes, normalize_customer_sql, is_named_customer
         raw = await request.body()
         if len(raw) > 1_000_000: raise HTTPException(413, "Selection too large.")
         try:
@@ -703,7 +703,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                 if last_shipment_date:
                     try: date.fromisoformat(last_shipment_date)
                     except ValueError: raise ValueError("Invalid last shipment date.")
-                if not name or len(name) > 300: raise ValueError("Invalid customer name.")
+                if not is_named_customer(name) or len(name) > 300: raise ValueError("Invalid customer name.")
                 if not isinstance(companies, list) or not companies or not set(companies).issubset(allowed_companies):
                     raise PermissionError("The selected company is outside your access scope.")
                 if not isinstance(requested_lobs or [], list) or (allowed_lobs is not None and not lobs.issubset(allowed_lobs)):
