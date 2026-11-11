@@ -23,7 +23,7 @@ async function boot(mutate){
  {const {dom,w,d,ng,data}=await boot();
   const cc=ng.COLS.customer.c,dates=data.date,mx=Math.max(...dates),cur={from:mx-29,to:mx},prev={from:mx-59,to:mx-30};
   const inC=new Set(),inP={};for(let i=0;i<dates.length;i++){if(dates[i]>=cur.from&&dates[i]<=cur.to)inC.add(cc[i]);else if(dates[i]>=prev.from&&dates[i]<=prev.to)inP[cc[i]]=(inP[cc[i]]||0)+1}
-  const lostIds=Object.keys(inP).filter(j=>!inC.has(+j));
+  const lostIds=Object.keys(inP).filter(j=>!inC.has(+j)&&!['(blank)','blank'].includes(String(ng.COLS.customer.d[+j]||'').trim().toLowerCase()));
   check('fixture has a customer present before and absent now (test precondition)',lostIds.length>0,{inP:Object.keys(inP).length,inC:inC.size});
   ng.S.sel={};ng.S.rel=null;ng.S.from=cur.from;ng.S.to=cur.to;ng.S.def.compare='prev';ng.S.def.topN=500;ng.setGroup('ops');ng.S.page='customers';ng.renderAll();
   const card=[...d.querySelectorAll('#page article')].find(e=>e.querySelector('h2')?.textContent==='Declining accounts');
