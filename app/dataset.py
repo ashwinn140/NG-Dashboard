@@ -324,11 +324,11 @@ def restrict(D: dict, user: dict) -> dict:
     keep = np.isin(rep, allowed_rep)
     idx = np.nonzero(keep)[0]
     pk = np.zeros(len(D["p"]["co"]), dtype=bool)
+    lob_ix = {"AE": 0, "AI": 1, "OE": 2, "OI": 3}
+    all_lobs = not user["lobs"] or set(user["lobs"]) == set(lob_ix)
     if user["finance"]:
         pco = np.asarray(D["p"]["co"], dtype=np.int64); prt = np.asarray(D["p"]["rt"], dtype=np.int64)
         comp_ok = [i for i, c in enumerate(["NG", "NCS"]) if not user["companies"] or c in user["companies"]]
-        lob_ix = {"AE": 0, "AI": 1, "OE": 2, "OI": 3}
-        all_lobs = not user["lobs"] or set(user["lobs"]) == set(lob_ix)
         rt_ok = [0, 1, 2, 3, 4] if all_lobs else [lob_ix[l] for l in user["lobs"]]
         pk = np.isin(pco, comp_ok) & np.isin(prt, rt_ok)
     pidx = np.nonzero(pk)[0]
