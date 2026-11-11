@@ -228,7 +228,7 @@ def execute(D,body,definitions,include_operations_links=True):
  displayed=body.get('displayed_value',a['value']);difference=None if displayed is None or a['value'] is None else displayed-a['value']
  reconciliation=dict(displayed_value=displayed,recalculated_value=a['value'],difference=difference,status='match' if difference is not None and abs(difference)<0.005 else 'not comparable' if difference is None else 'mismatch')
  evidence_records=current
-evidence_comparison_records=previous
+ evidence_comparison_records=previous
  if metric.id in ['profit.customers','profit.customers_80','profit.loss_customers','ops.active_customers']:
   evidence_records=[r for r in current if is_named_customer(r.get('customer'))]
  if metric.id=='profit.best_dimension':
