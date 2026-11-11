@@ -80,8 +80,8 @@ class TestRestrictedReportMetadata(unittest.TestCase):
                 "expense": [50], "td": [None], "jd": [None],
                 "meta": [{"co": "NG", "jobs": 1}],
             },
-            "cols": {"agent": {"l": "Agent", "d": [], "c": [], "pc": []}},
-            "agentInfo": [], "meta": [{}], "changes": {},
+            "cols": {"agent": {"l": "Agent", "d": ["Agent"], "c": [0], "pc": []}},
+            "agentInfo": [["", "", "", "", "", ""]], "meta": [{}], "changes": {},
         }
         restricted = DS.restrict(
             full,
