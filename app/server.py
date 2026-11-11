@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 import pandas as pd
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy import select, func, insert, delete, update, and_, or_
 from sqlalchemy.exc import IntegrityError
 from . import auth, admin_ops as ops, dataset as DS, mailer, master as MST, processor as P, profit as J, metric_definitions as MD, metric_execution as MX, report_scheduler as RS, report_scheduler_service as RSS
@@ -328,8 +329,10 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         try:
             body = json.loads(raw)
             if not isinstance(body, dict): raise ValueError("Invalid metric request.")
-            data = json.loads(gzip.decompress(store.dataset_for(user)))
-            return MX.execute(data, body, MD, include_operations_links=include_operations_links)
+            def execute_metric():
+                data = json.loads(gzip.decompress(store.dataset_for(user)))
+                return MX.execute(data, body, MD, include_operations_links=include_operations_links)
+            return await run_in_threadpool(execute_metric)
         except PermissionError as e: raise HTTPException(403, str(e))
         except (ValueError, TypeError, KeyError) as e: raise HTTPException(400, str(e))
 
@@ -424,78 +427,78 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         companies = sorted({company for company, _ in groups})
         customer_keys = set(groups)
         normalized_names = sorted({customer for _, customer in groups})
-        activity_dates = {key: {lob: [] for lob in visible_lobs} for key in groups}
-        latest_jobs = {key: [] for key in groups}
-        promoted = set()
-        register_started = time.perf_counter()
-        register_row_count = 0
-        register_ms = 0.0
-        import_ms = 0.0
-        jpr_ms = 0.0
-        jpr_row_count = 0
-        with engine.connect() as conn:
-            normalized_register_customer = normalize_customer_sql(shipments.c.customer)
-            pair_list = sorted(customer_keys)
-            for offset in range(0, len(pair_list), 200):
-                pair_batch = pair_list[offset:offset + 200]
-                pair_filter = or_(*[
-                    and_(shipments.c.company == company, normalized_register_customer == customer)
-                    for company, customer in pair_batch
-                ])
-                register_rows = conn.execute(select(
-                    shipments.c.company, shipments.c.report_type, shipments.c.customer,
-                    shipments.c.shipment_date
-                ).where(
-                    pair_filter,
-                    shipments.c.report_type.in_(visible_lobs),
-                    shipments.c.to_import.is_(None),
-                    shipments.c.shipment_date.is_not(None),
-                    shipments.c.shipment_date <= as_of,
-                )).mappings().all()
-                register_row_count += len(register_rows)
-                for row in register_rows:
-                    key = (row["company"], normalize_customer(row["customer"]))
-                    lob = row["report_type"]
-                    if lob in activity_dates[key] and row["shipment_date"]:
-                        activity_dates[key][lob].append(row["shipment_date"])
+        def fetch_customer_history():
+            activity_dates = {key: {lob: [] for lob in visible_lobs} for key in groups}
+            latest_jobs = {key: [] for key in groups}
+            promoted = set()
+            register_started = time.perf_counter()
+            register_row_count = 0
+            register_ms = 0.0
+            import_ms = 0.0
+            jpr_ms = 0.0
+            jpr_row_count = 0
+            batch_size = 500
+            with engine.connect() as conn:
+                normalized_register_customer = normalize_customer_sql(shipments.c.customer)
+                for offset in range(0, len(normalized_names), batch_size):
+                    name_batch = normalized_names[offset:offset + batch_size]
+                    register_rows = conn.execute(select(
+                        shipments.c.company, shipments.c.report_type, shipments.c.customer,
+                        shipments.c.shipment_date
+                    ).where(
+                        shipments.c.company.in_(companies),
+                        normalized_register_customer.in_(name_batch),
+                        shipments.c.report_type.in_(visible_lobs),
+                        shipments.c.to_import.is_(None),
+                        shipments.c.shipment_date.is_not(None),
+                        shipments.c.shipment_date <= as_of,
+                    )).mappings().all()
+                    register_row_count += len(register_rows)
+                    for row in register_rows:
+                        key = (row["company"], normalize_customer(row["customer"]))
+                        lob = row["report_type"]
+                        if key in activity_dates and lob in activity_dates[key] and row["shipment_date"]:
+                            activity_dates[key][lob].append(row["shipment_date"])
 
-            register_ms = (time.perf_counter() - register_started) * 1000
-            import_started = time.perf_counter()
-            import_rows = conn.execute(select(
-                imports.c.company, imports.c.report_type, imports.c.status, imports.c.id
-            ).where(
-                imports.c.company.in_(companies),
-                imports.c.report_type.in_(lob_order),
-            ).order_by(imports.c.id.desc())).mappings().all()
-            latest_import_status = {}
-            for row in import_rows:
-                key = (row["company"], row["report_type"])
-                if key not in latest_import_status:
-                    latest_import_status[key] = row["status"]
-            promoted.update(key for key, status in latest_import_status.items() if status == "promoted")
-            import_ms = (time.perf_counter() - import_started) * 1000
-
-            jpr_started = time.perf_counter()
-            normalized_jpr_customer = normalize_customer_sql(profit_lines.c.customer)
-            for offset in range(0, len(pair_list), 200):
-                pair_batch = pair_list[offset:offset + 200]
-                pair_filter = or_(*[
-                    and_(profit_lines.c.company == company, normalized_jpr_customer == customer)
-                    for company, customer in pair_batch
-                ])
-                jpr_rows = conn.execute(select(
-                    profit_lines.c.company, profit_lines.c.job_no, profit_lines.c.job_date,
-                    profit_lines.c.lob, profit_lines.c.customer, profit_lines.c.extra
+                register_ms = (time.perf_counter() - register_started) * 1000
+                import_started = time.perf_counter()
+                import_rows = conn.execute(select(
+                    imports.c.company, imports.c.report_type, imports.c.status, imports.c.id
                 ).where(
-                    pair_filter,
-                    *J.current_jobs(),
-                ).order_by(profit_lines.c.job_date.desc(), profit_lines.c.id.desc())).mappings().all()
-                jpr_row_count += len(jpr_rows)
-                for row in jpr_rows:
-                    key = (row["company"], normalize_customer(row["customer"]))
-                    if key in latest_jobs:
-                        latest_jobs[key].append(dict(row))
-            jpr_ms = (time.perf_counter() - jpr_started) * 1000
+                    imports.c.company.in_(companies),
+                    imports.c.report_type.in_(lob_order),
+                ).order_by(imports.c.id.desc())).mappings().all()
+                latest_import_status = {}
+                for row in import_rows:
+                    key = (row["company"], row["report_type"])
+                    if key not in latest_import_status:
+                        latest_import_status[key] = row["status"]
+                promoted.update(key for key, status in latest_import_status.items() if status == "promoted")
+                import_ms = (time.perf_counter() - import_started) * 1000
+
+                jpr_started = time.perf_counter()
+                normalized_jpr_customer = normalize_customer_sql(profit_lines.c.customer)
+                for offset in range(0, len(normalized_names), batch_size):
+                    name_batch = normalized_names[offset:offset + batch_size]
+                    jpr_rows = conn.execute(select(
+                        profit_lines.c.company, profit_lines.c.job_no, profit_lines.c.job_date,
+                        profit_lines.c.lob, profit_lines.c.customer, profit_lines.c.extra
+                    ).where(
+                        profit_lines.c.company.in_(companies),
+                        normalized_jpr_customer.in_(name_batch),
+                        *J.current_jobs(),
+                    ).order_by(profit_lines.c.job_date.desc(), profit_lines.c.id.desc())).mappings().all()
+                    jpr_row_count += len(jpr_rows)
+                    for row in jpr_rows:
+                        key = (row["company"], normalize_customer(row["customer"]))
+                        if key in latest_jobs:
+                            latest_jobs[key].append(dict(row))
+                jpr_ms = (time.perf_counter() - jpr_started) * 1000
+            return (activity_dates, latest_jobs, promoted, register_ms, register_row_count,
+                    import_ms, jpr_ms, jpr_row_count)
+
+        (activity_dates, latest_jobs, promoted, register_ms, register_row_count,
+         import_ms, jpr_ms, jpr_row_count) = await run_in_threadpool(fetch_customer_history)
 
         result = []
         coverage = {}
@@ -528,13 +531,20 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             -(row["selected_lob_activity"]["company_wide_activity"].get("days_since_last") or 0),
             row["company"], row["customer"].casefold(),
         ))
+        total_ms = (time.perf_counter() - request_started) * 1000
         log.info(
             "customer360_activity_profile evidence_ms=%.1f grouping_ms=%.1f "
             "register_ms=%.1f register_rows=%d import_ms=%.1f jpr_ms=%.1f "
             "jpr_rows=%d customers=%d total_ms=%.1f",
             evidence_ms, grouping_ms, register_ms, register_row_count, import_ms,
-            jpr_ms, jpr_row_count, len(result), (time.perf_counter() - request_started) * 1000,
+            jpr_ms, jpr_row_count, len(result), total_ms,
         )
+        if total_ms >= 5000:
+            log.warning(
+                "customer360_activity_slow evidence_ms=%.1f grouping_ms=%.1f "
+                "register_ms=%.1f import_ms=%.1f jpr_ms=%.1f customers=%d total_ms=%.1f",
+                evidence_ms, grouping_ms, register_ms, import_ms, jpr_ms, len(result), total_ms,
+            )
         return {
             "as_of": as_of.isoformat(), "customers": result,
             "snapshot": evidence["snapshot"], "coverage": list(coverage.values()),
