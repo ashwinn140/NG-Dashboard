@@ -52,6 +52,20 @@ def user_dict(r) -> dict:
                 has_password=bool(r.pw_hash), last_login=r.last_login.isoformat() if r.last_login else None)
 
 
+
+def _scope_values(value, allowed, label):
+    """Validate access scopes before persistence; an invalid scope must never become unrestricted."""
+    if value is None:
+        value = []
+    if not isinstance(value, (list, tuple, set)):
+        raise ValueError(f"{label} must be a list of allowed values.")
+    values = list(dict.fromkeys(str(item).strip().upper() for item in value if str(item).strip()))
+    invalid = sorted(set(values) - set(allowed))
+    if invalid:
+        raise ValueError(f"Unknown {label.lower()} scope value(s): " + ", ".join(invalid))
+    return values
+
+
 def finance_default(role: str) -> int:
     return 1 if role in ("admin", "management", "finance") else 0
 
@@ -60,7 +74,7 @@ def create_user(engine, email: str, role: str = "operations", name: str = "", us
     email = email.strip().lower()
     if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email): raise ValueError("That does not look like an email address.")
     if role not in ROLES: raise ValueError("Role must be one of: " + ", ".join(ROLES))
-    companies = [c for c in (companies or []) if c in COMPANIES]; lobs = [l for l in (lobs or []) if l in LOB_CODES]
+    companies = _scope_values(companies, COMPANIES, "Company"); lobs = _scope_values(lobs, LOB_CODES, "LOB")
     if password:
         p = password_problem(password)
         if p: raise ValueError(p)
@@ -80,8 +94,8 @@ def update_user(engine, uid: int, **f) -> dict:
         if f["role"] not in ROLES: raise ValueError("Role must be one of: " + ", ".join(ROLES))
         vals["role"] = f["role"]
     if "name" in f and f["name"] is not None: vals["name"] = f["name"]
-    if "companies" in f and f["companies"] is not None: vals["companies"] = ",".join(c for c in f["companies"] if c in COMPANIES)
-    if "lobs" in f and f["lobs"] is not None: vals["lobs"] = ",".join(l for l in f["lobs"] if l in LOB_CODES)
+    if "companies" in f and f["companies"] is not None: vals["companies"] = ",".join(_scope_values(f["companies"], COMPANIES, "Company"))
+    if "lobs" in f and f["lobs"] is not None: vals["lobs"] = ",".join(_scope_values(f["lobs"], LOB_CODES, "LOB"))
     if "finance" in f and f["finance"] is not None: vals["finance"] = int(bool(f["finance"]))
     if "active" in f and f["active"] is not None: vals["active"] = int(bool(f["active"]))
     if "user_id" in f and f["user_id"] is not None: vals["user_id"] = f["user_id"].strip().lower() or None
