@@ -136,4 +136,44 @@ class MetricExecutionTests(unittest.TestCase):
 
  def test_ops_does_not_include_money(self):
   r=X.execute(self.fixture(),dict(metric='ops.shipments',indices=[0,1]),M);self.assertEqual(r['current']['value'],2);self.assertNotIn('income',r['records'][0])
+ def test_blank_customer_buckets_are_excluded_from_named_customer_metrics(self):
+  d=self.fixture();d['cols']['customer']={'d':['Alpha','(blank)'],'pc':[0,1],'c':[0,1]}
+  r=X.execute(d,dict(metric='profit.customers',indices=[0,1]),M)
+  self.assertEqual(r['current']['value'],1)
+  self.assertEqual({x['customer'] for x in r['records']},{'Alpha'})
+  r=X.execute(d,dict(metric='profit.customers_80',indices=[0,1]),M)
+  self.assertEqual(r['current']['value'],1)
+  self.assertEqual({x['customer'] for x in r['records']},{'Alpha'})
+  r=X.execute(d,dict(metric='profit.loss_customers',indices=[0,1]),M)
+  self.assertEqual(r['current']['value'],0)
+  self.assertEqual({x['customer'] for x in r['records']},{'Alpha'})
+  r=X.execute(d,dict(metric='profit.biggest_customer',indices=[0,1]),M)
+  self.assertAlmostEqual(r['current']['value'],1.5)
+  self.assertEqual({x['customer'] for x in r['records']},{'Alpha','(blank)'})
+  r=X.execute(d,dict(metric='ops.active_customers',indices=[0,1],context={'active_min':1}),M)
+  self.assertEqual(r['current']['value'],1)
+  self.assertEqual({x['customer'] for x in r['records']},{'Alpha'})
+  r=X.execute(d,dict(metric='ops.customer_concentration',indices=[0,1],context={'top_n':1}),M)
+  self.assertAlmostEqual(r['current']['value'],0.5)
+  self.assertEqual({x['customer'] for x in r['records']},{'Alpha','(blank)'})
+
+ def test_period_customer_metrics_ignore_blank_bucket(self):
+  d=self.fixture();d['cols']['customer']={'d':['Alpha','(blank)'],'pc':[0,1],'c':[0,1]}
+  r=X.execute(d,dict(metric='ops.period_new_customers',indices=[0,1],previous_indices=[],context={'active_min':1}),M)
+  self.assertEqual(r['current']['value'],1)
+  self.assertEqual({x['customer'] for x in r['records']},{'Alpha'})
+  r=X.execute(d,dict(metric='ops.period_absent_customers',indices=[],previous_indices=[0,1],context={'active_min':1}),M)
+  self.assertEqual(r['current']['value'],1)
+  self.assertEqual({x['customer'] for x in r['records']},{'Alpha'})
+
+ def test_cost_coverage_counts_distinct_jobs(self):
+  d=self.fixture();d['p']['co']=[0,0];d['p']['sidx']=[0,1];d['p']['jd']=[20000,20000]
+  d['cols']['p_job']={'d':['J1'],'pc':[0,0]}
+  d['cols']['p_lob']={'d':['FFWD AIR EXP'],'pc':[0,0]}
+  d['p']['expense']=[40,50]
+  r=X.execute(d,dict(metric='profit.cost_coverage',indices=[0,1]),M)
+  self.assertEqual(r['current']['numerator'],1)
+  self.assertEqual(r['current']['denominator'],1)
+  self.assertEqual(r['current']['value'],1)
+
 if __name__=='__main__':unittest.main()
