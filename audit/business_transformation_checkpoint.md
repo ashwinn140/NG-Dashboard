@@ -39,3 +39,37 @@ Customer & Partner 360 was not visibly marked BETA in current navigation/page ti
 ## Release safety
 
 Only label text and checkpoint documentation are in this release. Production rollback before rollout: f761fabb-f268-4b2e-af4c-ef5baab401fc / main 75e704e. No database rollback required. Release rollout and public health result will be recorded on the PR; authenticated acceptance remains explicitly outstanding.
+
+## Continuation verification — 9 November 2026 (live GitHub/Railway reads)
+
+### Current repository and production state
+- Rechecked GitHub main: `004b7a6e3f66317375d28c84249110ed109e6490` (merge of PR #41).
+- PR #41 is merged. PR #40 remains open at `2d6e65eb998456c5c9c2ff3662687f62ac133c57`; PR #28 remains open and deferred.
+- PR #40's Metric traceability checks workflow run 42660496371 completed SUCCESS. Its single job ran production build, backend/permissions/Excel reconciliation suite, frontend metric-contract audit and synthetic visual inventory. This is CI evidence only, not live database reconciliation.
+- Railway project `Performance Dashboard Production`, production environment `410fd484-cba1-4ade-b831-b6c76e0018e1`: dashboard, Postgres and AI-Insights are all online (1/1 replicas each), zero active warnings/criticals, zero recent failures and no pending work.
+- Current dashboard deployment `a30fb086-e1a0-4a9b-abbf-be8541bde149` SUCCESS, serving main commit `004b7a6...`. Previous `f761fabb...` is REMOVED/superseded. Public health requests returned HTTP 200. No deployment was initiated during this continuation.
+- Runtime logs include successful `/api/dataset`, `/api/metrics/definitions`, `/api/me` and `POST /api/metrics/evidence` responses. This verifies API request success, not financial reconciliation.
+
+### PR #40 review continuation
+- Current PR head is unchanged; PR is mergeable and open. No submitted reviews or inline review threads are present.
+- Patch attaches the existing `ops.locked_no_invoice` metric to the existing billing worklist visual and preserves the selected grouping dimension. Existing server metric eligibility is operations lock date > 0 and invoice count == 0; the action returns the locked/uninvoiced subset and explicitly describes its as-of scope.
+- Workflow run `42660496371` and job `129310447609` completed SUCCESS at 17:02 UTC, including the focused backend evidence test and frontend binding assertion.
+- No merge performed. Continue to require acceptance that the evidence action represents the locked/uninvoiced subset, not every displayed billing measure.
+
+### Live configuration and source checks
+- Dashboard service follows `ashwinn140/NG-Dashboard` main, region iad, persistent `/data` volume. Postgres has its persistent data volume in iad. No service configuration changes or pending patches.
+- Railway OAuth returns variable names only. No variable values or SQL endpoint are available through this connection; no secrets were copied or queried.
+- Dashboard and Postgres 24-hour samples were available; no immediate resource remediation is indicated. PostgreSQL deploy logs include repeated SSL `unexpected eof while reading` connection messages despite successful deployment and normal API activity. They remain an observation, not a diagnosed outage.
+- Repository source confirms JPR `job_summary_v1`, Job Date basis, one row per job, Income − Expense, grand-total validation, duplicate identity Job No. + Job Date + LOB, and explicit rejection of charge-detail input. No formula/source architecture change.
+- Repository source confirms import admin has `needs_review`/failed/promoted states, history coverage and data-freshness views. Live held 2024 status and current company/report completeness remain unverified.
+
+### Ingestion cadence clarification
+- `gmail/ERP_Mail_Collector.gs` defines `TRIGGER_HOURS: 3` and `installTrigger()` creates an Apps Script time-based trigger every three hours.
+- README also describes a 15-minute Apps Script polling hop. This may be a separate integration/polling stage; documentation alone does not prove either live trigger is installed/enabled or that the end-to-end schedule is healthy.
+- Actual Apps Script trigger state and live admin import/freshness records still require authenticated Google Apps Script/admin access.
+
+### Outstanding acceptance and evidence
+- Secure authenticated browser acceptance is still outstanding; unauthenticated/public checks and server log records do not substitute for user-session acceptance, responsive testing or keyboard/accessibility checks.
+- Source workbook → PostgreSQL → API → screen/export financial reconciliation remains outstanding. No live SQL read, import metadata query, workbook download or authenticated finance-role visibility check was possible through the current connectors.
+- No source files, imports, financial formulas, database schema, permissions, schedules, services or production configuration changed in this continuation. No deploy was initiated.
+- Continue with secure admin/browser and read-only SQL access; reconcile current simple JPR totals and historical coverage, inspect held 2024 imports and actual Apps Script triggers, perform targeted authenticated acceptance, then update this checkpoint on an isolated branch. Preserve all exclusions: no charge-wise reconstruction, no scheduler build, no Customer360 expansion, no PR #28 merge.
