@@ -525,7 +525,7 @@ function pageCustomers() {
       status.textContent='Showing '+jobs.length+' most recent distinct jobs. Latest job owner is shown above; owner values come only from JPR.';
     }).catch(error=>{status.textContent=error.message;status.className='bad';});
   }
-  const sel = S.sel[key] || new Set(), hasPrev = R.np > 0; const rows = []; for (let j = 0; j < sz; j++) if (cnt[j] > 0 || sel.has(j)) rows.push({j, cnt: cnt[j], air: air[j], sea: sea[j], share: totC ? cnt[j] / totC : 0, delta: hasPrev ? cnt[j] - pc[j] : 0, last: last[j], v: vol[j]});
+  const sel = S.sel[key] || new Set(), hasPrev = R.np > 0; const rows = []; for (let j = 0; j < sz; j++) if ((cnt[j] > 0 || sel.has(j)) && isNamedCustomerLabel(COLS.customer.d[j])) rows.push({j, cnt: cnt[j], air: air[j], sea: sea[j], share: totC ? cnt[j] / totC : 0, delta: hasPrev ? cnt[j] - pc[j] : 0, last: last[j], v: vol[j]});
   const exportCust = async () => {
     const list = rows.slice().sort((a,b)=>b.cnt-a.cnt);
     try {
@@ -588,7 +588,7 @@ function pageCustomers() {
       [...hm.get(j)].map((v, bi) => h('td', {class: 'n hc', title: COLS.customer.d[j] + ' · ' + d3.utcFormat('%b %Y')(dDate(months[bi])) + ': ' + fm(v), style: v ? 'background:rgba(76,120,168,' + (0.12 + 0.75 * v / hmax) + ');color:' + (v / hmax > 0.55 ? '#fff' : 'inherit') : '', onclick: () => { S.sel.customer = new Set([j]); S.rel = null; S.from = Math.max(months[bi], MINDATE); S.to = Math.min(Math.round(+d3.utcMonth.offset(dDate(months[bi]), 1) / DMS) - 1, MAXDATE); renderAll(); }}, v ? (R.useVol ? (R.air ? f1(v) : fInt(Math.round(v))) : fInt(v)) : '')))))));
   // A customer with shipments before and none now is the biggest possible decline, but has no row above
   // (rows are customers with shipments now), so add them here for the movers lists only.
-  const lost = []; if (hasPrev) for (let j = 0; j < sz; j++) if (!(cnt[j] > 0 || sel.has(j)) && pc[j] > 0) lost.push({j, cnt: 0, delta: -pc[j]});
+  const lost = []; if (hasPrev) for (let j = 0; j < sz; j++) if (isNamedCustomerLabel(COLS.customer.d[j]) && !(cnt[j] > 0 || sel.has(j)) && pc[j] > 0) lost.push({j, cnt: 0, delta: -pc[j]});
   const mov = hasPrev ? rows.filter((r) => r.delta !== 0).concat(lost) : [], gain = mov.filter((r) => r.delta > 0).sort((a, b) => b.delta - a.delta).slice(0, S.def.topN), lose = mov.filter((r) => r.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, S.def.topN);
   const moverList = (arr, sign) => arr.length ? h('div', {class: 'rank'}, arr.map((r) => h('button', {type: 'button', class: 'row', onclick: () => toggle(key, r.j)}, h('span', {class: 'lab', title: COLS.customer.d[r.j]}, COLS.customer.d[r.j]), h('span', {class: 'track'}, h('span', {class: 'fill', style: 'width:' + Math.min(100, Math.abs(r.delta) / Math.abs(arr[0].delta) * 100) + '%;background:var(--' + (sign > 0 ? 'ok' : 'bad') + ')'})), h('span', {class: 'val'}, (sign > 0 ? '+' : '−') + fInt(Math.abs(r.delta)) + ' shipments')))) : (hasPrev ? emptyNote() : h('p', {class: 'empty'}, 'No earlier period to compare with. Choose a shorter date range, for example the last 30 days.'));
   return h('div', null, h('div', {class: 'grid'},
@@ -1074,16 +1074,16 @@ function selectProfitJob(e) {
   });
 }
 const pcatv = (key, i) => COLS[key].d[COLS[key].pc[i]];
-function prankList(rows, onClick, selFn, opt) {
+function prankList(rows, onClick, selFn, opt, denominator) {
   opt = opt || {}; if (!rows.length) return emptyNote();
   const sorted = rows.slice().sort((a, b) => rankVal(b) - rankVal(a)), lim = opt.limit || S.def.topN; const top = sorted.slice(0, lim); sorted.forEach((r) => { if (selFn(r) && !top.includes(r)) top.push(r); });
-  const mx = Math.max(...top.map((r) => Math.abs(rankVal(r))), 1), tot = d3.sum(rows, (r) => rankVal(r));
+  const mx = Math.max(...top.map((r) => Math.abs(rankVal(r))), 1), tot = denominator == null ? d3.sum(rows, (r) => rankVal(r)) : denominator;
   return h('div', null, h('div', {class: 'rank'}, top.map((r) => h('button', {type: 'button', class: 'row' + (selFn(r) ? ' on' : ''), onclick: () => onClick(r)}, h('span', {class: 'lab', title: r.label}, r.label),
     h('span', {class: 'track'}, h('span', {class: 'fill', style: 'width:' + (Math.abs(rankVal(r)) / mx * 100) + '%;background:' + (rankVal(r) < 0 ? 'var(--bad)' : (opt.color || '#4c78a8'))})),
     h('span', {class: 'val'}, money(rankVal(r)) + (S.rank === 'profit' ? ' · ' + fMargin(r.margin) : '') + (tot > 0 && rankVal(r) > 0 ? ' · ' + fS(rankVal(r) / tot) : ''))))),
     sorted.length > top.length ? h('p', {class: 'more'}, 'Top ' + top.length + ' of ' + fInt(sorted.length) + '. Use the filters above to find others.') : null);
 }
-const pkeyRank = (key, opt) => { const m = maskP({skip: key}), sel = S.sel[key] || new Set(); return prankList(groupByP(key, m), (r) => {toggle(key,r.g);}, (r) => sel.has(r.g), opt); };
+const pkeyRank = (key, opt) => { const m = maskP({skip: key}), sel = S.sel[key] || new Set(), rows = groupByP(key, m).filter(r => key !== 'customer' || isNamedCustomerLabel(r.label)); return prankList(rows, (r) => {toggle(key,r.g);}, (r) => sel.has(r.g), opt, key === 'customer' ? totalsP(m).profit : undefined); };
 
 // ================================================================ pages
 const colour = (v, mx) => (v >= 0 ? 'rgba(26,127,75,' : 'rgba(194,54,43,') + (0.1 + 0.7 * Math.min(1, Math.abs(v) / (mx || 1))) + ')';
@@ -1192,14 +1192,14 @@ function ppBranches() {
     card('New Globe against Neutral Consolidation', 'Profit by branch. Click a bar to filter to that company and branch.', chart, null, {metric:'profit.gp',dimension:'branch'}), card('Branch by line of business', 'Profit in each combination. Click a cell to filter.', heat, null, {metric:'profit.gp',dimension:'branch'})));
 }
 function ppCustomers() {
-  const m = maskP({skip: 'customer'}), rows = groupByP('customer', m), sel = S.sel.customer || new Set(), tot = d3.sum(rows, (r) => r.profit), st = S.pcust;
+  const m = maskP({skip: 'customer'}), rows = groupByP('customer', m).filter(r => isNamedCustomerLabel(r.label)), sel = S.sel.customer || new Set(), tot = totalsP(m).profit, st = S.pcust;
   const sorted = rows.slice().sort((a, b) => b.profit - a.profit); let cum = 0, n80 = 0; const pos = d3.sum(rows.filter((r) => r.profit > 0), (r) => r.profit);
   sorted.forEach((r) => { if (r.profit > 0 && cum < 0.8 * pos) { cum += r.profit; n80++; } });
   const top1 = sorted[0], cols = [{k: 'label', t: 'Customer'}, {k: 'inc', t: 'Income', num: true}, {k: 'exp', t: 'Expense', num: true}, {k: 'profit', t: 'Profit', num: true}, {k: 'margin', t: 'Margin', num: true}, {k: 'jobs', t: 'Jobs', num: true}, {k: 'share', t: 'Share of profit', num: true}];
   rows.forEach((r) => { r.share = tot > 0 ? r.profit / tot : null; });
   const thead = h('thead'), tbody = h('tbody'), note = h('p', {class: 'note'}), draw = () => { const f = st.sort === 'label' ? (a, b) => a.label.localeCompare(b.label) : (a, b) => (a[st.sort] == null ? -1e18 : a[st.sort]) - (b[st.sort] == null ? -1e18 : b[st.sort]); const list = rows.slice().sort((a, b) => f(a, b) * st.dir), shown = list.slice(0, S.def.tableRows);
     thead.replaceChildren(sortHead(cols, st, draw)); tbody.replaceChildren(...shown.map((r) => h('tr', {class: 'click' + (sel.has(r.g) ? ' on' : ''), onclick: () => toggle('customer', r.g)}, h('td', null, r.label), h('td', {class: 'n'}, money(r.inc)), h('td', {class: 'n'}, money(r.exp)), h('td', {class: 'n ' + (r.profit < 0 ? 'bad' : '')}, money(r.profit)), h('td', {class: 'n'}, fMargin(r.margin)), h('td', {class: 'n'}, fInt(r.jobs)), h('td', {class: 'n'}, r.share == null ? '–' : fS(r.share)))));
-    note.textContent = 'Showing ' + shown.length + ' of ' + fInt(list.length) + ' customers. Click a header to sort, a row to filter.'; }; draw();
+    note.textContent = 'Showing ' + shown.length + ' of ' + fInt(list.length) + ' named customers. Unassigned JPR profit remains in company totals but is excluded from named-customer rankings. Click a header to sort, a row to filter.'; }; draw();
   const exportC = () => { const list = rows.slice().sort((a, b) => b.profit - a.profit), n = list.length + 1;
     downloadXlsx('customer_profit_' + fIso(dDate(MAXDATE)) + '.xlsx', [{name: 'Customer profit', freeze: true, filter: true, cols: [46, 16, 16, 16, 12, 10, 16], rows: [['Customer', 'Income', 'Expense', 'Profit', 'Margin', 'Jobs', 'Share of total profit'].map(HDR)].concat(list.map((r, i) => { const x = i + 2; return [r.label, {v: +r.inc.toFixed(2), s: 3}, {v: +r.exp.toFixed(2), s: 3}, {f: 'B' + x + '-C' + x, s: 3}, {f: 'IF(B' + x + '<=0,"",D' + x + '/B' + x + ')', s: 2}, {v: r.jobs, s: 3}, {f: 'IF(SUM(D$2:D$' + n + ')=0,"",D' + x + '/SUM(D$2:D$' + n + '))', s: 2}]; }))}, settingsSheet()]); };
   // income against margin, bubble = profit
