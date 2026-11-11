@@ -228,11 +228,16 @@ def execute(D,body,definitions,include_operations_links=True):
  displayed=body.get('displayed_value',a['value']);difference=None if displayed is None or a['value'] is None else displayed-a['value']
  reconciliation=dict(displayed_value=displayed,recalculated_value=a['value'],difference=difference,status='match' if difference is not None and abs(difference)<0.005 else 'not comparable' if difference is None else 'mismatch')
  evidence_records=current
+evidence_comparison_records=previous
  if metric.id in ['profit.customers','profit.customers_80','profit.loss_customers','ops.active_customers']:
   evidence_records=[r for r in current if is_named_customer(r.get('customer'))]
  if metric.id=='profit.best_dimension':
   evidence_records=[r for r in current if is_named_customer(r.get('dimension_value'))]
- return dict(reconciliation=reconciliation,metric=metric.public_dict(),snapshot=snap,version=VERSION,current=a,previous=b,difference=delta,percentage=None if delta is None or not bv else delta/abs(bv)*100,records=evidence_records,comparison_records=previous,operations_records=operations_records,benchmark_records=benchmark,context=body.get('context',{}),lineage={'built_at':D.get('built_at'),'reports':D.get('p',{}).get('meta',[]) if source=='profit' else D.get('meta',[])})
+ if metric.id=='ops.rate_usable':
+  # The KPI denominator is every selected air export; the evidence table is the usable-rate numerator only.
+  evidence_records=[r for r in current if usable_rate(r,body.get('context',{}))]
+  evidence_comparison_records=[r for r in previous if usable_rate(r,body.get('context',{}))]
+ return dict(reconciliation=reconciliation,metric=metric.public_dict(),snapshot=snap,version=VERSION,current=a,previous=b,difference=delta,percentage=None if delta is None or not bv else delta/abs(bv)*100,records=evidence_records,comparison_records=evidence_comparison_records,operations_records=operations_records,benchmark_records=benchmark,context=body.get('context',{}),lineage={'built_at':D.get('built_at'),'reports':D.get('p',{}).get('meta',[]) if source=='profit' else D.get('meta',[])})
 
 def workbook(result):
  wb=Workbook(write_only=True)
