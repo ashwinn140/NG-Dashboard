@@ -68,5 +68,22 @@ class TestAuthenticationAtomicity(unittest.TestCase):
         self.assertIn("Too many wrong attempts", message)
 
 
+
+    def test_invalid_company_scope_is_rejected_instead_of_becoming_unrestricted(self):
+        with self.assertRaisesRegex(ValueError, "Unknown company scope"):
+            auth.create_user(
+                self.engine,
+                "bad-scope@example.test",
+                role="operations",
+                companies=["NOT-A-COMPANY"],
+            )
+
+    def test_invalid_lob_update_is_rejected_without_changing_existing_scope(self):
+        with self.assertRaisesRegex(ValueError, "Unknown lob scope"):
+            auth.update_user(self.engine, self.user["id"], lobs=["NOT-A-LOB"])
+        current = auth.session_user(self.engine, None)
+        updated = auth.update_user(self.engine, self.user["id"], lobs=["AE"])
+        self.assertEqual(updated["lobs"], ["AE"])
+
 if __name__ == "__main__":
     unittest.main()
