@@ -215,6 +215,7 @@ def normalize_customer_sql(column):
     for whitespace in ("\t", "\n", "\r", "\f", "\v", "\x85", "\u00a0", "\u1680", "\u2000", "\u2001", "\u2002", "\u2003", "\u2004", "\u2005", "\u2006", "\u2007", "\u2008", "\u2009", "\u200a", "\u2028", "\u2029", "\u202f", "\u205f", "\u3000"):
         value = func.replace(value, whitespace, " ")
     value = func.trim(value)
-    for _ in range(8):
+    # Ten passes collapse runs longer than the API's 300-character name limit.
+    for _ in range(10):
         value = func.replace(value, "  ", " ")
     return func.lower(func.trim(value))
