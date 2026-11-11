@@ -145,8 +145,8 @@ const fS = (s) => (s >= 0.1 ? fP0(s) : fP1(s));
 function rankedKey(key) {
   const limit = S.def.topN;
   const m = mask({skip: key}), c = COLS[key].c, a = new Float64Array(COLS[key].d.length); let tot = 0;
-  for (let i = 0; i < N; i++) if (m[i]) { const v = vi(i); a[c[i]] += v; tot += v; }
-  const sel = S.sel[key] || new Set(); let ids = []; for (let j = 0; j < a.length; j++) if (a[j] > 0 || sel.has(j)) ids.push(j);
+  for (let i = 0; i < N; i++) if (m[i]) { const v = vi(i); if (key !== 'customer' || isNamedCustomerLabel(COLS[key].d[c[i]])) a[c[i]] += v; tot += v; }
+  const sel = S.sel[key] || new Set(); let ids = []; for (let j = 0; j < a.length; j++) if ((a[j] > 0 || sel.has(j)) && (key !== 'customer' || isNamedCustomerLabel(COLS[key].d[j]))) ids.push(j);
   ids.sort((x, y) => a[y] - a[x]); const top = ids.slice(0, limit); sel.forEach((j) => { if (!top.includes(j)) top.push(j); });
   return h('div', null, rankRows(top.map((j) => ({k: j, label: COLS[key].d[j], v: a[j], sel: sel.has(j)})), tot, (d) => {const metric=R.useVol?(R.air?'ops.air_weight':'ops.teu'):'ops.shipments';toggle(key,d.k);}, CI[key] || 0),
     ids.length > top.length ? h('p', {class: 'more'}, 'Top ' + top.length + ' of ' + fInt(ids.length) + '. Use the ' + COLS[key].l + ' filter above to find others.') : null);
@@ -399,10 +399,11 @@ function kpi(label, value, delta, note, tone, previousValue, metricExplanation) 
     note ? h('div', {class: 'kn'}, note) : null,
     businessMeaning(label, note, metricExplanation));
 }
-function activeCust(m) { const c = COLS.customer.c, a = new Uint32Array(COLS.customer.d.length); for (let i = 0; i < N; i++) if (m[i]) a[c[i]]++; let n = 0; for (let j = 0; j < a.length; j++) if (a[j] > 0 && a[j] >= S.def.activeMin) n++; return n; }
+function isNamedCustomerLabel(value) { const label = String(value == null ? '' : value).trim().toLowerCase(); return !!label && label !== '(blank)' && label !== 'blank'; }
+function activeCust(m) { const c = COLS.customer.c, a = new Uint32Array(COLS.customer.d.length); for (let i = 0; i < N; i++) if (m[i]) a[c[i]]++; let n = 0; for (let j = 0; j < a.length; j++) if (a[j] > 0 && a[j] >= S.def.activeMin && isNamedCustomerLabel(COLS.customer.d[j])) n++; return n; }
 function sumWhere(m, f) { let s = 0; for (let i = 0; i < N; i++) if (m[i]) s += f(i); return s; }
 function distinct(m, key) { const c = COLS[key].c, set = new Set(); for (let i = 0; i < N; i++) if (m[i]) set.add(c[i]); return set.size; }
-function top10(m, useVol) { const c = COLS.customer.c, a = new Float64Array(COLS.customer.d.length); let t = 0; for (let i = 0; i < N; i++) if (m[i]) { const v = useVol ? VOL[i] : 1; a[c[i]] += v; t += v; }
+function top10(m, useVol) { const c = COLS.customer.c, a = new Float64Array(COLS.customer.d.length); let t = 0; for (let i = 0; i < N; i++) if (m[i]) { const v = useVol ? VOL[i] : 1; if (isNamedCustomerLabel(COLS.customer.d[c[i]])) a[c[i]] += v; t += v; }
   if (!t) return null; const s = Array.from(a).sort((x, y) => y - x); let u = 0; for (let k = 0; k < S.def.topN; k++) u += s[k] || 0; return u / t; }
 
 // ---------------------------------------------------------------- trend chart
@@ -524,7 +525,7 @@ function pageCustomers() {
       status.textContent='Showing '+jobs.length+' most recent distinct jobs. Latest job owner is shown above; owner values come only from JPR.';
     }).catch(error=>{status.textContent=error.message;status.className='bad';});
   }
-  const sel = S.sel[key] || new Set(), hasPrev = R.np > 0; const rows = []; for (let j = 0; j < sz; j++) if (cnt[j] > 0 || sel.has(j)) rows.push({j, cnt: cnt[j], air: air[j], sea: sea[j], share: totC ? cnt[j] / totC : 0, delta: hasPrev ? cnt[j] - pc[j] : 0, last: last[j], v: vol[j]});
+  const sel = S.sel[key] || new Set(), hasPrev = R.np > 0; const rows = []; for (let j = 0; j < sz; j++) if ((cnt[j] > 0 || sel.has(j)) && isNamedCustomerLabel(COLS.customer.d[j])) rows.push({j, cnt: cnt[j], air: air[j], sea: sea[j], share: totC ? cnt[j] / totC : 0, delta: hasPrev ? cnt[j] - pc[j] : 0, last: last[j], v: vol[j]});
   const exportCust = async () => {
     const list = rows.slice().sort((a,b)=>b.cnt-a.cnt);
     try {
@@ -556,7 +557,7 @@ function pageCustomers() {
     thead.replaceChildren(sortHead(cols, s, draw)); const shown = rows.slice(0, S.def.tableRows);
     tbody.replaceChildren(...shown.map((r) => h('tr', {class: 'click' + (sel.has(r.j) ? ' on' : ''), onclick: () => toggle(key, r.j)}, h('td', null, COLS.customer.d[r.j]), h('td', {class: 'n'}, fInt(r.cnt)), h('td', {class: 'n'}, r.air ? f1(r.air) : '–'), h('td', {class: 'n'}, r.sea ? fInt(Math.round(r.sea)) : '–'),
       h('td', {class: 'n'}, fS(r.share)), h('td', {class: 'n ' + (r.delta > 0 ? 'ok' : r.delta < 0 ? 'bad' : '')}, hasPrev ? (r.delta > 0 ? '+' : r.delta < 0 ? '−' : '') + fInt(Math.abs(r.delta)) : '–'), h('td', {class: 'n'}, r.last > 0 ? fDay(r.last) : '–'), h('td', null, r.jobOwner || 'Loading…'), h('td', null, h('button',{type:'button',class:'link',onclick:event=>{event.stopPropagation();showRecentJobs(COLS.customer.d[r.j],historyCompanies(r.j));}},'View jobs')))));
-    note.textContent = 'Showing ' + shown.length + ' of ' + fInt(rows.length) + ' customers. Click a row to filter; use View jobs to inspect the last five distinct JPR jobs. Job history uses Job Date and is independent of the dashboard date range. ' + (hasPrev ? 'Change = shipments minus the ' + cmpLabel() + '.' : 'No earlier period exists before this date range, so there is no change to show.'); };
+    note.textContent = 'Showing ' + shown.length + ' of ' + fInt(rows.length) + ' named customers. Unassigned customer rows remain in shipment totals but are excluded from customer rankings. Click a row to filter; use View jobs to inspect the last five distinct JPR jobs. Job history uses Job Date and is independent of the dashboard date range. ' + (hasPrev ? 'Change = shipments minus the ' + cmpLabel() + '.' : 'No earlier period exists before this date range, so there is no change to show.'); };
   draw();
   // Populate the latest Job Owner from the same JPR-backed recent-job endpoint used by View jobs.
   // Fetch only displayed customers in bounded batches; never substitute salesperson/register owner.
@@ -587,7 +588,7 @@ function pageCustomers() {
       [...hm.get(j)].map((v, bi) => h('td', {class: 'n hc', title: COLS.customer.d[j] + ' · ' + d3.utcFormat('%b %Y')(dDate(months[bi])) + ': ' + fm(v), style: v ? 'background:rgba(76,120,168,' + (0.12 + 0.75 * v / hmax) + ');color:' + (v / hmax > 0.55 ? '#fff' : 'inherit') : '', onclick: () => { S.sel.customer = new Set([j]); S.rel = null; S.from = Math.max(months[bi], MINDATE); S.to = Math.min(Math.round(+d3.utcMonth.offset(dDate(months[bi]), 1) / DMS) - 1, MAXDATE); renderAll(); }}, v ? (R.useVol ? (R.air ? f1(v) : fInt(Math.round(v))) : fInt(v)) : '')))))));
   // A customer with shipments before and none now is the biggest possible decline, but has no row above
   // (rows are customers with shipments now), so add them here for the movers lists only.
-  const lost = []; if (hasPrev) for (let j = 0; j < sz; j++) if (!(cnt[j] > 0 || sel.has(j)) && pc[j] > 0) lost.push({j, cnt: 0, delta: -pc[j]});
+  const lost = []; if (hasPrev) for (let j = 0; j < sz; j++) if (isNamedCustomerLabel(COLS.customer.d[j]) && !(cnt[j] > 0 || sel.has(j)) && pc[j] > 0) lost.push({j, cnt: 0, delta: -pc[j]});
   const mov = hasPrev ? rows.filter((r) => r.delta !== 0).concat(lost) : [], gain = mov.filter((r) => r.delta > 0).sort((a, b) => b.delta - a.delta).slice(0, S.def.topN), lose = mov.filter((r) => r.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, S.def.topN);
   const moverList = (arr, sign) => arr.length ? h('div', {class: 'rank'}, arr.map((r) => h('button', {type: 'button', class: 'row', onclick: () => toggle(key, r.j)}, h('span', {class: 'lab', title: COLS.customer.d[r.j]}, COLS.customer.d[r.j]), h('span', {class: 'track'}, h('span', {class: 'fill', style: 'width:' + Math.min(100, Math.abs(r.delta) / Math.abs(arr[0].delta) * 100) + '%;background:var(--' + (sign > 0 ? 'ok' : 'bad') + ')'})), h('span', {class: 'val'}, (sign > 0 ? '+' : '−') + fInt(Math.abs(r.delta)) + ' shipments')))) : (hasPrev ? emptyNote() : h('p', {class: 'empty'}, 'No earlier period to compare with. Choose a shorter date range, for example the last 30 days.'));
   return h('div', null, h('div', {class: 'grid'},
@@ -1082,7 +1083,7 @@ function prankList(rows, onClick, selFn, opt) {
     h('span', {class: 'val'}, money(rankVal(r)) + (S.rank === 'profit' ? ' · ' + fMargin(r.margin) : '') + (tot > 0 && rankVal(r) > 0 ? ' · ' + fS(rankVal(r) / tot) : ''))))),
     sorted.length > top.length ? h('p', {class: 'more'}, 'Top ' + top.length + ' of ' + fInt(sorted.length) + '. Use the filters above to find others.') : null);
 }
-const pkeyRank = (key, opt) => { const m = maskP({skip: key}), sel = S.sel[key] || new Set(); return prankList(groupByP(key, m), (r) => {toggle(key,r.g);}, (r) => sel.has(r.g), opt); };
+const pkeyRank = (key, opt) => { const m = maskP({skip: key}), sel = S.sel[key] || new Set(), rows = groupByP(key, m).filter(r => key !== 'customer' || isNamedCustomerLabel(r.label)); return prankList(rows, (r) => {toggle(key,r.g);}, (r) => sel.has(r.g), opt); };
 
 // ================================================================ pages
 const colour = (v, mx) => (v >= 0 ? 'rgba(26,127,75,' : 'rgba(194,54,43,') + (0.1 + 0.7 * Math.min(1, Math.abs(v) / (mx || 1))) + ')';
@@ -1191,14 +1192,14 @@ function ppBranches() {
     card('New Globe against Neutral Consolidation', 'Profit by branch. Click a bar to filter to that company and branch.', chart, null, {metric:'profit.gp',dimension:'branch'}), card('Branch by line of business', 'Profit in each combination. Click a cell to filter.', heat, null, {metric:'profit.gp',dimension:'branch'})));
 }
 function ppCustomers() {
-  const m = maskP({skip: 'customer'}), rows = groupByP('customer', m), sel = S.sel.customer || new Set(), tot = d3.sum(rows, (r) => r.profit), st = S.pcust;
+  const m = maskP({skip: 'customer'}), rows = groupByP('customer', m).filter(r => isNamedCustomerLabel(r.label)), sel = S.sel.customer || new Set(), tot = totalsP(m).profit, st = S.pcust;
   const sorted = rows.slice().sort((a, b) => b.profit - a.profit); let cum = 0, n80 = 0; const pos = d3.sum(rows.filter((r) => r.profit > 0), (r) => r.profit);
   sorted.forEach((r) => { if (r.profit > 0 && cum < 0.8 * pos) { cum += r.profit; n80++; } });
   const top1 = sorted[0], cols = [{k: 'label', t: 'Customer'}, {k: 'inc', t: 'Income', num: true}, {k: 'exp', t: 'Expense', num: true}, {k: 'profit', t: 'Profit', num: true}, {k: 'margin', t: 'Margin', num: true}, {k: 'jobs', t: 'Jobs', num: true}, {k: 'share', t: 'Share of profit', num: true}];
   rows.forEach((r) => { r.share = tot > 0 ? r.profit / tot : null; });
   const thead = h('thead'), tbody = h('tbody'), note = h('p', {class: 'note'}), draw = () => { const f = st.sort === 'label' ? (a, b) => a.label.localeCompare(b.label) : (a, b) => (a[st.sort] == null ? -1e18 : a[st.sort]) - (b[st.sort] == null ? -1e18 : b[st.sort]); const list = rows.slice().sort((a, b) => f(a, b) * st.dir), shown = list.slice(0, S.def.tableRows);
     thead.replaceChildren(sortHead(cols, st, draw)); tbody.replaceChildren(...shown.map((r) => h('tr', {class: 'click' + (sel.has(r.g) ? ' on' : ''), onclick: () => toggle('customer', r.g)}, h('td', null, r.label), h('td', {class: 'n'}, money(r.inc)), h('td', {class: 'n'}, money(r.exp)), h('td', {class: 'n ' + (r.profit < 0 ? 'bad' : '')}, money(r.profit)), h('td', {class: 'n'}, fMargin(r.margin)), h('td', {class: 'n'}, fInt(r.jobs)), h('td', {class: 'n'}, r.share == null ? '–' : fS(r.share)))));
-    note.textContent = 'Showing ' + shown.length + ' of ' + fInt(list.length) + ' customers. Click a header to sort, a row to filter.'; }; draw();
+    note.textContent = 'Showing ' + shown.length + ' of ' + fInt(list.length) + ' named customers. Unassigned JPR profit remains in company totals but is excluded from named-customer rankings. Click a header to sort, a row to filter.'; }; draw();
   const exportC = () => { const list = rows.slice().sort((a, b) => b.profit - a.profit), n = list.length + 1;
     downloadXlsx('customer_profit_' + fIso(dDate(MAXDATE)) + '.xlsx', [{name: 'Customer profit', freeze: true, filter: true, cols: [46, 16, 16, 16, 12, 10, 16], rows: [['Customer', 'Income', 'Expense', 'Profit', 'Margin', 'Jobs', 'Share of total profit'].map(HDR)].concat(list.map((r, i) => { const x = i + 2; return [r.label, {v: +r.inc.toFixed(2), s: 3}, {v: +r.exp.toFixed(2), s: 3}, {f: 'B' + x + '-C' + x, s: 3}, {f: 'IF(B' + x + '<=0,"",D' + x + '/B' + x + ')', s: 2}, {v: r.jobs, s: 3}, {f: 'IF(SUM(D$2:D$' + n + ')=0,"",D' + x + '/SUM(D$2:D$' + n + '))', s: 2}]; }))}, settingsSheet()]); };
   // income against margin, bubble = profit
@@ -1245,7 +1246,7 @@ function ppQuality() {
 const CMP_DIMS = ['branch', 'customer', 'x_salesperson', 'x_tradelanename', 'destination', 'origin', 'carrier', 'lane', 'job_owner', 'p_lob', 'company', 'p_mode', 'p_direction', 'p_kind', 'jobstatus'];
 function scanP(m, key, pr) {
   const c = COLS[key].pc, sz = COLS[key].d.length, o = {ci: new Float64Array(sz), ce: new Float64Array(sz), pi: new Float64Array(sz), pe: new Float64Array(sz), cl: new Float64Array(sz), pl: new Float64Array(sz)}, NN = S.pdemo ? NPA : NP;
-  for (let i = 0; i < NN; i++) { if (!m[i]) continue; const d = pdate[i], inC = d >= pr.cur.from && d <= pr.cur.to, inP = d >= pr.prev.from && d <= pr.prev.to; if (!inC && !inP) continue; const j = c[i]; if (inC) { o.ci[j] += pinc[i]; o.ce[j] += pexp[i]; o.cl[j]++; } if (inP) { o.pi[j] += pinc[i]; o.pe[j] += pexp[i]; o.pl[j]++; } }
+  for (let i = 0; i < NN; i++) { if (!m[i]) continue; const d = pdate[i], inC = d >= pr.cur.from && d <= pr.cur.to, inP = d >= pr.prev.from && d <= pr.prev.to; if (!inC && !inP) continue; const j = c[i]; if (key === 'customer' && !isNamedCustomerLabel(COLS[key].d[j])) continue; if (inC) { o.ci[j] += pinc[i]; o.ce[j] += pexp[i]; o.cl[j]++; } if (inP) { o.pi[j] += pinc[i]; o.pe[j] += pexp[i]; o.pl[j]++; } }
   return o;
 }
 function ppCompare() {
@@ -1393,7 +1394,7 @@ S.sc = {dim: 0, sort: {sort: 'profit', dir: -1}};
 function goto(group, page, extra) { if (extra) for (const k in extra) S.sel[k] = new Set([].concat(extra[k])); S.group = group; S.page = page; syncBounds(); renderAll(); window.scrollTo(0, 0); }
 function opsFacts(m) {
   let n = 0, air = 0, sea = 0, openFin = 0, old = 0, lagSum = 0, lagN = 0; const cust = new Set(), age0 = OPS_MAX;
-  for (let i = 0; i < N; i++) { if (!m[i]) continue; n++; if (mode[i]) sea += teus[i]; else air += chg[i]; cust.add(COLS.customer.c[i]); if (COLS.stage.c[i] === STAGE_FIN) { openFin++; if (age0 - date[i] > S.def.oldDays) old++; } if (opsD[i] > 0 && finD[i] > 0) { lagSum += finD[i] - opsD[i]; lagN++; } }
+  for (let i = 0; i < N; i++) { if (!m[i]) continue; n++; if (mode[i]) sea += teus[i]; else air += chg[i]; if (isNamedCustomerLabel(COLS.customer.d[COLS.customer.c[i]])) cust.add(COLS.customer.c[i]); if (COLS.stage.c[i] === STAGE_FIN) { openFin++; if (age0 - date[i] > S.def.oldDays) old++; } if (opsD[i] > 0 && finD[i] > 0) { lagSum += finD[i] - opsD[i]; lagN++; } }
   return {n, air, sea, openFin, old, lag: lagN ? lagSum / lagN : null, cust: cust.size};
 }
 function monthBars(m) {
@@ -1422,13 +1423,13 @@ function sOwner() {
   if (FIN) { let neg = 0, give = 0; for (let i = 0; i < N; i++) if (M[i] && rtype[i] === 0 && rateOK(i) && rsell[i] < rbuy[i]) { neg++; give += rmargin(i); } if (neg) al.push({sev: 'warn', text: fInt(neg) + ' air export shipments were sold below their buy rate, giving away ' + money(Math.abs(give)), go: () => goto('profit', 'p_rates'), label: 'See rate margin'}); }
   if (mo.old) al.push({sev: 'warn', text: fInt(mo.old) + ' shipments have operations locked but financials still open after more than ' + S.def.oldDays + ' days: billing is slow', go: () => goto('ops', 'ops', {stage: STAGE_FIN}), label: 'See the worklist'});
   if (st('Loss-making').jobs) al.push({sev: 'bad', text: fInt(st('Loss-making').jobs) + ' loss-making job' + (st('Loss-making').jobs > 1 ? 's' : '') + ' costing ' + money(Math.abs(st('Loss-making').profit)), go: () => goto('profit', 'p_quality', {jobstatus: 3}), label: 'See the jobs'});
-  const cu = groupByP('customer', maskP({skip: 'customer'})).sort((a, b) => b.profit - a.profit), tp1 = cu[0], totPos = d3.sum(cu.filter((r) => r.profit > 0), (r) => r.profit);
+  const cu = groupByP('customer', maskP({skip: 'customer'})).filter(r => isNamedCustomerLabel(r.label)).sort((a, b) => b.profit - a.profit), tp1 = cu[0], totPos = totalsP(maskP()).profit;
   if (tp1 && totPos > 0 && tp1.profit / totPos * 100 > S.def.ownerConc) al.push({sev: 'warn', text: tp1.label + ' alone brings ' + fP0(tp1.profit / totPos) + ' of profit (limit ' + S.def.ownerConc + '%): a risk if they leave', go: () => goto('profit', 'p_customers'), label: 'See customers'});
   const sp = groupByP('x_salesperson', maskP({skip: 'x_salesperson'})), spT = d3.sum(sp, (r) => r.profit), spU = d3.sum(sp.filter((r) => un.includes(r.label.toLowerCase()) || r.label === '(blank)'), (r) => r.profit);
   if (spT > 0 && spU / spT * 100 > S.def.unassignedShare) al.push({sev: 'warn', text: fP0(spU / spT) + ' of profit (' + money(spU) + ') is credited to “' + S.def.unassignedNames + '” or no sales person, so sales people cannot be judged', go: () => goto('profit', 'p_explorer'), label: 'See sales people'});
   const tlb = groupByP('x_tradelanename', maskP({skip: 'x_tradelanename'})), tlT = d3.sum(tlb, (r) => r.profit), tlU = d3.sum(tlb.filter((r) => r.label === '(blank)' || r.label === '(no register match)'), (r) => r.profit);
   if (tlT > 0 && tlU / tlT * 100 > S.def.unassignedShare) al.push({sev: 'info', text: fP0(tlU / tlT) + ' of profit has no trade lane recorded, which weakens lane analysis', go: () => goto('profit', 'p_explorer'), label: 'See trade lanes'});
-  const dec = (() => { const a = new Float64Array(COLS.customer.d.length), b = new Float64Array(COLS.customer.d.length), mm = mask({skip: 'customer'}), pp = mask({skip: 'customer', dates: 'prev'}); for (let i = 0; i < N; i++) { if (mm[i]) a[COLS.customer.c[i]]++; if (pp[i]) b[COLS.customer.c[i]]++; } let w = null; for (let j = 0; j < a.length; j++) { const dlt = a[j] - b[j]; if (b[j] >= 10 && (!w || dlt < w.d)) w = {j, d: dlt, b: b[j], a: a[j]}; } return w; })();
+  const dec = (() => { const a = new Float64Array(COLS.customer.d.length), b = new Float64Array(COLS.customer.d.length), mm = mask({skip: 'customer'}), pp = mask({skip: 'customer', dates: 'prev'}); for (let i = 0; i < N; i++) { if (mm[i]) a[COLS.customer.c[i]]++; if (pp[i]) b[COLS.customer.c[i]]++; } let w = null; for (let j = 0; j < a.length; j++) { const dlt = a[j] - b[j]; if (isNamedCustomerLabel(COLS.customer.d[j]) && b[j] >= 10 && (!w || dlt < w.d)) w = {j, d: dlt, b: b[j], a: a[j]}; } return w; })();
   if (dec && dec.d < 0 && R.np > 0) al.push({sev: 'warn', text: COLS.customer.d[dec.j] + ' shipped ' + fInt(dec.a) + ' against ' + fInt(dec.b) + ' in the ' + cmpLabel() + ': the biggest fall among regular customers', go: () => goto('ops', 'customers'), label: 'See customers'});
   const asDay = asOfDay(), lateRanges = [...D.meta.map((mm, i) => ({n: COMP[i < 4 ? 0 : 1] + ' ' + REPN[i % 4], end: isoD(mm.range_to)})), ...D.p.meta.map((mm) => ({n: COMP[mm.co === 'NG' ? 0 : 1] + ' profit', end: isoD(mm.range_to)}))].filter((r) => asDay > r.end);
   if (lateRanges.length) al.push({sev: 'bad', text: 'The ERP date range has run out for ' + lateRanges.length + ' report' + (lateRanges.length > 1 ? 's' : '') + ' (' + lateRanges.slice(0, 3).map((r) => r.n).join(', ') + '): new shipments will stop arriving until the schedule is changed', go: () => goto('ops', 'status'), label: 'See data status'});
@@ -2089,7 +2090,7 @@ function metricTraceValue(metric,m,p) {
   if(metric==='ops.locked_no_invoice'||metric==='ops.overdue_invoice'){const a=ids.filter(i=>opsD[i]>0&&invN[i]===0);return metric==='ops.locked_no_invoice'?a.length:a.filter(i=>OPS_MAX-opsD[i]>S.def.unbilledDays).length;}
   if(metric==='ops.customer_concentration')return top10(m,R.useVol);
   if(metric.startsWith('ops.rate_')){const all=ids.filter(i=>rtype[i]===0),ok=all.filter(rateOK),kg=d3.sum(ok,i=>ckg[i]),sell=d3.sum(ok,i=>rsell[i]*ckg[i]),buy=d3.sum(ok,i=>rbuy[i]*ckg[i]);return {'ops.rate_air_exports':all.length,'ops.rate_usable':all.length?ok.length/all.length:null,'ops.rate_sell':kg?sell/kg:null,'ops.rate_buy':kg?buy/kg:null,'ops.rate_margin_kg':kg?(sell-buy)/kg:null,'ops.rate_margin':sell-buy,'ops.rate_below_buy':ok.filter(i=>rsell[i]<rbuy[i]).length}[metric];}
-  if(metric==='ops.period_new_customers'||metric==='ops.period_absent_customers'){const a=new Map(),b=new Map();for(let i=0;i<N;i++){if(m[i])a.set(COLS.customer.c[i],(a.get(COLS.customer.c[i])||0)+1);if(p?.[i])b.set(COLS.customer.c[i],(b.get(COLS.customer.c[i])||0)+1);}const cur=metric==='ops.period_new_customers'?a:b,other=metric==='ops.period_new_customers'?b:a;return [...cur].filter(([k,v])=>v>=S.def.activeMin&&!other.has(k)).length;}
+  if(metric==='ops.period_new_customers'||metric==='ops.period_absent_customers'){const a=new Map(),b=new Map();for(let i=0;i<N;i++){const k=COLS.customer.c[i];if(!isNamedCustomerLabel(COLS.customer.d[k]))continue;if(m[i])a.set(k,(a.get(k)||0)+1);if(p?.[i])b.set(k,(b.get(k)||0)+1);}const cur=metric==='ops.period_new_customers'?a:b,other=metric==='ops.period_new_customers'?b:a;return [...cur].filter(([k,v])=>v>=S.def.activeMin&&!other.has(k)).length;}
   return undefined;
  }
  const t=totalsP(m),jobs=pbyJob(m);
@@ -2108,7 +2109,7 @@ function metricTraceValue(metric,m,p) {
  if(metric==='profit.low_margin')return jobs.filter(r=>r.status===4).length;
  if(metric==='profit.negative_income_rows')return Array.from(m).filter((v,i)=>v&&pinc[i]<0).length;
  if(metric==='profit.intercompany_proxy')return jobs.filter(r=>pcatv('p_ic',r.i0)==='Intercompany').length;
- if(['profit.customers','profit.customers_80','profit.biggest_customer','profit.loss_customers'].includes(metric)){const a=groupByP('customer',m).sort((x,y)=>y.profit-x.profit),total=d3.sum(a,r=>r.profit),positive=d3.sum(a.filter(r=>r.profit>0),r=>r.profit);let cum=0,n=0;a.forEach(r=>{if(r.profit>0&&cum<.8*positive){cum+=r.profit;n++;}});return {'profit.customers':a.length,'profit.customers_80':n,'profit.biggest_customer':a.length&&total>0?a[0].profit/total:null,'profit.loss_customers':a.filter(r=>r.profit<0).length}[metric];}
+ if(['profit.customers','profit.customers_80','profit.biggest_customer','profit.loss_customers'].includes(metric)){const a=groupByP('customer',m).filter(r=>isNamedCustomerLabel(r.label)).sort((x,y)=>y.profit-x.profit),total=totalsP(m).profit,positive=d3.sum(a.filter(r=>r.profit>0),r=>r.profit);let cum=0,n=0;a.forEach(r=>{if(r.profit>0&&cum<.8*positive){cum+=r.profit;n++;}});return {'profit.customers':a.length,'profit.customers_80':n,'profit.biggest_customer':a.length&&total>0?a[0].profit/total:null,'profit.loss_customers':a.filter(r=>r.profit<0).length}[metric];}
  if(['profit.air_yield','profit.ocean_yield','profit.matched_share','profit.best_dimension'].includes(metric)){const d=EXP_DIMS[S.exp.dim]||EXP_DIMS[0],a=groupByP(d.k,m);if(metric==='profit.air_yield')return d3.sum(a,r=>r.airT)>0?d3.sum(a,r=>r.airP)/d3.sum(a,r=>r.airT):null;if(metric==='profit.ocean_yield')return d3.sum(a,r=>r.seaT)>0?d3.sum(a,r=>r.seaP)/d3.sum(a,r=>r.seaT):null;if(metric==='profit.matched_share')return t.jobs?jobs.filter(r=>psidx[r.i0]>=0).length/t.jobs:null;return d3.max(a.filter(r=>r.profit>0),r=>r.profit)??null;}
  if(metric.startsWith('profit.rate_matched_')){const ids=Array.from(m).flatMap((v,i)=>v&&psidx[i]>=0?[psidx[i]]:[]),ok=ids.filter(rateOK),kg=d3.sum(ok,i=>ckg[i]),sell=d3.sum(ok,i=>rsell[i]*ckg[i]),buy=d3.sum(ok,i=>rbuy[i]*ckg[i]);return {'profit.rate_matched_count':ok.length,'profit.rate_matched_estimate':sell-buy,'profit.rate_matched_actual':t.profit,'profit.rate_matched_difference':t.profit-(sell-buy)}[metric];}
  return undefined;
@@ -2151,11 +2152,11 @@ function metricTraceSelection(metric,label) {
  if(fin&&['profit.cost_not_booked_proxy','profit.billing_pending_proxy','profit.loss_making','profit.low_margin'].includes(metric)){const status={'profit.cost_not_booked_proxy':1,'profit.billing_pending_proxy':2,'profit.loss_making':3,'profit.low_margin':4}[metric];values[metric]=pbyJob(m).filter(r=>r.status===status).length;}
  if(metric==='profit.negative_income_rows')values[metric]=Array.from(m).filter((v,i)=>v&&pinc[i]<0).length;
  if(metric==='profit.intercompany_proxy')values[metric]=pbyJob(m).filter(r=>pcatv('p_ic',r.i0)==='Intercompany').length;
- if(['ops.period_new_customers','ops.period_absent_customers'].includes(metric)){const current=new Map(),previous=new Map();for(let i=0;i<N;i++){const c=COLS.customer.c[i];if(m[i])current.set(c,(current.get(c)||0)+1);if(p[i])previous.set(c,(previous.get(c)||0)+1);}values[metric]=metric==='ops.period_new_customers'?[...current].filter(([c,n])=>n>=S.def.activeMin&&!previous.has(c)).length:[...previous].filter(([c,n])=>n>=S.def.activeMin&&!current.has(c)).length;}
+ if(['ops.period_new_customers','ops.period_absent_customers'].includes(metric)){const current=new Map(),previous=new Map();for(let i=0;i<N;i++){const c=COLS.customer.c[i];if(!isNamedCustomerLabel(COLS.customer.d[c]))continue;if(m[i])current.set(c,(current.get(c)||0)+1);if(p[i])previous.set(c,(previous.get(c)||0)+1);}values[metric]=metric==='ops.period_new_customers'?[...current].filter(([c,n])=>n>=S.def.activeMin&&!previous.has(c)).length:[...previous].filter(([c,n])=>n>=S.def.activeMin&&!current.has(c)).length;}
  if(metric==='ops.customer_concentration')values[metric]=top10(m,R.useVol);
  if(metric==='ops.active_customers')values[metric]=S.group==='summary'?opsFacts(m).cust:activeCust(m);
  if(metric==='ops.lock_lag')values[metric]=opsFacts(m).lag;
- if(['profit.customers','profit.customers_80','profit.biggest_customer','profit.loss_customers'].includes(metric)){const rs=groupByP('customer',m).sort((a,b)=>b.profit-a.profit),total=d3.sum(rs,r=>r.profit),positive=d3.sum(rs.filter(r=>r.profit>0),r=>r.profit);let cum=0,num=0;rs.forEach(r=>{if(r.profit>0&&cum<.8*positive){cum+=r.profit;num++;}});values[metric]={'profit.customers':rs.length,'profit.customers_80':num,'profit.biggest_customer':rs.length&&total>0?rs[0].profit/total:null,'profit.loss_customers':rs.filter(r=>r.profit<0).length}[metric];}
+ if(['profit.customers','profit.customers_80','profit.biggest_customer','profit.loss_customers'].includes(metric)){const rs=groupByP('customer',m).filter(r=>isNamedCustomerLabel(r.label)).sort((a,b)=>b.profit-a.profit),total=totalsP(m).profit,positive=d3.sum(rs.filter(r=>r.profit>0),r=>r.profit);let cum=0,num=0;rs.forEach(r=>{if(r.profit>0&&cum<.8*positive){cum+=r.profit;num++;}});values[metric]={'profit.customers':rs.length,'profit.customers_80':num,'profit.biggest_customer':rs.length&&total>0?rs[0].profit/total:null,'profit.loss_customers':rs.filter(r=>r.profit<0).length}[metric];}
  return {metric,dataset_built_at:D.built_at,displayed_value:values[metric],indices:Array.from(m).flatMap((v,i)=>v?[i]:[]),previous_indices:Array.from(p).flatMap((v,i)=>v?[i]:[]),context:{low_margin:S.def.lowMargin,top_n:S.def.topN,concentration_measure:R.useVol?(R.air?'air_weight_t':'teu'):'count',dimension_key:(EXP_DIMS[S.exp.dim]||EXP_DIMS[0]).k,rate_mode:S.def.rateMode,rate_max:S.def.rateMax,active_min:S.group==='summary'?1:S.def.activeMin,old_days:S.def.oldDays,unbilled_days:S.def.unbilledDays,age_as_of:OPS_MAX,period:(S.page==='p_compare'||S.page==='compare')?periods(fin&&S.page==='p_compare'?S.pcmp:S.cmp):win(),date_basis:fin?'Job Date':'Shipment Date',page:S.page,visual:label,filters:Object.fromEntries(Object.entries(S.sel).map(([k,v])=>[k,[...v].map(i=>COLS[k]?.d[i]??i)]))}};
 }
 window.NG = {visualMetricPayload,traceVariance:metricTraceVariance,periods,win,pctOf,pctChange,traceCategory:metricTraceCategory,traceVisual:metricTraceVisual,exportVisibleVisuals,traceSelection:metricTraceSelection,agentRows, runVisual, visGet, visSave, defCfg, VTEMPLATES, rateOK, rmargin, saveView, applyView, viewsGet, goto, setGroup, opsFacts, laneAgg, maskP, groupByP, totalsP, pbyJob, pExpectedByLob, selectProfitJob, money, NP, NPA, NJ, pinc, pexp, pjob, psidx, pjInc, pjExp, D, S, DEFAULTS, renderDefs, COLS, D, mask, compute, renderAll, toggle, csvOf, openMenu, menuAll, menuClear, get R() { return R; }, N, MAXDATE, MINDATE};
