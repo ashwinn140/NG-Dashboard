@@ -79,11 +79,12 @@ class TestAuthenticationAtomicity(unittest.TestCase):
             )
 
     def test_invalid_lob_update_is_rejected_without_changing_existing_scope(self):
+        before = auth.update_user(self.engine, self.user["id"])
+        self.assertEqual(before["lobs"], [])
         with self.assertRaisesRegex(ValueError, "Unknown lob scope"):
             auth.update_user(self.engine, self.user["id"], lobs=["NOT-A-LOB"])
-        current = auth.session_user(self.engine, None)
-        updated = auth.update_user(self.engine, self.user["id"], lobs=["AE"])
-        self.assertEqual(updated["lobs"], ["AE"])
+        after = auth.update_user(self.engine, self.user["id"])
+        self.assertEqual(after["lobs"], [])
 
 if __name__ == "__main__":
     unittest.main()
