@@ -1,7 +1,7 @@
 """Sign-in: one-time email link (with a 6-digit code as fallback) and user ID + password. Sessions, roles and lockouts."""
 import hashlib, hmac, os, re, secrets
 from datetime import datetime, timedelta
-from sqlalchemy import select, update, insert, delete, func
+from sqlalchemy import select, update, insert, delete, func, case, or_
 from .db import users, sessions, login_tokens
 
 LINK_MINUTES = 15            # a link or code works for this long, once
@@ -120,9 +120,20 @@ def request_link(engine, email: str, now: datetime | None = None):
 def use_token(engine, token: str, now: datetime | None = None):
     now = now or datetime.utcnow(); th = h("t:" + token)
     with engine.begin() as conn:
-        t = conn.execute(select(login_tokens).where(login_tokens.c.token_hash == th)).first()
-        if not t or t.used or t.expires_at < now: return None
-        conn.execute(update(login_tokens).where(login_tokens.c.id == t.id).values(used=1))
+        t = conn.execute(select(login_tokens).where(
+            login_tokens.c.token_hash == th,
+            login_tokens.c.used == 0,
+            login_tokens.c.expires_at > now,
+        ).order_by(login_tokens.c.id.desc()).limit(1)).first()
+        if not t: return None
+        # Consume the bearer token atomically. A second concurrent verifier
+        # must observe rowcount=0 after the first transaction commits.
+        consumed = conn.execute(update(login_tokens).where(
+            login_tokens.c.id == t.id,
+            login_tokens.c.used == 0,
+            login_tokens.c.expires_at > now,
+        ).values(used=1))
+        if consumed.rowcount != 1: return None
         u = conn.execute(select(users).where(users.c.email == t.email, users.c.active == 1)).first()
     return user_dict(u) if u else None
 
@@ -130,13 +141,37 @@ def use_token(engine, token: str, now: datetime | None = None):
 def use_code(engine, email: str, code: str, now: datetime | None = None):
     now = now or datetime.utcnow(); email = email.strip().lower()
     with engine.begin() as conn:
-        t = conn.execute(select(login_tokens).where(login_tokens.c.email == email, login_tokens.c.used == 0, login_tokens.c.expires_at > now).order_by(login_tokens.c.id.desc())).first()
+        t = conn.execute(select(login_tokens).where(
+            login_tokens.c.email == email,
+            login_tokens.c.used == 0,
+            login_tokens.c.expires_at > now,
+        ).order_by(login_tokens.c.id.desc()).limit(1)).first()
         if not t: return None
-        if t.attempts >= CODE_ATTEMPTS:
-            conn.execute(update(login_tokens).where(login_tokens.c.id == t.id).values(used=1)); return None
+        attempts = int(t.attempts or 0)
+        if attempts >= CODE_ATTEMPTS:
+            conn.execute(update(login_tokens).where(
+                login_tokens.c.id == t.id,
+                login_tokens.c.used == 0,
+                login_tokens.c.attempts >= CODE_ATTEMPTS,
+            ).values(used=1))
+            return None
         if not hmac.compare_digest(t.code_hash, h("c:%s:%s" % (email, code.strip()))):
-            conn.execute(update(login_tokens).where(login_tokens.c.id == t.id).values(attempts=t.attempts + 1, used=1 if t.attempts + 1 >= CODE_ATTEMPTS else 0)); return None
-        conn.execute(update(login_tokens).where(login_tokens.c.id == t.id).values(used=1))
+            # Compare-and-increment prevents concurrent failures from losing
+            # an attempt or bypassing the configured lockout threshold.
+            conn.execute(update(login_tokens).where(
+                login_tokens.c.id == t.id,
+                login_tokens.c.used == 0,
+                login_tokens.c.attempts == attempts,
+                login_tokens.c.expires_at > now,
+            ).values(attempts=attempts + 1, used=1 if attempts + 1 >= CODE_ATTEMPTS else 0))
+            return None
+        consumed = conn.execute(update(login_tokens).where(
+            login_tokens.c.id == t.id,
+            login_tokens.c.used == 0,
+            login_tokens.c.attempts == attempts,
+            login_tokens.c.expires_at > now,
+        ).values(used=1))
+        if consumed.rowcount != 1: return None
         u = conn.execute(select(users).where(users.c.email == email, users.c.active == 1)).first()
     return user_dict(u) if u else None
 
@@ -151,8 +186,17 @@ def password_login(engine, login: str, pw: str, now: datetime | None = None):
         if ok:
             conn.execute(update(users).where(users.c.id == u.id).values(fail_count=0, locked_until=None)); return user_dict(u), ""
         if u:
-            n = (u.fail_count or 0) + 1
-            conn.execute(update(users).where(users.c.id == u.id).values(fail_count=0 if n >= PW_FAILS else n, locked_until=now + timedelta(minutes=LOCK_MINUTES) if n >= PW_FAILS else None))
+            next_count = func.coalesce(users.c.fail_count, 0) + 1
+            lock_now = next_count >= PW_FAILS
+            # Keep the counter and lockout transition in one atomic UPDATE;
+            # a concurrent login failure must not overwrite another attempt.
+            conn.execute(update(users).where(
+                users.c.id == u.id,
+                or_(users.c.locked_until.is_(None), users.c.locked_until <= now),
+            ).values(
+                fail_count=case((lock_now, 0), else_=next_count),
+                locked_until=case((lock_now, now + timedelta(minutes=LOCK_MINUTES)), else_=None),
+            ))
     return None, "That ID or password is not right."
 
 
