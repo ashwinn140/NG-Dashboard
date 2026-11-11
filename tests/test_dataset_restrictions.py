@@ -68,5 +68,29 @@ class TestRestrictedReportMetadata(unittest.TestCase):
         self.assertEqual(hidden["finopen"], 0)
 
 
+    def test_explicit_full_lob_scope_includes_general_finance_jobs_and_metadata(self):
+        full = {
+            "reps": [("NG", "AE")], "rep": [0], "no": ["S1"],
+            "date": [20000], "ops": [0], "fin": [0], "gross": [0],
+            "chg": [0], "teus": [0], "cbm": [0], "ckg": [0],
+            "rbuy": [0], "rbf": [0], "rsell": [0], "rsf": [0],
+            "inv1": [0], "invN": [0],
+            "p": {
+                "co": [0], "rt": [4], "sidx": [-1], "income": [100],
+                "expense": [50], "td": [None], "jd": [None],
+                "meta": [{"co": "NG", "jobs": 1}],
+            },
+            "cols": {"agent": {"l": "Agent", "d": [], "c": [], "pc": []}},
+            "agentInfo": [], "meta": [{}], "changes": {},
+        }
+        restricted = DS.restrict(
+            full,
+            {"companies": ["NG"], "lobs": ["AE", "AI", "OE", "OI"], "finance": True},
+        )
+        self.assertEqual(restricted["p"]["rt"], [4])
+        self.assertEqual(restricted["p"]["income"], [100])
+        self.assertEqual(restricted["p"]["meta"], [{"co": "NG", "jobs": 1}])
+
+
 if __name__ == "__main__":
     unittest.main()
