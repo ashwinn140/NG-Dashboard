@@ -524,38 +524,57 @@ def _summary_rows(report_id, rows):
     return rows
 
 
-def build_report_rows(D, definition, start, end):
-    """Build the pilot report rows from the already per-user-restricted dataset."""
+def _build_report_rows(D, definition, start, end):
+    """Return output rows and their exact filtered source rows."""
     report_id = definition["report_id"]
     if report_id == "job_profitability":
-        rows = _job_rows(D, definition, start, end)
+        source_rows = _job_rows(D, definition, start, end)
+        rows = _summary_rows(report_id, source_rows) if definition["summary_detail"] == "summary" else source_rows
     else:
-        rows = _shipment_rows(D, definition, start, end)
+        source_rows = _shipment_rows(D, definition, start, end)
         if report_id == "customer_performance":
-            rows = _customer_rows(rows)
-    if definition["summary_detail"] == "summary" and report_id != "customer_performance":
-        rows = _summary_rows(report_id, rows)
-    return _sort_rows(rows, definition)
+            rows = _customer_rows(source_rows)
+        elif definition["summary_detail"] == "summary":
+            rows = _summary_rows(report_id, source_rows)
+        else:
+            rows = source_rows
+    return _sort_rows(rows, definition), source_rows
 
 
-def _add_visuals_sheet(wb, rows, report_id, start, end):
-    """Add chart summaries plus the exact chart data as an accessible table."""
+def build_report_rows(D, definition, start, end):
+    """Build the pilot report rows from the already per-user-restricted dataset."""
+    return _build_report_rows(D, definition, start, end)[0]
+
+
+def _named_customer_display(value):
+    name = " ".join(str(value or "").split())
+    return name if name and name.casefold() not in {"(blank)", "blank"} else None
+
+
+def _add_visuals_sheet(wb, rows, report_id, start, end, source_rows=None, summary=False):
+    """Build charts from the same filtered source population as the report."""
+    source_rows = source_rows if source_rows is not None else rows
     ws = wb.create_sheet("Visuals")
     ws.sheet_view.showGridLines = False
     ws.append(["Report visuals"])
     ws["A1"].font = Font(bold=True, size=16, color="FFFFFF")
     ws["A1"].fill = PatternFill("solid", fgColor="173142")
-    ws.append(["Charts summarize the same filtered rows shown on the Report sheet."])
-    if not rows:
+    ws.append(["Charts use the same filtered source rows as the Report sheet; summary charts aggregate those source rows."])
+    if not rows and not source_rows:
         ws.append(["No records in the selected period and filters."])
         return
 
     if report_id == "job_profitability":
         by_customer = {}
+        display_names = {}
+        unassigned = {"jobs": 0, "income": 0.0, "expense": 0.0, "profit": 0.0}
         by_month = {}
-        for row in rows:
-            customer = str(row.get("customer") or "(Unspecified)")
-            group = by_customer.setdefault(customer, {"jobs": 0, "income": 0.0, "expense": 0.0, "profit": 0.0})
+        for row in source_rows:
+            name = _named_customer_display(row.get("customer"))
+            group_key = name.lower() if name else None
+            group = by_customer.setdefault(group_key, {"jobs": 0, "income": 0.0, "expense": 0.0, "profit": 0.0}) if group_key else unassigned
+            if group_key:
+                display_names.setdefault(group_key, name)
             group["jobs"] += 1
             for key in ("income", "expense", "profit"):
                 group[key] += float(row.get(key) or 0)
@@ -566,15 +585,18 @@ def _add_visuals_sheet(wb, rows, report_id, start, end):
                 for key in ("income", "expense", "profit"):
                     m[key] += float(row.get(key) or 0)
         ws.append([])
-        ws.append(["Top customers by recorded gross profit", "Jobs", "Income (INR)", "Expense (INR)", "Profit (INR)"])
+        ws.append(["Top named customers by recorded gross profit", "Jobs", "Income (INR)", "Expense (INR)", "Profit (INR)"])
         top = sorted(by_customer.items(), key=lambda item: item[1]["profit"], reverse=True)[:12]
-        for name, values in top:
-            ws.append([safe_excel_text(name), values["jobs"], values["income"], values["expense"], values["profit"]])
+        for key, values in top:
+            ws.append([safe_excel_text(display_names[key]), values["jobs"], values["income"], values["expense"], values["profit"]])
+        if unassigned["jobs"]:
+            ws.append(["Unassigned / blank Organization (included in company totals)", unassigned["jobs"],
+                       unassigned["income"], unassigned["expense"], unassigned["profit"]])
         if top:
             chart = BarChart()
             chart.type = "bar"
             chart.style = 10
-            chart.title = "Top customers by recorded gross profit"
+            chart.title = "Top named customers by recorded gross profit"
             chart.y_axis.title = "Customer"
             chart.x_axis.title = "INR"
             chart.height, chart.width = 8, 16
@@ -601,11 +623,28 @@ def _add_visuals_sheet(wb, rows, report_id, start, end):
             ws.add_chart(chart, "G20")
     else:
         by_customer = {}
+        display_names = {}
         by_lob = {}
         by_month = {}
-        for row in rows:
-            customer = str(row.get("customer") or "(Unspecified)")
-            by_customer[customer] = by_customer.get(customer, 0) + 1
+        customer_summary = report_id == "customer_performance" or (report_id == "shipment_register" and summary)
+        if customer_summary:
+            for row in rows:
+                name = _named_customer_display(row.get("customer"))
+                if not name:
+                    continue
+                key = name.lower()
+                display_names.setdefault(key, name)
+                by_customer[key] = by_customer.get(key, 0) + int(row.get("shipments") or 0)
+        else:
+            for row in source_rows:
+                name = _named_customer_display(row.get("customer"))
+                if not name:
+                    continue
+                key = name.lower()
+                display_names.setdefault(key, name)
+                by_customer[key] = by_customer.get(key, 0) + 1
+        unassigned_shipments = sum(1 for row in source_rows if not _named_customer_display(row.get("customer")))
+        for row in source_rows:
             lob = str(row.get("lob") or "(Unspecified)")
             by_lob[lob] = by_lob.get(lob, 0) + 1
             day = row.get("shipment_date")
@@ -613,15 +652,17 @@ def _add_visuals_sheet(wb, rows, report_id, start, end):
                 month = day.strftime("%Y-%m")
                 by_month[month] = by_month.get(month, 0) + 1
         ws.append([])
-        ws.append(["Top customers by shipments", "Shipments"])
+        ws.append(["Top named customers by shipments", "Shipments"])
         top = sorted(by_customer.items(), key=lambda item: item[1], reverse=True)[:12]
-        for name, count in top:
-            ws.append([safe_excel_text(name), count])
+        for key, count in top:
+            ws.append([safe_excel_text(display_names[key]), count])
+        if unassigned_shipments:
+            ws.append(["Unassigned / blank customer rows (included in totals)", unassigned_shipments])
         if top:
             chart = BarChart()
             chart.type = "bar"
             chart.style = 10
-            chart.title = "Top customers by shipments"
+            chart.title = "Top named customers by shipments"
             chart.y_axis.title = "Customer"
             chart.x_axis.title = "Shipments"
             chart.height, chart.width = 8, 16
@@ -671,9 +712,9 @@ def build_report_workbook(D, definition, start, end, freshness, generated_at=Non
     from datetime import datetime as _datetime
     report = REPORT_CATALOG[definition["report_id"]]
     generated_at = generated_at or _datetime.now(UTC)
-    rows = build_report_rows(D, definition, start, end)
-    if len(rows) > MAX_EXPORT_ROWS:
-        raise ScheduleValidationError("The report exceeds the 100,000-row pilot limit; narrow the filters or split the report.")
+    rows, source_rows = _build_report_rows(D, definition, start, end)
+    if len(rows) > MAX_EXPORT_ROWS or len(source_rows) > MAX_EXPORT_ROWS:
+        raise ScheduleValidationError("The report or its filtered source exceeds the 100,000-row pilot limit; narrow the filters or split the report.")
     columns = definition["columns"]
     wb = Workbook()
     ws = wb.active
@@ -690,10 +731,32 @@ def build_report_workbook(D, definition, start, end, freshness, generated_at=Non
         ws.append([safe_excel_text(row.get(col)) for col in columns])
     if definition.get("totals") and rows:
         totals = []
+        shipment_summary = report["date_basis"] == "Shipment Date" and (
+            definition["report_id"] == "customer_performance" or
+            (definition["report_id"] == "shipment_register" and definition["summary_detail"] == "summary")
+        )
         for col in columns:
-            if col in ("income", "expense", "profit", "gross_weight_t", "chargeable_weight_t", "teus", "volume_cbm",
-                       "shipments", "air_shipments", "ocean_shipments", "jobs", "air_chargeable_weight_t", "ocean_teus", "invoice_count"):
-                totals.append(sum(float(r.get(col) or 0) for r in rows))
+            if shipment_summary and col == "company":
+                totals.append("TOTAL")
+            elif shipment_summary and col == "customer":
+                totals.append("TOTAL (includes unassigned)")
+            elif shipment_summary and col == "shipments":
+                totals.append(len(source_rows))
+            elif shipment_summary and col == "air_shipments":
+                totals.append(sum(1 for r in source_rows if r["_mode"] == "Air"))
+            elif shipment_summary and col == "ocean_shipments":
+                totals.append(sum(1 for r in source_rows if r["_mode"] == "Ocean"))
+            elif shipment_summary and col == "air_chargeable_weight_t":
+                totals.append(sum(float(r.get("chargeable_weight_t") or 0) for r in source_rows if r["_mode"] == "Air"))
+            elif shipment_summary and col == "ocean_teus":
+                totals.append(sum(float(r.get("teus") or 0) for r in source_rows if r["_mode"] == "Ocean"))
+            elif shipment_summary and col == "lob_count":
+                totals.append(len({r["lob"] for r in source_rows}))
+            elif shipment_summary and col == "last_shipment_date":
+                totals.append(max((r["shipment_date"] for r in source_rows if r.get("shipment_date")), default=None))
+            elif col in ("income", "expense", "profit", "gross_weight_t", "chargeable_weight_t", "teus", "volume_cbm",
+                         "shipments", "air_shipments", "ocean_shipments", "jobs", "air_chargeable_weight_t", "ocean_teus", "invoice_count"):
+                totals.append(sum(float(r.get(col) or 0) for r in (source_rows if shipment_summary else rows)))
             elif col in ("buy_rate", "sell_rate"):
                 totals.append("")  # Rates are unit values, not additive totals.
             elif col == "margin":
@@ -701,7 +764,7 @@ def build_report_workbook(D, definition, start, end, freshness, generated_at=Non
                 gp = sum(float(r.get("profit") or 0) for r in rows)
                 totals.append(gp / inc if inc > 0 else None)
             elif col in ("shipment_no", "job_no"):
-                totals.append(f"Rows: {len(rows)}")
+                totals.append(f"Rows: {len(source_rows) if shipment_summary else len(rows)}")
             else:
                 totals.append("TOTAL" if col == columns[0] else "")
         ws.append(totals)
@@ -736,7 +799,7 @@ def build_report_workbook(D, definition, start, end, freshness, generated_at=Non
     for row_idx in range(7, ws.max_row + 1):
         for cell in ws[row_idx]:
             cell.alignment = Alignment(vertical="top")
-    _add_visuals_sheet(wb, rows, definition["report_id"], start, end)
+    _add_visuals_sheet(wb, rows, definition["report_id"], start, end, source_rows=source_rows, summary=definition["summary_detail"] == "summary")
     output = BytesIO()
     wb.save(output)
     content = output.getvalue()
