@@ -156,14 +156,17 @@ def use_code(engine, email: str, code: str, now: datetime | None = None):
             ).values(used=1))
             return None
         if not hmac.compare_digest(t.code_hash, h("c:%s:%s" % (email, code.strip()))):
-            # Compare-and-increment prevents concurrent failures from losing
-            # an attempt or bypassing the configured lockout threshold.
+            # Increment in the database so simultaneous wrong codes cannot
+            # overwrite one another or bypass the configured attempt limit.
+            next_attempts = func.coalesce(login_tokens.c.attempts, 0) + 1
             conn.execute(update(login_tokens).where(
                 login_tokens.c.id == t.id,
                 login_tokens.c.used == 0,
-                login_tokens.c.attempts == attempts,
                 login_tokens.c.expires_at > now,
-            ).values(attempts=attempts + 1, used=1 if attempts + 1 >= CODE_ATTEMPTS else 0))
+            ).values(
+                attempts=next_attempts,
+                used=case((next_attempts >= CODE_ATTEMPTS, 1), else_=0),
+            ))
             return None
         consumed = conn.execute(update(login_tokens).where(
             login_tokens.c.id == t.id,
@@ -184,7 +187,13 @@ def password_login(engine, login: str, pw: str, now: datetime | None = None):
         if u and u.locked_until and u.locked_until > now: return None, "Too many wrong attempts. Try again in a few minutes."
         ok = check_password(pw, u.pw_hash if u else None) and u is not None and u.active == 1
         if ok:
-            conn.execute(update(users).where(users.c.id == u.id).values(fail_count=0, locked_until=None)); return user_dict(u), ""
+            reset = conn.execute(update(users).where(
+                users.c.id == u.id,
+                or_(users.c.locked_until.is_(None), users.c.locked_until <= now),
+            ).values(fail_count=0, locked_until=None))
+            if reset.rowcount != 1:
+                return None, "Too many wrong attempts. Try again later."
+            return user_dict(u), ""
         if u:
             next_count = func.coalesce(users.c.fail_count, 0) + 1
             lock_now = next_count >= PW_FAILS
