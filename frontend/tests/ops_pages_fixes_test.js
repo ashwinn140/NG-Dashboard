@@ -86,7 +86,7 @@ async function boot(mutate){
   const textBucket=()=>{const card=[...d.querySelectorAll('#page article')].find(e=>e.querySelector('h2')?.textContent.trim()==='How the rates were read');return card?.querySelectorAll('li')[1]?.textContent||'';};
   ng.S.def.rateMode='clean';ng.renderAll();const cleanMode=textBucket();
   ng.S.def.rateMode='text';ng.renderAll();const textMode=textBucket();
-  const textCount=s=>(s.match(/^(\\d+) have text/)||[])[1]||'';
+  const textCount=s=>(s.match(/^(\d+) have text/)||[])[1]||'';
   check('rate-quality text bucket is independent of the active acceptance mode',textCount(cleanMode)==='1'&&textCount(cleanMode)===textCount(textMode)&&cleanMode.includes('excluded')&&textMode.includes('included'),{cleanMode,textMode});
   dom.window.close()}
  
