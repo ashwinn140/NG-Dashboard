@@ -364,7 +364,7 @@ def restrict(D: dict, user: dict) -> dict:
     # agent details only for agents still present
     ag_old = D["cols"]["agent"]["d"]; ag_new = cols["agent"]["d"]; pos = {n: i for i, n in enumerate(ag_old)}
     out["agentInfo"] = [D["agentInfo"][pos[n]] for n in ag_new]
-    blank = {"rows": 0, "from": "", "to": "", "pend": 0, "finopen": 0, "repeated": 0, "runs": 0}
+    blank = {"rows": 0, "from": "", "to": "", "range_from": "", "range_to": "", "pend": 0, "finopen": 0, "repeated": 0, "runs": 0}
     out["meta"] = [m if i in allowed_rep else dict(m, **blank) for i, m in enumerate(D["meta"])]
     out["changes"] = {k: v for k, v in D["changes"].items() if int(k) in allowed_rep}
     out["built_at"] = D.get("built_at")
