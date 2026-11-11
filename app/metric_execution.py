@@ -105,7 +105,7 @@ def aggregate(metric,rows,options=None):
   for r in rows:
    if is_named_customer(r.get('customer')):grouped[r['customer']]=grouped.get(r['customer'],0)+r['profit']
   profits=sorted(grouped.values(),reverse=True)
-  positive_total=sum(max(0,r.get('profit',0)) for r in rows)
+  positive_total=sum(max(0,x) for x in profits)
   cum=n=0
   for x in profits:
    if x>0 and positive_total>0 and cum<.8*positive_total:cum+=x;n+=1
@@ -228,7 +228,7 @@ def execute(D,body,definitions,include_operations_links=True):
  displayed=body.get('displayed_value',a['value']);difference=None if displayed is None or a['value'] is None else displayed-a['value']
  reconciliation=dict(displayed_value=displayed,recalculated_value=a['value'],difference=difference,status='match' if difference is not None and abs(difference)<0.005 else 'not comparable' if difference is None else 'mismatch')
  evidence_records=current
- if metric.id in ['profit.customers','profit.loss_customers','ops.active_customers']:
+ if metric.id in ['profit.customers','profit.customers_80','profit.loss_customers','ops.active_customers']:
   evidence_records=[r for r in current if is_named_customer(r.get('customer'))]
  return dict(reconciliation=reconciliation,metric=metric.public_dict(),snapshot=snap,version=VERSION,current=a,previous=b,difference=delta,percentage=None if delta is None or not bv else delta/abs(bv)*100,records=evidence_records,comparison_records=previous,operations_records=operations_records,benchmark_records=benchmark,context=body.get('context',{}),lineage={'built_at':D.get('built_at'),'reports':D.get('p',{}).get('meta',[]) if source=='profit' else D.get('meta',[])})
 
