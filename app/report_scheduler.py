@@ -436,9 +436,12 @@ def _shipment_rows(D, definition, start, end):
 def _customer_rows(shipment_rows):
     groups = {}
     for r in shipment_rows:
-        key = (r["company"], r["customer"])
+        customer = " ".join(str(r.get("customer") or "").split())
+        if not customer or customer.casefold() in {"(blank)", "blank"}:
+            continue
+        key = (r["company"], customer.lower())
         g = groups.setdefault(key, {
-            "company": r["company"], "customer": r["customer"], "shipments": 0,
+            "company": r["company"], "customer": customer, "shipments": 0,
             "air_shipments": 0, "ocean_shipments": 0,
             "air_chargeable_weight_t": 0.0, "ocean_teus": 0.0,
             "lob_set": set(), "last_shipment_date": None,
