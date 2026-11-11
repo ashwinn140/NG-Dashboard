@@ -60,6 +60,29 @@ class ReportBuilderTests(unittest.TestCase):
             "summary_detail": "detail", "totals": True,
         }
 
+    def test_customer_performance_summary_excludes_blank_and_normalizes_customer_names(self):
+        data = self.dataset()
+        day = date(2026, 11, 5).toordinal() - date(1970, 1, 1).toordinal()
+        data["rep"] = [0, 0, 0]
+        data["no"] = ["S-1", "S-2", "S-3"]
+        data["date"] = [day, day + 1, day + 2]
+        for key in ("ops", "fin"):
+            data[key] = [-1, -1, -1]
+        for key in ("gross", "chg", "teus", "cbm", "invN", "rbuy", "rbf", "rsell", "rsf"):
+            value = data[key][0]
+            data[key] = [value, value, value]
+        data["inv1"] = [data["inv1"][0]] * 3
+        data["cols"]["customer"] = encoded(["Acme Logistics", "(blank)", " ACME   LOGISTICS "])
+        definition = self.definition(
+            report_id="customer_performance",
+            columns=["customer", "shipments", "air_shipments", "ocean_shipments"],
+        )
+        definition["summary_detail"] = "summary"
+        rows = build_report_rows(data, definition, date(2026, 11, 1), date(2026, 11, 10))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["customer"], "Acme Logistics")
+        self.assertEqual(rows[0]["shipments"], 2)
+
     def test_shipment_report_exposes_source_dimensions_and_operational_stage(self):
         data = self.dataset()
         definition = self.definition(columns=["shipment_no", "stage", "shipper", "trade_lane",
