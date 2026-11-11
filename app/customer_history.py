@@ -135,7 +135,7 @@ def build_last_shipment_owners(shipment_rows, jpr_rows, lobs=None, target_date=N
         shipment_no = str(row.get("shipment_no") or "").strip()
         shipment_date = _iso_day(row.get("shipment_date"))
         customer = " ".join(str(row.get("customer") or "").split())
-        key = customer.casefold()
+        key = customer.lower()
         if not company or not report_type or not shipment_no or not shipment_date or not is_named_customer(customer):
             continue
         if allowed_lobs and report_type not in allowed_lobs:
