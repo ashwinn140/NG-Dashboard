@@ -328,7 +328,8 @@ def restrict(D: dict, user: dict) -> dict:
         pco = np.asarray(D["p"]["co"], dtype=np.int64); prt = np.asarray(D["p"]["rt"], dtype=np.int64)
         comp_ok = [i for i, c in enumerate(["NG", "NCS"]) if not user["companies"] or c in user["companies"]]
         lob_ix = {"AE": 0, "AI": 1, "OE": 2, "OI": 3}
-        rt_ok = [lob_ix[l] for l in user["lobs"]] if user["lobs"] else [0, 1, 2, 3, 4]      # road and general jobs only for people with every LOB
+        all_lobs = not user["lobs"] or set(user["lobs"]) == set(lob_ix)
+        rt_ok = [0, 1, 2, 3, 4] if all_lobs else [lob_ix[l] for l in user["lobs"]]
         pk = np.isin(pco, comp_ok) & np.isin(prt, rt_ok)
     pidx = np.nonzero(pk)[0]
     # register rows: new index of each kept row, for the profit join
@@ -344,7 +345,7 @@ def restrict(D: dict, user: dict) -> dict:
     matched = (sidx >= 0) & (sidx < len(newpos))
     sidx_new[matched] = newpos[sidx[matched]]  # hidden shipments remain unmatched, including empty registers
     out["p"] = {"co": [D["p"]["co"][i] for i in pidx], "sidx": sidx_new.tolist(), "rt": [D["p"]["rt"][i] for i in pidx], "income": [D["p"]["income"][i] for i in pidx], "expense": [D["p"]["expense"][i] for i in pidx],
-                "format": J.FORMAT, "td": [D["p"]["td"][i] for i in pidx], "jd": [D["p"]["jd"][i] for i in pidx], "meta": [m for m in D["p"]["meta"] if user["finance"] and not user["lobs"] and (not user["companies"] or m["co"] in user["companies"])]}
+                "format": J.FORMAT, "td": [D["p"]["td"][i] for i in pidx], "jd": [D["p"]["jd"][i] for i in pidx], "meta": [m for m in D["p"]["meta"] if user["finance"] and all_lobs and (not user["companies"] or m["co"] in user["companies"])]}
     cols = {}
     for k, c in D["cols"].items():
         entry = {"l": c["l"]}
