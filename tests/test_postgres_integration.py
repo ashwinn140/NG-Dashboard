@@ -7,6 +7,7 @@ exercised on the production database engine.
 """
 import os
 import unittest
+from datetime import date
 from uuid import uuid4
 
 from sqlalchemy import create_engine, select, text
@@ -38,12 +39,12 @@ class PostgreSQLIntegrationTests(unittest.TestCase):
                 conn.execute(shipments.insert().values(
                     company="NG", report_type="AE", key="shipment-1",
                     from_import=1, to_import=None, shipment_no="S-100",
-                    shipment_date="2026-11-10", customer="  Acme\\t  Logistics ",
+                    shipment_date=date(2026, 11, 10), customer="  Acme\t  Logistics ",
                     extra={"Job Owner": "Owner A", "source": "JPR"},
                 ))
                 conn.execute(profit_lines.insert().values(
                     company="NG", key="job-1", from_import=1, to_import=None,
-                    lob="FFWD AIR EXP", job_no="S-100", job_date="2026-11-10",
+                    lob="FFWD AIR EXP", job_no="S-100", job_date=date(2026, 11, 10),
                     customer="Acme Logistics",
                     extra={"Job Owner": "Owner A", "source_row": 7},
                 ))
