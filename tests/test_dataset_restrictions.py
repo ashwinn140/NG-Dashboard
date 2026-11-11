@@ -53,6 +53,11 @@ class TestRestrictedReportMetadata(unittest.TestCase):
         )
         hidden = restricted["meta"][1]
         self.assertTrue(hidden["restricted"])
+        self.assertEqual(hidden["co"], "")
+        self.assertEqual(hidden["rep"], "")
+        self.assertNotIn("file", hidden)
+        self.assertNotIn("title", hidden)
+        self.assertEqual(restricted["reps"][1], ["", ""])
         self.assertEqual(hidden["rows"], 0)
         self.assertEqual(hidden["runs"], 0)
         self.assertEqual(hidden["range_from"], "")
