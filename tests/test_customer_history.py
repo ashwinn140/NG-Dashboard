@@ -12,12 +12,12 @@ class CustomerHistoryTests(unittest.TestCase):
         try:
             with engine.connect() as conn:
                 value = conn.execute(select(normalize_customer_sql(
-                    literal("  Acme\t\u00a0  Logistics\u202f\nIndia   ")
+                    literal("  Acme\\t\\u00a0  Logistics\\u202f\\nIndia   ")
                 ))).scalar_one()
-            self.assertEqual(value, "acme logistics india")
                 long_run = conn.execute(select(normalize_customer_sql(
                     literal("Acme" + (" " * 300) + "Logistics")
                 ))).scalar_one()
+            self.assertEqual(value, "acme logistics india")
             self.assertEqual(long_run, "acme logistics")
         finally:
             engine.dispose()
