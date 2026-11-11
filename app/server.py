@@ -567,7 +567,8 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
     @app.post("/api/metrics/export")
     async def metric_export_api(request: Request, user: dict = Depends(unsafe)):
         result = await metric_evidence(request, user)
-        return Response(MX.workbook(result), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": 'attachment; filename="metric_reconciliation.xlsx"', "Cache-Control": "private, no-store"})
+        workbook = await run_in_threadpool(MX.workbook, result)
+        return Response(workbook, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": 'attachment; filename="metric_reconciliation.xlsx"', "Cache-Control": "private, no-store"})
 
     @app.get("/assets/metric_trace.js")
     def metric_trace_script(user: dict = Depends(me)):
