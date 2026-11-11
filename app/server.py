@@ -453,11 +453,11 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                         shipments.c.shipment_date.is_not(None),
                         shipments.c.shipment_date <= as_of,
                     )).mappings().all()
-                    register_row_count += len(register_rows)
                     for row in register_rows:
                         key = (row["company"], normalize_customer(row["customer"]))
                         lob = row["report_type"]
                         if key in activity_dates and lob in activity_dates[key] and row["shipment_date"]:
+                            register_row_count += 1
                             activity_dates[key][lob].append(row["shipment_date"])
 
                 register_ms = (time.perf_counter() - register_started) * 1000
@@ -488,10 +488,10 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                         normalized_jpr_customer.in_(name_batch),
                         *J.current_jobs(),
                     ).order_by(profit_lines.c.job_date.desc(), profit_lines.c.id.desc())).mappings().all()
-                    jpr_row_count += len(jpr_rows)
                     for row in jpr_rows:
                         key = (row["company"], normalize_customer(row["customer"]))
                         if key in latest_jobs:
+                            jpr_row_count += 1
                             latest_jobs[key].append(dict(row))
                 jpr_ms = (time.perf_counter() - jpr_started) * 1000
             return (activity_dates, latest_jobs, promoted, register_ms, register_row_count,
