@@ -96,6 +96,8 @@ class ReportBuilderTests(unittest.TestCase):
         self.assertEqual(visuals["B6"].value, 1)
         self.assertEqual(visuals["B22"].value, 3)
         self.assertEqual(visuals["B40"].value, 3)
+        self.assertIn("B5", visuals._charts[0].series[0].val.numRef.f)
+        self.assertIn("A5", visuals._charts[0].series[0].cat.numRef.f)
 
     def test_shipment_report_exposes_source_dimensions_and_operational_stage(self):
         data = self.dataset()
