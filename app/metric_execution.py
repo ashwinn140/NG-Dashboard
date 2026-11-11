@@ -230,6 +230,8 @@ def execute(D,body,definitions,include_operations_links=True):
  evidence_records=current
  if metric.id in ['profit.customers','profit.customers_80','profit.loss_customers','ops.active_customers']:
   evidence_records=[r for r in current if is_named_customer(r.get('customer'))]
+ if metric.id=='profit.best_dimension':
+  evidence_records=[r for r in current if is_named_customer(r.get('dimension_value'))]
  return dict(reconciliation=reconciliation,metric=metric.public_dict(),snapshot=snap,version=VERSION,current=a,previous=b,difference=delta,percentage=None if delta is None or not bv else delta/abs(bv)*100,records=evidence_records,comparison_records=previous,operations_records=operations_records,benchmark_records=benchmark,context=body.get('context',{}),lineage={'built_at':D.get('built_at'),'reports':D.get('p',{}).get('meta',[]) if source=='profit' else D.get('meta',[])})
 
 def workbook(result):
