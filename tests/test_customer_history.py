@@ -12,7 +12,7 @@ class CustomerHistoryTests(unittest.TestCase):
         try:
             with engine.connect() as conn:
                 value = conn.execute(select(normalize_customer_sql(
-                    literal("  Acme\\t\\u00a0  Logistics\\u202f\\nIndia   ")
+                    literal("  Acme" + chr(9) + chr(160) + "  Logistics" + chr(8239) + chr(10) + "India   ")
                 ))).scalar_one()
                 long_run = conn.execute(select(normalize_customer_sql(
                     literal("Acme" + (" " * 300) + "Logistics")
