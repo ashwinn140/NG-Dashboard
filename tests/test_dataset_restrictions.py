@@ -16,7 +16,7 @@ class TestRestrictedReportMetadata(unittest.TestCase):
             "inv1": [0, 0], "invN": [0, 0],
             "p": {"co": [], "rt": [], "sidx": [], "income": [], "expense": [], "td": [], "jd": [], "meta": []},
             "cols": {"agent": {"l": "Agent", "d": ["Agent"], "c": [0, 0], "pc": []}},
-            "agentInfo": [],
+            "agentInfo": [["", "", "", "", "", ""]],
             "meta": [
                 {"co": "NG", "rows": 12, "from": "2026-01-01", "to": "2026-11-01", "range_from": "2026-01-01", "range_to": "2026-11-01", "pend": 2, "finopen": 3, "repeated": 1, "runs": 4},
                 {"co": "NCS", "rows": 99, "from": "2024-01-01", "to": "2026-10-31", "range_from": "2024-01-01", "range_to": "2026-10-31", "pend": 9, "finopen": 8, "repeated": 7, "runs": 6},
