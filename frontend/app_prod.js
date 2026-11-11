@@ -145,8 +145,8 @@ const fS = (s) => (s >= 0.1 ? fP0(s) : fP1(s));
 function rankedKey(key) {
   const limit = S.def.topN;
   const m = mask({skip: key}), c = COLS[key].c, a = new Float64Array(COLS[key].d.length); let tot = 0;
-  for (let i = 0; i < N; i++) if (m[i]) { const v = vi(i); a[c[i]] += v; tot += v; }
-  const sel = S.sel[key] || new Set(); let ids = []; for (let j = 0; j < a.length; j++) if (a[j] > 0 || sel.has(j)) ids.push(j);
+  for (let i = 0; i < N; i++) if (m[i]) { const v = vi(i); if (key !== 'customer' || isNamedCustomerLabel(COLS[key].d[c[i]])) a[c[i]] += v; tot += v; }
+  const sel = S.sel[key] || new Set(); let ids = []; for (let j = 0; j < a.length; j++) if ((a[j] > 0 || sel.has(j)) && (key !== 'customer' || isNamedCustomerLabel(COLS[key].d[j]))) ids.push(j);
   ids.sort((x, y) => a[y] - a[x]); const top = ids.slice(0, limit); sel.forEach((j) => { if (!top.includes(j)) top.push(j); });
   return h('div', null, rankRows(top.map((j) => ({k: j, label: COLS[key].d[j], v: a[j], sel: sel.has(j)})), tot, (d) => {const metric=R.useVol?(R.air?'ops.air_weight':'ops.teu'):'ops.shipments';toggle(key,d.k);}, CI[key] || 0),
     ids.length > top.length ? h('p', {class: 'more'}, 'Top ' + top.length + ' of ' + fInt(ids.length) + '. Use the ' + COLS[key].l + ' filter above to find others.') : null);
@@ -399,10 +399,11 @@ function kpi(label, value, delta, note, tone, previousValue, metricExplanation) 
     note ? h('div', {class: 'kn'}, note) : null,
     businessMeaning(label, note, metricExplanation));
 }
-function activeCust(m) { const c = COLS.customer.c, a = new Uint32Array(COLS.customer.d.length); for (let i = 0; i < N; i++) if (m[i]) a[c[i]]++; let n = 0; for (let j = 0; j < a.length; j++) if (a[j] > 0 && a[j] >= S.def.activeMin) n++; return n; }
+function isNamedCustomerLabel(value) { const label = String(value == null ? '' : value).trim().toLowerCase(); return !!label && label !== '(blank)' && label !== 'blank'; }
+function activeCust(m) { const c = COLS.customer.c, a = new Uint32Array(COLS.customer.d.length); for (let i = 0; i < N; i++) if (m[i]) a[c[i]]++; let n = 0; for (let j = 0; j < a.length; j++) if (a[j] > 0 && a[j] >= S.def.activeMin && isNamedCustomerLabel(COLS.customer.d[j])) n++; return n; }
 function sumWhere(m, f) { let s = 0; for (let i = 0; i < N; i++) if (m[i]) s += f(i); return s; }
 function distinct(m, key) { const c = COLS[key].c, set = new Set(); for (let i = 0; i < N; i++) if (m[i]) set.add(c[i]); return set.size; }
-function top10(m, useVol) { const c = COLS.customer.c, a = new Float64Array(COLS.customer.d.length); let t = 0; for (let i = 0; i < N; i++) if (m[i]) { const v = useVol ? VOL[i] : 1; a[c[i]] += v; t += v; }
+function top10(m, useVol) { const c = COLS.customer.c, a = new Float64Array(COLS.customer.d.length); let t = 0; for (let i = 0; i < N; i++) if (m[i]) { const v = useVol ? VOL[i] : 1; if (isNamedCustomerLabel(COLS.customer.d[c[i]])) a[c[i]] += v; t += v; }
   if (!t) return null; const s = Array.from(a).sort((x, y) => y - x); let u = 0; for (let k = 0; k < S.def.topN; k++) u += s[k] || 0; return u / t; }
 
 // ---------------------------------------------------------------- trend chart
@@ -1393,7 +1394,7 @@ S.sc = {dim: 0, sort: {sort: 'profit', dir: -1}};
 function goto(group, page, extra) { if (extra) for (const k in extra) S.sel[k] = new Set([].concat(extra[k])); S.group = group; S.page = page; syncBounds(); renderAll(); window.scrollTo(0, 0); }
 function opsFacts(m) {
   let n = 0, air = 0, sea = 0, openFin = 0, old = 0, lagSum = 0, lagN = 0; const cust = new Set(), age0 = OPS_MAX;
-  for (let i = 0; i < N; i++) { if (!m[i]) continue; n++; if (mode[i]) sea += teus[i]; else air += chg[i]; cust.add(COLS.customer.c[i]); if (COLS.stage.c[i] === STAGE_FIN) { openFin++; if (age0 - date[i] > S.def.oldDays) old++; } if (opsD[i] > 0 && finD[i] > 0) { lagSum += finD[i] - opsD[i]; lagN++; } }
+  for (let i = 0; i < N; i++) { if (!m[i]) continue; n++; if (mode[i]) sea += teus[i]; else air += chg[i]; if (isNamedCustomerLabel(COLS.customer.d[COLS.customer.c[i]])) cust.add(COLS.customer.c[i]); if (COLS.stage.c[i] === STAGE_FIN) { openFin++; if (age0 - date[i] > S.def.oldDays) old++; } if (opsD[i] > 0 && finD[i] > 0) { lagSum += finD[i] - opsD[i]; lagN++; } }
   return {n, air, sea, openFin, old, lag: lagN ? lagSum / lagN : null, cust: cust.size};
 }
 function monthBars(m) {
