@@ -74,4 +74,19 @@ async function boot(mutate){
    check('unbilled evidence carries exact source indices',q?.indices?.length===Number((row.children[3].textContent||'').replace(/,/g,'')),{indices:q?.indices?.length,displayed:row.children[3].textContent});
   }dom.window.close()}
 
+ // Rate-quality buckets describe source quality independently of the active acceptance mode.
+ {const {dom,w,d,ng}=await boot(data=>{
+   if(!data.rep.length)throw new Error('Rate-quality fixture needs at least one shipment');
+   data.reps=[['NG','AE']];data.rep=data.rep.map(()=>0);
+   data.rbf=data.rbf.map(()=>1);data.rsf=data.rsf.map(()=>1);
+   data.rbuy=data.rbuy.map(()=>100);data.rsell=data.rsell.map(()=>120);data.ckg=data.ckg.map(()=>1000);
+   data.rbf[0]=2;
+  });
+  ng.S.sel={};ng.S.rel=null;ng.S.from=null;ng.S.to=null;ng.setGroup('profit');ng.S.page='p_rates';
+  const textBucket=()=>{const card=[...d.querySelectorAll('#page article')].find(e=>e.querySelector('h2')?.textContent.trim()==='How the rates were read');return card?.querySelectorAll('li')[1]?.textContent||'';};
+  ng.S.def.rateMode='clean';ng.renderAll();const cleanMode=textBucket();
+  ng.S.def.rateMode='text';ng.renderAll();const textMode=textBucket();
+  check('rate-quality text bucket is independent of the active acceptance mode',/1 have text/.test(cleanMode)&&cleanMode===textMode,{cleanMode,textMode});
+  dom.window.close()}
+ 
  console.log(fails?'FAILED '+fails:'ALL PASSED');process.exit(fails?1:0)})().catch(e=>{console.error(e);process.exit(1)});
