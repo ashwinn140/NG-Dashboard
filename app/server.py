@@ -723,68 +723,70 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                 all_names.add(name.strip().casefold())
             if not normalized:
                 return {"histories": []}
-            with engine.connect() as conn:
-                # A caller may request only customers already present in the
-                # current operational register within their authorized scope.
-                visible_report_types = visible_report_types_for_scopes(lobs for _, _, lobs, _ in normalized)
-                visible_rows = conn.execute(select(
-                    shipments.c.company, shipments.c.customer
-                ).where(
-                    shipments.c.company.in_(sorted(all_companies)),
-                    shipments.c.report_type.in_(visible_report_types),
-                    shipments.c.to_import.is_(None),
-                    normalize_customer_sql(shipments.c.customer).in_(sorted(all_names))
-                )).all()
-                visible = {
-                    (company, " ".join(str(customer or "").split()).casefold())
-                    for company, customer in visible_rows
-                }
-                for name, companies, _, _ in normalized:
-                    if any((company, name.casefold()) not in visible for company in companies):
-                        raise PermissionError("The customer is outside your visible operational scope for one or more selected companies.")
-                shipment_rows = conn.execute(select(
-                    shipments.c.company, shipments.c.report_type, shipments.c.shipment_no,
-                    shipments.c.shipment_date, shipments.c.customer
-                ).where(
-                    shipments.c.company.in_(sorted(all_companies)),
-                    shipments.c.report_type.in_(visible_report_types),
-                    shipments.c.to_import.is_(None),
-                    normalize_customer_sql(shipments.c.customer).in_(sorted(all_names))
-                ).order_by(shipments.c.shipment_date.desc(), shipments.c.id.desc())).mappings().all()
-                source_rows = conn.execute(select(
-                    profit_lines.c.id, profit_lines.c.company, profit_lines.c.job_no,
-                    profit_lines.c.job_date, profit_lines.c.lob, profit_lines.c.customer,
-                    profit_lines.c.extra
-                ).where(
-                    profit_lines.c.company.in_(sorted(all_companies)),
-                    normalize_customer_sql(profit_lines.c.customer).in_(sorted(all_names)),
-                    *J.current_jobs()
-                ).order_by(profit_lines.c.job_date.desc(), profit_lines.c.id.desc())).mappings().all()
-            by_customer = {}
-            for row in source_rows:
-                key = " ".join(str(row["customer"] or "").split()).casefold()
-                by_customer.setdefault(key, []).append(dict(row))
-            shipments_by_customer = {}
-            for row in shipment_rows:
-                key = " ".join(str(row["customer"] or "").split()).casefold()
-                shipments_by_customer.setdefault(key, []).append(dict(row))
-            histories = []
-            for name, companies, lobs, last_shipment_date in normalized:
-                key = name.strip().casefold()
-                rows = [row for row in by_customer.get(key, []) if row["company"] in companies]
-                visible_shipments = [row for row in shipments_by_customer.get(key, []) if row["company"] in companies]
-                jobs = build_recent_jobs(rows, lobs=lobs, limit=5)
-                last_owner = build_last_shipment_owners(visible_shipments, rows, lobs=lobs, target_date=last_shipment_date).get(key)
-                histories.append({
-                    "customer": name,
-                    "jobs": jobs,
-                    "job_count_returned": len(jobs),
-                    "last_shipment_job_owner": last_owner["last_shipment_job_owner"] if last_owner else "No shipment record",
-                    "last_shipment_owner_status": last_owner["last_shipment_owner_status"] if last_owner else "no_shipment",
-                    "last_shipment_date": last_owner["last_shipment_date"] if last_owner else None,
-                    "last_shipment_numbers": last_owner["last_shipment_numbers"] if last_owner else [],
-                })
-            return {"histories": histories, "basis": "Job Date", "source": "Current Job Profit Analysis Report"}
+            def build_history_batch():
+                with engine.connect() as conn:
+                    # A caller may request only customers already present in the
+                    # current operational register within their authorized scope.
+                    visible_report_types = visible_report_types_for_scopes(lobs for _, _, lobs, _ in normalized)
+                    visible_rows = conn.execute(select(
+                        shipments.c.company, shipments.c.customer
+                    ).where(
+                        shipments.c.company.in_(sorted(all_companies)),
+                        shipments.c.report_type.in_(visible_report_types),
+                        shipments.c.to_import.is_(None),
+                        normalize_customer_sql(shipments.c.customer).in_(sorted(all_names))
+                    )).all()
+                    visible = {
+                        (company, " ".join(str(customer or "").split()).casefold())
+                        for company, customer in visible_rows
+                    }
+                    for name, companies, _, _ in normalized:
+                        if any((company, name.casefold()) not in visible for company in companies):
+                            raise PermissionError("The customer is outside your visible operational scope for one or more selected companies.")
+                    shipment_rows = conn.execute(select(
+                        shipments.c.company, shipments.c.report_type, shipments.c.shipment_no,
+                        shipments.c.shipment_date, shipments.c.customer
+                    ).where(
+                        shipments.c.company.in_(sorted(all_companies)),
+                        shipments.c.report_type.in_(visible_report_types),
+                        shipments.c.to_import.is_(None),
+                        normalize_customer_sql(shipments.c.customer).in_(sorted(all_names))
+                    ).order_by(shipments.c.shipment_date.desc(), shipments.c.id.desc())).mappings().all()
+                    source_rows = conn.execute(select(
+                        profit_lines.c.id, profit_lines.c.company, profit_lines.c.job_no,
+                        profit_lines.c.job_date, profit_lines.c.lob, profit_lines.c.customer,
+                        profit_lines.c.extra
+                    ).where(
+                        profit_lines.c.company.in_(sorted(all_companies)),
+                        normalize_customer_sql(profit_lines.c.customer).in_(sorted(all_names)),
+                        *J.current_jobs()
+                    ).order_by(profit_lines.c.job_date.desc(), profit_lines.c.id.desc())).mappings().all()
+                by_customer = {}
+                for row in source_rows:
+                    key = " ".join(str(row["customer"] or "").split()).casefold()
+                    by_customer.setdefault(key, []).append(dict(row))
+                shipments_by_customer = {}
+                for row in shipment_rows:
+                    key = " ".join(str(row["customer"] or "").split()).casefold()
+                    shipments_by_customer.setdefault(key, []).append(dict(row))
+                histories = []
+                for name, companies, lobs, last_shipment_date in normalized:
+                    key = name.strip().casefold()
+                    rows = [row for row in by_customer.get(key, []) if row["company"] in companies]
+                    visible_shipments = [row for row in shipments_by_customer.get(key, []) if row["company"] in companies]
+                    jobs = build_recent_jobs(rows, lobs=lobs, limit=5)
+                    last_owner = build_last_shipment_owners(visible_shipments, rows, lobs=lobs, target_date=last_shipment_date).get(key)
+                    histories.append({
+                        "customer": name,
+                        "jobs": jobs,
+                        "job_count_returned": len(jobs),
+                        "last_shipment_job_owner": last_owner["last_shipment_job_owner"] if last_owner else "No shipment record",
+                        "last_shipment_owner_status": last_owner["last_shipment_owner_status"] if last_owner else "no_shipment",
+                        "last_shipment_date": last_owner["last_shipment_date"] if last_owner else None,
+                        "last_shipment_numbers": last_owner["last_shipment_numbers"] if last_owner else [],
+                    })
+                return {"histories": histories, "basis": "Job Date", "source": "Current Job Profit Analysis Report"}
+            return await run_in_threadpool(build_history_batch)
         except PermissionError as e:
             raise HTTPException(403, str(e))
         except (ValueError, TypeError, KeyError) as e:
