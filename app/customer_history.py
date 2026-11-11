@@ -27,6 +27,12 @@ def _iso_day(value):
     return str(value or "").strip()[:10]
 
 
+def is_named_customer(value):
+    """Return False for the explicit blank bucket used by dashboard data."""
+    customer = " ".join(str(value or "").split())
+    return bool(customer) and customer.casefold() not in {"(blank)", "blank"}
+
+
 def build_recent_jobs(rows, lobs=None, limit=5):
     """Return the newest distinct company/LOB/job/date identities.
 
@@ -43,7 +49,7 @@ def build_recent_jobs(rows, lobs=None, limit=5):
         lob = str(row.get("lob") or "").strip()
         job_date = _iso_day(row.get("job_date"))
         customer = " ".join(str(row.get("customer") or "").split())
-        if not company or not job_no or not job_date or not lob or not customer:
+        if not company or not job_no or not job_date or not lob or not is_named_customer(customer):
             continue
         mode = "Air" if "AIR" in lob.upper() else "Sea" if "SEA" in lob.upper() else "Road" if "ROAD" in lob.upper() else "Other"
         direction = "Export" if "EXP" in lob.upper() else "Import" if "IMP" in lob.upper() else "Domestic" if "DOM" in lob.upper() else "Other"
@@ -130,7 +136,7 @@ def build_last_shipment_owners(shipment_rows, jpr_rows, lobs=None, target_date=N
         shipment_date = _iso_day(row.get("shipment_date"))
         customer = " ".join(str(row.get("customer") or "").split())
         key = customer.casefold()
-        if not company or not report_type or not shipment_no or not shipment_date or not customer:
+        if not company or not report_type or not shipment_no or not shipment_date or not is_named_customer(customer):
             continue
         if allowed_lobs and report_type not in allowed_lobs:
             continue
