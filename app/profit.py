@@ -236,7 +236,7 @@ def process_profit(engine, rep: ProfitReport, file_name: str, file_sha: str, rep
             def covered(h):                 # was this line loaded by a file whose dates overlap this one?
                 a = spans.get(h.from_import)
                 return a is None or a[0] is None or (a[0] <= rep.range_to and a[1] >= rep.range_from)
-            in_jobs = [h for h in held if covered(h)]
+            in_jobs = [h for h in held if covered(h) and h.job_date is not None and rep.range_from <= h.job_date <= rep.range_to]
         else:                               # dates unreadable: judge only the jobs the file lists
             in_jobs = [h for h in held if h.job_no in jobs]
         if in_jobs and not approve_review:

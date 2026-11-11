@@ -32,19 +32,23 @@ def find_opportunities(rows, as_of: date, window_days: int = 180,
     for row in rows:
         company = str(row.get("company") or "").strip().upper()
         customer = " ".join(str(row.get("customer") or "").split())
+        customer_key = customer.lower()
         lob = str(row.get("lob") or "").strip().upper()
         shipment_id = str(row.get("shipment_id") or "").strip()
         when = row.get("shipment_date")
-        if not (company in ("NG", "NCS") and customer and lob in LOBS and shipment_id
+        if not (company in ("NG", "NCS") and customer
+                and customer.casefold() not in {"(blank)", "blank"}
+                and lob in LOBS and shipment_id
                 and isinstance(when, date) and not hasattr(when, "hour")
                 and start <= when <= as_of):
             continue
-        grouped[(company, customer)][lob].add((shipment_id,when))
-        display_names.setdefault((company,customer),' '.join(str(row.get('customer') or '').split()))
-        salesperson=str(row.get('salesperson') or '').strip()
-        if salesperson:sales[(company,customer)][salesperson].add((lob,shipment_id,when))
+        grouped[(company, customer_key)][lob].add((shipment_id, when))
+        display_names.setdefault((company, customer_key), customer)
+        salesperson = str(row.get("salesperson") or "").strip()
+        if salesperson:
+            sales[(company, customer_key)][salesperson].add((lob, shipment_id, when))
     result = []
-    for (company, customer), lob_counts in grouped.items():
+    for (company, customer_key), lob_counts in grouped.items():
         active = {lob: len(ids) for lob, ids in lob_counts.items() if ids}
         total = sum(active.values())
         if total < min_shipments:
@@ -53,7 +57,7 @@ def find_opportunities(rows, as_of: date, window_days: int = 180,
         if not missing:
             continue
         result.append({
-            "company": company, "customer": display_names[(company,customer)], "customer_key": customer, "salespersons": {name:len(ids) for name,ids in sales[(company,customer)].items()},
+            "company": company, "customer": display_names[(company, customer_key)], "customer_key": customer_key, "salespersons": {name: len(ids) for name, ids in sales[(company, customer_key)].items()},
             "active_lobs": dict(sorted(active.items())),
             "candidate_lobs": missing, "shipment_count": total,
             "signal": "cross_service_whitespace",

@@ -31,6 +31,9 @@ def value(D,key,i,finance=False):
  codes=c.get('pc' if finance else 'c',[])
  return c.get('d',[])[codes[i]] if i<len(codes) else ''
 def iso(d):return (date(1970,1,1)+timedelta(days=d)).isoformat() if d is not None and d>=0 else ''
+def is_named_customer(value):
+ text=' '.join(str(value or '').split())
+ return bool(text) and text.casefold() not in {'(blank)','blank'}
 def records(D,source,indices,include_operations_links=True):
  fin=source=='profit';p=D.get('p',{});n=len(p.get('co',[])) if fin else len(D.get('rep',[]))
  if not isinstance(indices,list) or len(indices)>n or any(type(i)is not int or i<0 or i>=n for i in indices):raise ValueError('Invalid scoped record selection.')
@@ -89,7 +92,9 @@ def aggregate(metric,rows,options=None):
  if metric in ['profit.air_yield','profit.ocean_yield','profit.matched_share','profit.best_dimension']:
   if metric=='profit.best_dimension':
    grouped={}
-   for r in rows:grouped[r.get('dimension_value','')]=grouped.get(r.get('dimension_value',''),0)+r['profit']
+   for r in rows:
+    dimension=r.get('dimension_value','')
+    if is_named_customer(dimension):grouped[dimension]=grouped.get(dimension,0)+r['profit']
    return dict(value=max([v for v in grouped.values() if v>0],default=None),numerator=None,denominator=None)
   if metric=='profit.matched_share':num=sum(r['matched_source_index']>=0 for r in rows);den=len(rows)
   else:
@@ -97,22 +102,31 @@ def aggregate(metric,rows,options=None):
   return dict(value=num/den if den>0 else None,numerator=num,denominator=den)
  if metric in ['profit.customers','profit.customers_80','profit.biggest_customer','profit.loss_customers']:
   grouped={}
-  for r in rows:grouped[r['customer']]=grouped.get(r['customer'],0)+r['profit']
-  profits=sorted(grouped.values(),reverse=True);pos=sum(x for x in profits if x>0);cum=n=0
+  for r in rows:
+   if is_named_customer(r.get('customer')):grouped[r['customer']]=grouped.get(r['customer'],0)+r['profit']
+  profits=sorted(grouped.values(),reverse=True)
+  positive_total=sum(max(0,x) for x in profits)
+  cum=n=0
   for x in profits:
-   if x>0 and cum<.8*pos:cum+=x;n+=1
-  v={'profit.customers':len(grouped),'profit.customers_80':n,'profit.biggest_customer':profits[0]/sum(profits) if profits and sum(profits)>0 else None,'profit.loss_customers':sum(x<0 for x in profits)}[metric]
+   if x>0 and positive_total>0 and cum<.8*positive_total:cum+=x;n+=1
+  net_total=sum(r.get('profit',0) for r in rows)
+  v={'profit.customers':len(grouped),'profit.customers_80':n,'profit.biggest_customer':profits[0]/net_total if profits and net_total>0 else None,'profit.loss_customers':sum(x<0 for x in profits)}[metric]
   return dict(value=v,numerator=None,denominator=None)
  if metric=='ops.customer_concentration':
-  grouped={};measure=options.get('concentration_measure','count')
-  for r in rows:grouped[r['customer']]=grouped.get(r['customer'],0)+(1 if measure=='count' else r.get(measure,0))
-  total=sum(grouped.values());num=sum(sorted(grouped.values(),reverse=True)[:max(1,int(options.get('top_n',25)))]);return dict(value=num/total if total else None,numerator=num,denominator=total)
+  grouped={};measure=options.get('concentration_measure','count');total=0
+  for r in rows:
+   amount=1 if measure=='count' else r.get(measure,0)
+   total+=amount
+   if is_named_customer(r.get('customer')):grouped[r['customer']]=grouped.get(r['customer'],0)+amount
+  num=sum(sorted(grouped.values(),reverse=True)[:max(1,int(options.get('top_n',25)))])
+  return dict(value=num/total if total>0 else None,numerator=num,denominator=total)
  if metric in ['profit.cost_not_booked_proxy','profit.billing_pending_proxy','profit.loss_making','profit.low_margin','profit.negative_income_rows','profit.intercompany_proxy']:return dict(value=len(rows),numerator=None,denominator=None)
  if metric=='ops.invoice_reference_count' or metric=='profit.rows':return dict(value=len(rows),numerator=None,denominator=None)
  if metric=='ops.invoiced_count':return dict(value=len(rows),numerator=None,denominator=None)
  if metric=='ops.active_customers':
   counts={}
-  for r in rows:counts[r['customer']]=counts.get(r['customer'],0)+1
+  for r in rows:
+   if is_named_customer(r.get('customer')):counts[r['customer']]=counts.get(r['customer'],0)+1
   return dict(value=sum(n>=max(1,int(options.get('active_min',1))) for n in counts.values()),numerator=None,denominator=None)
  if metric.startswith('ops.') and metric not in ['ops.shipments','ops.air_weight','ops.air_weight_kg','ops.teu','ops.volume','ops.period_new_customers','ops.period_absent_customers']:
   today=int(options.get('age_as_of',0));old=int(options.get('old_days',90));unbilled=int(options.get('unbilled_days',30));eligible=rows;numerator=denominator=None
@@ -128,10 +142,12 @@ def aggregate(metric,rows,options=None):
   elif metric in ['ops.locked_no_invoice','ops.overdue_invoice']:eligible=[r for r in rows if r['operations_lock_day']>0 and r['invoice_count']==0 and (metric=='ops.locked_no_invoice' or today-r['operations_lock_day']>unbilled)];v=len(eligible)
   else:raise ValueError('Unsupported operational metric.')
   return dict(value=v,numerator=numerator,denominator=denominator)
- if metric in ['ops.period_new_customers','ops.period_absent_customers']:return dict(value=len({r['customer'] for r in rows}),numerator=None,denominator=None)
+ if metric in ['ops.period_new_customers','ops.period_absent_customers']:return dict(value=len({r['customer'] for r in rows if is_named_customer(r.get('customer'))}),numerator=None,denominator=None)
  if metric in ['profit.income','profit.expense','profit.gp']:return {'value':{'profit.income':inc,'profit.expense':exp,'profit.gp':inc-exp}[metric],'numerator':None,'denominator':None}
  if metric=='profit.margin':return dict(value=(inc-exp)/inc if inc>0 else None,numerator=inc-exp,denominator=inc)
- if metric=='profit.cost_coverage':return dict(value=sum(r.get('expense',0)>0 for r in rows)/len(keys) if keys else None,numerator=sum(r.get('expense',0)>0 for r in rows),denominator=len(keys))
+ if metric=='profit.cost_coverage':
+  covered={(r['company'],r['lob'],r['job'],r['date']) for r in rows if r.get('expense',0)>0}
+  return dict(value=len(covered)/len(keys) if keys else None,numerator=len(covered),denominator=len(keys))
  if metric=='profit.expected_adjusted':return dict(value=sum(r.get('profit',0)-r.get('expected_cost',0) for r in rows),numerator=None,denominator=None)
  if metric=='profit.expected_cost_only':return dict(value=sum(r.get('expected_cost',0) for r in rows),numerator=None,denominator=None)
  if metric=='profit.per_job':return dict(value=(inc-exp)/len(keys) if keys else None,numerator=inc-exp,denominator=len(keys))
@@ -200,8 +216,10 @@ def execute(D,body,definitions,include_operations_links=True):
   if body.get('context',{}).get('dimension_key'):r['dimension_value']=value(D,body['context']['dimension_key'],r['source_index'],source=='profit')
  if metric.id in ['ops.period_new_customers','ops.period_absent_customers']:
   ca={};pa={};minimum=max(1,int(body.get('context',{}).get('active_min',1)))
-  for r in current:ca[r['customer']]=ca.get(r['customer'],0)+1
-  for r in previous:pa[r['customer']]=pa.get(r['customer'],0)+1
+  for r in current:
+   if is_named_customer(r.get('customer')):ca[r['customer']]=ca.get(r['customer'],0)+1
+  for r in previous:
+   if is_named_customer(r.get('customer')):pa[r['customer']]=pa.get(r['customer'],0)+1
   chosen={c for c,n in (ca if metric.id=='ops.period_new_customers' else pa).items() if n>=minimum and not (pa if metric.id=='ops.period_new_customers' else ca).get(c)}
   current=[r for r in (current if metric.id=='ops.period_new_customers' else previous) if r['customer'] in chosen];previous=[]
  a=aggregate(metric.id,current,body.get('context'));b=aggregate(metric.id,previous,body.get('context'))
@@ -209,7 +227,17 @@ def execute(D,body,definitions,include_operations_links=True):
  av,bv=a['value'],b['value'];delta=None if av is None or bv is None else av-bv
  displayed=body.get('displayed_value',a['value']);difference=None if displayed is None or a['value'] is None else displayed-a['value']
  reconciliation=dict(displayed_value=displayed,recalculated_value=a['value'],difference=difference,status='match' if difference is not None and abs(difference)<0.005 else 'not comparable' if difference is None else 'mismatch')
- return dict(reconciliation=reconciliation,metric=metric.public_dict(),snapshot=snap,version=VERSION,current=a,previous=b,difference=delta,percentage=None if delta is None or not bv else delta/abs(bv)*100,records=current,comparison_records=previous,operations_records=operations_records,benchmark_records=benchmark,context=body.get('context',{}),lineage={'built_at':D.get('built_at'),'reports':D.get('p',{}).get('meta',[]) if source=='profit' else D.get('meta',[])})
+ evidence_records=current
+ evidence_comparison_records=previous
+ if metric.id in ['profit.customers','profit.customers_80','profit.loss_customers','ops.active_customers']:
+  evidence_records=[r for r in current if is_named_customer(r.get('customer'))]
+ if metric.id=='profit.best_dimension':
+  evidence_records=[r for r in current if is_named_customer(r.get('dimension_value'))]
+ if metric.id=='ops.rate_usable':
+  # The KPI denominator is every selected air export; the evidence table is the usable-rate numerator only.
+  evidence_records=[r for r in current if usable_rate(r,body.get('context',{}))]
+  evidence_comparison_records=[r for r in previous if usable_rate(r,body.get('context',{}))]
+ return dict(reconciliation=reconciliation,metric=metric.public_dict(),snapshot=snap,version=VERSION,current=a,previous=b,difference=delta,percentage=None if delta is None or not bv else delta/abs(bv)*100,records=evidence_records,comparison_records=evidence_comparison_records,operations_records=operations_records,benchmark_records=benchmark,context=body.get('context',{}),lineage={'built_at':D.get('built_at'),'reports':D.get('p',{}).get('meta',[]) if source=='profit' else D.get('meta',[])})
 
 def workbook(result):
  wb=Workbook(write_only=True)

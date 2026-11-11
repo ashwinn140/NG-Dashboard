@@ -324,17 +324,18 @@ def restrict(D: dict, user: dict) -> dict:
     keep = np.isin(rep, allowed_rep)
     idx = np.nonzero(keep)[0]
     pk = np.zeros(len(D["p"]["co"]), dtype=bool)
+    lob_ix = {"AE": 0, "AI": 1, "OE": 2, "OI": 3}
+    all_lobs = not user["lobs"] or set(user["lobs"]) == set(lob_ix)
     if user["finance"]:
         pco = np.asarray(D["p"]["co"], dtype=np.int64); prt = np.asarray(D["p"]["rt"], dtype=np.int64)
         comp_ok = [i for i, c in enumerate(["NG", "NCS"]) if not user["companies"] or c in user["companies"]]
-        lob_ix = {"AE": 0, "AI": 1, "OE": 2, "OI": 3}
-        rt_ok = [lob_ix[l] for l in user["lobs"]] if user["lobs"] else [0, 1, 2, 3, 4]      # road and general jobs only for people with every LOB
+        rt_ok = [0, 1, 2, 3, 4] if all_lobs else [lob_ix[l] for l in user["lobs"]]
         pk = np.isin(pco, comp_ok) & np.isin(prt, rt_ok)
     pidx = np.nonzero(pk)[0]
     # register rows: new index of each kept row, for the profit join
     newpos = -np.ones(len(rep), dtype=np.int64); newpos[idx] = np.arange(len(idx))
     take = lambda a: [a[i] for i in idx]
-    out = {"reps": reps, "rep": take(D["rep"]), "no": take(D["no"])}
+    out = {"reps": [list(pair) if i in allowed_rep else ["", ""] for i, pair in enumerate(reps)], "rep": take(D["rep"]), "no": take(D["no"])}
     for k in ("date", "ops", "fin", "gross", "chg", "teus", "cbm", "ckg", "rbuy", "rbf", "rsell", "rsf", "inv1", "invN"): out[k] = take(D[k])
     if not user["finance"]:
         for k in ("rbuy", "rbf", "rsell", "rsf"):
@@ -344,7 +345,7 @@ def restrict(D: dict, user: dict) -> dict:
     matched = (sidx >= 0) & (sidx < len(newpos))
     sidx_new[matched] = newpos[sidx[matched]]  # hidden shipments remain unmatched, including empty registers
     out["p"] = {"co": [D["p"]["co"][i] for i in pidx], "sidx": sidx_new.tolist(), "rt": [D["p"]["rt"][i] for i in pidx], "income": [D["p"]["income"][i] for i in pidx], "expense": [D["p"]["expense"][i] for i in pidx],
-                "format": J.FORMAT, "td": [D["p"]["td"][i] for i in pidx], "jd": [D["p"]["jd"][i] for i in pidx], "meta": [m for m in D["p"]["meta"] if user["finance"] and not user["lobs"] and (not user["companies"] or m["co"] in user["companies"])]}
+                "format": J.FORMAT, "td": [D["p"]["td"][i] for i in pidx], "jd": [D["p"]["jd"][i] for i in pidx], "meta": [m for m in D["p"]["meta"] if user["finance"] and all_lobs and (not user["companies"] or m["co"] in user["companies"])]}
     cols = {}
     for k, c in D["cols"].items():
         entry = {"l": c["l"]}
@@ -364,8 +365,8 @@ def restrict(D: dict, user: dict) -> dict:
     # agent details only for agents still present
     ag_old = D["cols"]["agent"]["d"]; ag_new = cols["agent"]["d"]; pos = {n: i for i, n in enumerate(ag_old)}
     out["agentInfo"] = [D["agentInfo"][pos[n]] for n in ag_new]
-    blank = {"rows": 0, "from": "", "to": "", "pend": 0, "finopen": 0, "repeated": 0, "runs": 0}
-    out["meta"] = [m if i in allowed_rep else dict(m, **blank) for i, m in enumerate(D["meta"])]
+    blank = {"co": "", "rep": "", "rows": 0, "from": "", "to": "", "range_from": "", "range_to": "", "pend": 0, "finopen": 0, "repeated": 0, "runs": 0, "restricted": True}
+    out["meta"] = [m if i in allowed_rep else dict(blank) for i, m in enumerate(D["meta"])]
     out["changes"] = {k: v for k, v in D["changes"].items() if int(k) in allowed_rep}
     out["built_at"] = D.get("built_at")
     out["storage_mode"] = D.get("storage_mode", "versioned")

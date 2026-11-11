@@ -37,6 +37,20 @@ class OpportunityTests(unittest.TestCase):
         rows = [shipment("NG", "", "AE", str(i)) for i in range(3)]
         self.assertEqual(find_opportunities(rows, TODAY), [])
 
+    def test_blank_customer_bucket_is_not_a_whitespace_opportunity(self):
+        rows = [shipment("NG", "(blank)", "AE", str(i)) for i in range(3)]
+        self.assertEqual(find_opportunities(rows, TODAY, complete_lob_coverage=True), [])
+
+    def test_customer_name_matching_is_case_and_whitespace_insensitive(self):
+        rows = [
+            shipment("NG", "Acme Logistics", "AE", "1"),
+            shipment("NG", " ACME   LOGISTICS ", "AE", "2"),
+            shipment("NG", "acme logistics", "AE", "3"),
+        ]
+        found = find_opportunities(rows, TODAY, complete_lob_coverage=True)
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0]["shipment_count"], 3)
+        self.assertEqual(found[0]["customer"], "Acme Logistics")
     def test_all_services_present_no_whitespace(self):
         rows = [shipment("NG", "C001", lob, lob) for lob in ("AE", "AI", "OE", "OI")]
         self.assertEqual(find_opportunities(rows, TODAY), [])

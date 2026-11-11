@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 import pandas as pd
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy import select, func, insert, delete, update, and_, or_
 from sqlalchemy.exc import IntegrityError
 from . import auth, admin_ops as ops, dataset as DS, mailer, master as MST, processor as P, profit as J, metric_definitions as MD, metric_execution as MX, report_scheduler as RS, report_scheduler_service as RSS
@@ -328,8 +329,10 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         try:
             body = json.loads(raw)
             if not isinstance(body, dict): raise ValueError("Invalid metric request.")
-            data = json.loads(gzip.decompress(store.dataset_for(user)))
-            return MX.execute(data, body, MD, include_operations_links=include_operations_links)
+            def execute_metric():
+                data = json.loads(gzip.decompress(store.dataset_for(user)))
+                return MX.execute(data, body, MD, include_operations_links=include_operations_links)
+            return await run_in_threadpool(execute_metric)
         except PermissionError as e: raise HTTPException(403, str(e))
         except (ValueError, TypeError, KeyError) as e: raise HTTPException(400, str(e))
 
@@ -346,7 +349,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         if evidence["metric"]["id"] != "ops.shipments":
             raise HTTPException(400, "Activity requires operational shipment evidence.")
         from .phase2_metrics import cross_lob_customer_activity
-        from .customer_history import build_recent_jobs, normalize_customer_sql
+        from .customer_history import build_recent_jobs, normalize_customer_sql, is_named_customer
 
         try:
             as_of = date.fromisoformat(evidence["context"]["as_of"])
@@ -388,12 +391,12 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         if not selected_lobs:
             selected_lobs = set(visible_lobs)
 
-        normalize_customer = lambda value: " ".join(str(value or "").split()).casefold()
+        normalize_customer = lambda value: " ".join(str(value or "").split()).lower()
         groups = {}
         for row in evidence["records"]:
             customer = " ".join(str(row.get("customer") or "").split())
             company = str(row.get("company") or "").strip().upper()
-            if not customer or company not in allowed_companies or not row.get("date"):
+            if not is_named_customer(customer) or company not in allowed_companies or not row.get("date"):
                 continue
             try:
                 shipment_day = date.fromisoformat(row["date"])
@@ -424,78 +427,78 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         companies = sorted({company for company, _ in groups})
         customer_keys = set(groups)
         normalized_names = sorted({customer for _, customer in groups})
-        activity_dates = {key: {lob: [] for lob in visible_lobs} for key in groups}
-        latest_jobs = {key: [] for key in groups}
-        promoted = set()
-        register_started = time.perf_counter()
-        register_row_count = 0
-        register_ms = 0.0
-        import_ms = 0.0
-        jpr_ms = 0.0
-        jpr_row_count = 0
-        with engine.connect() as conn:
-            normalized_register_customer = normalize_customer_sql(shipments.c.customer)
-            pair_list = sorted(customer_keys)
-            for offset in range(0, len(pair_list), 200):
-                pair_batch = pair_list[offset:offset + 200]
-                pair_filter = or_(*[
-                    and_(shipments.c.company == company, normalized_register_customer == customer)
-                    for company, customer in pair_batch
-                ])
-                register_rows = conn.execute(select(
-                    shipments.c.company, shipments.c.report_type, shipments.c.customer,
-                    shipments.c.shipment_date
-                ).where(
-                    pair_filter,
-                    shipments.c.report_type.in_(visible_lobs),
-                    shipments.c.to_import.is_(None),
-                    shipments.c.shipment_date.is_not(None),
-                    shipments.c.shipment_date <= as_of,
-                )).mappings().all()
-                register_row_count += len(register_rows)
-                for row in register_rows:
-                    key = (row["company"], normalize_customer(row["customer"]))
-                    lob = row["report_type"]
-                    if lob in activity_dates[key] and row["shipment_date"]:
-                        activity_dates[key][lob].append(row["shipment_date"])
+        def fetch_customer_history():
+            activity_dates = {key: {lob: [] for lob in visible_lobs} for key in groups}
+            latest_jobs = {key: [] for key in groups}
+            promoted = set()
+            register_started = time.perf_counter()
+            register_row_count = 0
+            register_ms = 0.0
+            import_ms = 0.0
+            jpr_ms = 0.0
+            jpr_row_count = 0
+            batch_size = 500
+            with engine.connect() as conn:
+                normalized_register_customer = normalize_customer_sql(shipments.c.customer)
+                for offset in range(0, len(normalized_names), batch_size):
+                    name_batch = normalized_names[offset:offset + batch_size]
+                    register_rows = conn.execute(select(
+                        shipments.c.company, shipments.c.report_type, shipments.c.customer,
+                        shipments.c.shipment_date
+                    ).where(
+                        shipments.c.company.in_(companies),
+                        normalized_register_customer.in_(name_batch),
+                        shipments.c.report_type.in_(visible_lobs),
+                        shipments.c.to_import.is_(None),
+                        shipments.c.shipment_date.is_not(None),
+                        shipments.c.shipment_date <= as_of,
+                    )).mappings().all()
+                    for row in register_rows:
+                        key = (row["company"], normalize_customer(row["customer"]))
+                        lob = row["report_type"]
+                        if key in activity_dates and lob in activity_dates[key] and row["shipment_date"]:
+                            register_row_count += 1
+                            activity_dates[key][lob].append(row["shipment_date"])
 
-            register_ms = (time.perf_counter() - register_started) * 1000
-            import_started = time.perf_counter()
-            import_rows = conn.execute(select(
-                imports.c.company, imports.c.report_type, imports.c.status, imports.c.id
-            ).where(
-                imports.c.company.in_(companies),
-                imports.c.report_type.in_(lob_order),
-            ).order_by(imports.c.id.desc())).mappings().all()
-            latest_import_status = {}
-            for row in import_rows:
-                key = (row["company"], row["report_type"])
-                if key not in latest_import_status:
-                    latest_import_status[key] = row["status"]
-            promoted.update(key for key, status in latest_import_status.items() if status == "promoted")
-            import_ms = (time.perf_counter() - import_started) * 1000
-
-            jpr_started = time.perf_counter()
-            normalized_jpr_customer = normalize_customer_sql(profit_lines.c.customer)
-            for offset in range(0, len(pair_list), 200):
-                pair_batch = pair_list[offset:offset + 200]
-                pair_filter = or_(*[
-                    and_(profit_lines.c.company == company, normalized_jpr_customer == customer)
-                    for company, customer in pair_batch
-                ])
-                jpr_rows = conn.execute(select(
-                    profit_lines.c.company, profit_lines.c.job_no, profit_lines.c.job_date,
-                    profit_lines.c.lob, profit_lines.c.customer, profit_lines.c.extra
+                register_ms = (time.perf_counter() - register_started) * 1000
+                import_started = time.perf_counter()
+                import_rows = conn.execute(select(
+                    imports.c.company, imports.c.report_type, imports.c.status, imports.c.id
                 ).where(
-                    pair_filter,
-                    *J.current_jobs(),
-                ).order_by(profit_lines.c.job_date.desc(), profit_lines.c.id.desc())).mappings().all()
-                jpr_row_count += len(jpr_rows)
-                for row in jpr_rows:
-                    key = (row["company"], normalize_customer(row["customer"]))
-                    if key in latest_jobs:
-                        latest_jobs[key].append(dict(row))
-            jpr_ms = (time.perf_counter() - jpr_started) * 1000
+                    imports.c.company.in_(companies),
+                    imports.c.report_type.in_(lob_order),
+                ).order_by(imports.c.id.desc())).mappings().all()
+                latest_import_status = {}
+                for row in import_rows:
+                    key = (row["company"], row["report_type"])
+                    if key not in latest_import_status:
+                        latest_import_status[key] = row["status"]
+                promoted.update(key for key, status in latest_import_status.items() if status == "promoted")
+                import_ms = (time.perf_counter() - import_started) * 1000
+
+                jpr_started = time.perf_counter()
+                normalized_jpr_customer = normalize_customer_sql(profit_lines.c.customer)
+                for offset in range(0, len(normalized_names), batch_size):
+                    name_batch = normalized_names[offset:offset + batch_size]
+                    jpr_rows = conn.execute(select(
+                        profit_lines.c.company, profit_lines.c.job_no, profit_lines.c.job_date,
+                        profit_lines.c.lob, profit_lines.c.customer, profit_lines.c.extra
+                    ).where(
+                        profit_lines.c.company.in_(companies),
+                        normalized_jpr_customer.in_(name_batch),
+                        *J.current_jobs(),
+                    ).order_by(profit_lines.c.job_date.desc(), profit_lines.c.id.desc())).mappings().all()
+                    for row in jpr_rows:
+                        key = (row["company"], normalize_customer(row["customer"]))
+                        if key in latest_jobs:
+                            jpr_row_count += 1
+                            latest_jobs[key].append(dict(row))
+                jpr_ms = (time.perf_counter() - jpr_started) * 1000
+            return (activity_dates, latest_jobs, promoted, register_ms, register_row_count,
+                    import_ms, jpr_ms, jpr_row_count)
+
+        (activity_dates, latest_jobs, promoted, register_ms, register_row_count,
+         import_ms, jpr_ms, jpr_row_count) = await run_in_threadpool(fetch_customer_history)
 
         result = []
         coverage = {}
@@ -528,13 +531,20 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             -(row["selected_lob_activity"]["company_wide_activity"].get("days_since_last") or 0),
             row["company"], row["customer"].casefold(),
         ))
+        total_ms = (time.perf_counter() - request_started) * 1000
         log.info(
             "customer360_activity_profile evidence_ms=%.1f grouping_ms=%.1f "
             "register_ms=%.1f register_rows=%d import_ms=%.1f jpr_ms=%.1f "
             "jpr_rows=%d customers=%d total_ms=%.1f",
             evidence_ms, grouping_ms, register_ms, register_row_count, import_ms,
-            jpr_ms, jpr_row_count, len(result), (time.perf_counter() - request_started) * 1000,
+            jpr_ms, jpr_row_count, len(result), total_ms,
         )
+        if total_ms >= 5000:
+            log.warning(
+                "customer360_activity_slow evidence_ms=%.1f grouping_ms=%.1f "
+                "register_ms=%.1f import_ms=%.1f jpr_ms=%.1f customers=%d total_ms=%.1f",
+                evidence_ms, grouping_ms, register_ms, import_ms, jpr_ms, len(result), total_ms,
+            )
         return {
             "as_of": as_of.isoformat(), "customers": result,
             "snapshot": evidence["snapshot"], "coverage": list(coverage.values()),
@@ -557,7 +567,8 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
     @app.post("/api/metrics/export")
     async def metric_export_api(request: Request, user: dict = Depends(unsafe)):
         result = await metric_evidence(request, user)
-        return Response(MX.workbook(result), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": 'attachment; filename="metric_reconciliation.xlsx"', "Cache-Control": "private, no-store"})
+        workbook = await run_in_threadpool(MX.workbook, result)
+        return Response(workbook, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": 'attachment; filename="metric_reconciliation.xlsx"', "Cache-Control": "private, no-store"})
 
     @app.get("/assets/metric_trace.js")
     def metric_trace_script(user: dict = Depends(me)):
@@ -680,7 +691,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         Owner/job identity only; no income, expense or profit values. Company
         and LOB scope are checked again on the server for every request.
         """
-        from .customer_history import build_recent_jobs, build_last_shipment_owners, visible_report_types_for_scopes, normalize_customer_sql
+        from .customer_history import build_recent_jobs, build_last_shipment_owners, visible_report_types_for_scopes, normalize_customer_sql, is_named_customer
         raw = await request.body()
         if len(raw) > 1_000_000: raise HTTPException(413, "Selection too large.")
         try:
@@ -703,78 +714,80 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                 if last_shipment_date:
                     try: date.fromisoformat(last_shipment_date)
                     except ValueError: raise ValueError("Invalid last shipment date.")
-                if not name or len(name) > 300: raise ValueError("Invalid customer name.")
+                if not is_named_customer(name) or len(name) > 300: raise ValueError("Invalid customer name.")
                 if not isinstance(companies, list) or not companies or not set(companies).issubset(allowed_companies):
                     raise PermissionError("The selected company is outside your access scope.")
                 if not isinstance(requested_lobs or [], list) or (allowed_lobs is not None and not lobs.issubset(allowed_lobs)):
                     raise PermissionError("The selected line of business is outside your access scope.")
                 normalized.append((name, set(companies), lobs, last_shipment_date))
                 all_companies.update(companies)
-                all_names.add(name.strip().casefold())
+                all_names.add(name.strip().lower())
             if not normalized:
                 return {"histories": []}
-            with engine.connect() as conn:
-                # A caller may request only customers already present in the
-                # current operational register within their authorized scope.
-                visible_report_types = visible_report_types_for_scopes(lobs for _, _, lobs, _ in normalized)
-                visible_rows = conn.execute(select(
-                    shipments.c.company, shipments.c.customer
-                ).where(
-                    shipments.c.company.in_(sorted(all_companies)),
-                    shipments.c.report_type.in_(visible_report_types),
-                    shipments.c.to_import.is_(None),
-                    normalize_customer_sql(shipments.c.customer).in_(sorted(all_names))
-                )).all()
-                visible = {
-                    (company, " ".join(str(customer or "").split()).casefold())
-                    for company, customer in visible_rows
-                }
-                for name, companies, _, _ in normalized:
-                    if any((company, name.casefold()) not in visible for company in companies):
-                        raise PermissionError("The customer is outside your visible operational scope for one or more selected companies.")
-                shipment_rows = conn.execute(select(
-                    shipments.c.company, shipments.c.report_type, shipments.c.shipment_no,
-                    shipments.c.shipment_date, shipments.c.customer
-                ).where(
-                    shipments.c.company.in_(sorted(all_companies)),
-                    shipments.c.report_type.in_(visible_report_types),
-                    shipments.c.to_import.is_(None),
-                    normalize_customer_sql(shipments.c.customer).in_(sorted(all_names))
-                ).order_by(shipments.c.shipment_date.desc(), shipments.c.id.desc())).mappings().all()
-                source_rows = conn.execute(select(
-                    profit_lines.c.id, profit_lines.c.company, profit_lines.c.job_no,
-                    profit_lines.c.job_date, profit_lines.c.lob, profit_lines.c.customer,
-                    profit_lines.c.extra
-                ).where(
-                    profit_lines.c.company.in_(sorted(all_companies)),
-                    normalize_customer_sql(profit_lines.c.customer).in_(sorted(all_names)),
-                    *J.current_jobs()
-                ).order_by(profit_lines.c.job_date.desc(), profit_lines.c.id.desc())).mappings().all()
-            by_customer = {}
-            for row in source_rows:
-                key = " ".join(str(row["customer"] or "").split()).casefold()
-                by_customer.setdefault(key, []).append(dict(row))
-            shipments_by_customer = {}
-            for row in shipment_rows:
-                key = " ".join(str(row["customer"] or "").split()).casefold()
-                shipments_by_customer.setdefault(key, []).append(dict(row))
-            histories = []
-            for name, companies, lobs, last_shipment_date in normalized:
-                key = name.strip().casefold()
-                rows = [row for row in by_customer.get(key, []) if row["company"] in companies]
-                visible_shipments = [row for row in shipments_by_customer.get(key, []) if row["company"] in companies]
-                jobs = build_recent_jobs(rows, lobs=lobs, limit=5)
-                last_owner = build_last_shipment_owners(visible_shipments, rows, lobs=lobs, target_date=last_shipment_date).get(key)
-                histories.append({
-                    "customer": name,
-                    "jobs": jobs,
-                    "job_count_returned": len(jobs),
-                    "last_shipment_job_owner": last_owner["last_shipment_job_owner"] if last_owner else "No shipment record",
-                    "last_shipment_owner_status": last_owner["last_shipment_owner_status"] if last_owner else "no_shipment",
-                    "last_shipment_date": last_owner["last_shipment_date"] if last_owner else None,
-                    "last_shipment_numbers": last_owner["last_shipment_numbers"] if last_owner else [],
-                })
-            return {"histories": histories, "basis": "Job Date", "source": "Current Job Profit Analysis Report"}
+            def build_history_batch():
+                with engine.connect() as conn:
+                    # A caller may request only customers already present in the
+                    # current operational register within their authorized scope.
+                    visible_report_types = visible_report_types_for_scopes(lobs for _, _, lobs, _ in normalized)
+                    visible_rows = conn.execute(select(
+                        shipments.c.company, shipments.c.customer
+                    ).where(
+                        shipments.c.company.in_(sorted(all_companies)),
+                        shipments.c.report_type.in_(visible_report_types),
+                        shipments.c.to_import.is_(None),
+                        normalize_customer_sql(shipments.c.customer).in_(sorted(all_names))
+                    )).all()
+                    visible = {
+                        (company, " ".join(str(customer or "").split()).lower())
+                        for company, customer in visible_rows
+                    }
+                    for name, companies, _, _ in normalized:
+                        if any((company, name.lower()) not in visible for company in companies):
+                            raise PermissionError("The customer is outside your visible operational scope for one or more selected companies.")
+                    shipment_rows = conn.execute(select(
+                        shipments.c.company, shipments.c.report_type, shipments.c.shipment_no,
+                        shipments.c.shipment_date, shipments.c.customer
+                    ).where(
+                        shipments.c.company.in_(sorted(all_companies)),
+                        shipments.c.report_type.in_(visible_report_types),
+                        shipments.c.to_import.is_(None),
+                        normalize_customer_sql(shipments.c.customer).in_(sorted(all_names))
+                    ).order_by(shipments.c.shipment_date.desc(), shipments.c.id.desc())).mappings().all()
+                    source_rows = conn.execute(select(
+                        profit_lines.c.id, profit_lines.c.company, profit_lines.c.job_no,
+                        profit_lines.c.job_date, profit_lines.c.lob, profit_lines.c.customer,
+                        profit_lines.c.extra
+                    ).where(
+                        profit_lines.c.company.in_(sorted(all_companies)),
+                        normalize_customer_sql(profit_lines.c.customer).in_(sorted(all_names)),
+                        *J.current_jobs()
+                    ).order_by(profit_lines.c.job_date.desc(), profit_lines.c.id.desc())).mappings().all()
+                by_customer = {}
+                for row in source_rows:
+                    key = " ".join(str(row["customer"] or "").split()).lower()
+                    by_customer.setdefault(key, []).append(dict(row))
+                shipments_by_customer = {}
+                for row in shipment_rows:
+                    key = " ".join(str(row["customer"] or "").split()).lower()
+                    shipments_by_customer.setdefault(key, []).append(dict(row))
+                histories = []
+                for name, companies, lobs, last_shipment_date in normalized:
+                    key = name.strip().lower()
+                    rows = [row for row in by_customer.get(key, []) if row["company"] in companies]
+                    visible_shipments = [row for row in shipments_by_customer.get(key, []) if row["company"] in companies]
+                    jobs = build_recent_jobs(rows, lobs=lobs, limit=5)
+                    last_owner = build_last_shipment_owners(visible_shipments, rows, lobs=lobs, target_date=last_shipment_date).get(key)
+                    histories.append({
+                        "customer": name,
+                        "jobs": jobs,
+                        "job_count_returned": len(jobs),
+                        "last_shipment_job_owner": last_owner["last_shipment_job_owner"] if last_owner else "No shipment record",
+                        "last_shipment_owner_status": last_owner["last_shipment_owner_status"] if last_owner else "no_shipment",
+                        "last_shipment_date": last_owner["last_shipment_date"] if last_owner else None,
+                        "last_shipment_numbers": last_owner["last_shipment_numbers"] if last_owner else [],
+                    })
+                return {"histories": histories, "basis": "Job Date", "source": "Current Job Profit Analysis Report"}
+            return await run_in_threadpool(build_history_batch)
         except PermissionError as e:
             raise HTTPException(403, str(e))
         except (ValueError, TypeError, KeyError) as e:

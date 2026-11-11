@@ -79,4 +79,39 @@ assert.equal(n.pctOf(10,0),null);assert.equal(n.pctOf(10,null),null);assert.equa
  statusButtons[0].click();assert.equal(opened.metric,'profit.gp');assert.deepEqual(Array.from(opened.indices),companyIndices);assert.equal(opened.displayed_value,meta.income-meta.expense);assert.equal(opened.context.date_basis,'Job Date');
  opened=null;matchButtons[0].click();assert.equal(opened.metric,'profit.matched_share');assert.deepEqual(Array.from(opened.indices),companyIndices);assert.equal(opened.displayed_value,meta.jobs?meta.matched/meta.jobs:null);
  w.MetricTrace.openWithRequest=originalOpen;
- n.S.sel={customer:new w.Set([0])};const original=n.COLS.customer.d[0];n.saveView('Stable identity');const saved=n.viewsGet()['Stable identity'];assert.equal(saved.selNames.customer[0],original);assert.equal(saved.version,2);const dict=n.COLS.customer.d.slice();n.COLS.customer.d=[dict[1],dict[0],...dict.slice(2)];n.applyView('Stable identity');assert.ok(n.S.sel.customer.has(1),'saved names rebind after dictionary reordering');n.COLS.customer.d=dict;assert.deepEqual(errors,[]);w.close();console.log('PASS metric trace selection: scoped masks, numeric values, summary/operations/profit and Explorer contexts.');})().catch(e=>{console.error(e);dom.window.close();process.exit(1)});
+ n.S.sel={customer:new w.Set([0])};const original=n.COLS.customer.d[0];n.saveView('Stable identity');const saved=n.viewsGet()['Stable identity'];assert.equal(saved.selNames.customer[0],original);assert.equal(saved.version,2);const dict=n.COLS.customer.d.slice();n.COLS.customer.d=[dict[1],dict[0],...dict.slice(2)];n.applyView('Stable identity');assert.ok(n.S.sel.customer.has(1),'saved names rebind after dictionary reordering');n.COLS.customer.d=dict;// Named-customer metrics must exclude the explicit blank bucket while company totals retain it.
+ const auditNamedCustomerLabel=v=>{const x=String(v==null?'':v).trim().toLowerCase();return !!x&&x!=='(blank)'&&x!=='blank';};
+ const auditOpsCode=n.COLS.customer.c.find(code=>auditNamedCustomerLabel(n.COLS.customer.d[code]));
+ const auditProfitCode=n.COLS.customer.pc.find(code=>auditNamedCustomerLabel(n.COLS.customer.d[code]));
+ assert.notEqual(auditOpsCode,undefined,'fixture has an operational customer');
+ assert.notEqual(auditProfitCode,undefined,'fixture has a financial customer');
+ const auditOriginals=new Map([[auditOpsCode,n.COLS.customer.d[auditOpsCode]],[auditProfitCode,n.COLS.customer.d[auditProfitCode]]]);
+ for(const code of auditOriginals.keys())n.COLS.customer.d[code]='(blank)';
+ n.S.sel={};n.S.rel=null;n.S.from=n.MINDATE;n.S.to=n.MAXDATE;n.S.def.activeMin=1;n.S.def.topN=25;n.R.useVol=false;
+ n.setGroup('ops');
+ const auditOpsMask=n.mask(),auditOpsCounts=new Map();let auditOpsTotal=0;
+ for(let i=0;i<auditOpsMask.length;i++)if(auditOpsMask[i]){auditOpsTotal++;const code=n.COLS.customer.c[i];if(auditNamedCustomerLabel(n.COLS.customer.d[code]))auditOpsCounts.set(code,(auditOpsCounts.get(code)||0)+1);}
+ const auditExpectedActive=[...auditOpsCounts.values()].filter(v=>v>=n.S.def.activeMin).length;
+ assert.equal(n.traceSelection('ops.active_customers','Active customers').displayed_value,auditExpectedActive,'active customer KPI excludes the blank bucket');
+ const auditTopOps=[...auditOpsCounts.values()].sort((a,b)=>b-a).slice(0,n.S.def.topN).reduce((a,b)=>a+b,0);
+ assert.equal(n.traceSelection('ops.customer_concentration','Customer concentration').displayed_value,auditOpsTotal?auditTopOps/auditOpsTotal:null,'customer concentration ranks named customers but retains all shipments in its denominator');
+ assert.equal(n.opsFacts(auditOpsMask).cust,auditExpectedActive,'summary customer count follows the same named-customer rule');
+ n.setGroup('profit');
+ const auditFinMask=n.maskP({skip:'customer'}),auditAllProfitGroups=n.groupByP('customer',auditFinMask);
+ const auditNamedProfitGroups=auditAllProfitGroups.filter(r=>auditNamedCustomerLabel(r.label));
+ assert.ok(auditAllProfitGroups.some(r=>!auditNamedCustomerLabel(r.label)),'raw customer grouping retains unassigned rows for reconciliation');
+ assert.equal(n.traceSelection('profit.customers','Named customers').displayed_value,auditNamedProfitGroups.length,'named customer count excludes blank Organization');
+ const auditNetProfit=n.totalsP(auditFinMask).profit,auditTopProfit=[...auditNamedProfitGroups].sort((a,b)=>b.profit-a.profit);
+ assert.equal(n.traceSelection('profit.biggest_customer','Biggest customer').displayed_value,auditTopProfit.length&&auditNetProfit>0?auditTopProfit[0].profit/auditNetProfit:null,'biggest named customer share uses total company net GP');
+ const auditPositiveProfit=auditNamedProfitGroups.filter(r=>r.profit>0).reduce((s,r)=>s+r.profit,0);let auditCum=0,audit80=0;
+ for(const row of auditTopProfit)if(row.profit>0&&auditCum<.8*auditPositiveProfit){auditCum+=row.profit;audit80++;}
+ assert.equal(n.traceSelection('profit.customers_80','Customers making 80%').displayed_value,audit80,'80-percent customer count uses named-customer positive GP');
+ assert.equal(n.traceSelection('profit.loss_customers','Loss-making customers').displayed_value,auditNamedProfitGroups.filter(r=>r.profit<0).length,'loss-making customer count excludes blank Organization');
+ n.S.page='p_customers';n.renderAll();
+ const auditProfitRows=[...w.document.querySelectorAll('#page table.tbl tbody tr')];
+ assert.ok(!auditProfitRows.some(row=>row.textContent.includes('(blank)')),'profit customer table does not rank the blank bucket');
+ n.setGroup('ops');n.S.page='customers';n.renderAll();
+ const auditOpsRows=[...w.document.querySelectorAll('#page table.tbl tbody tr')];
+ assert.ok(!auditOpsRows.some(row=>row.textContent.includes('(blank)')),'operations customer table does not rank the blank bucket');
+ for(const [code,label] of auditOriginals)n.COLS.customer.d[code]=label;
+ assert.deepEqual(errors,[]);w.close();console.log('PASS metric trace selection: scoped masks, numeric values, summary/operations/profit and Explorer contexts.');})().catch(e=>{console.error(e);dom.window.close();process.exit(1)});
