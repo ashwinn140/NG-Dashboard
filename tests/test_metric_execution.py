@@ -166,6 +166,10 @@ class MetricExecutionTests(unittest.TestCase):
   self.assertEqual(r['current']['value'],1)
   self.assertEqual({x['customer'] for x in r['records']},{'Alpha'})
 
+ def test_best_dimension_evidence_excludes_blank_dimension_values(self):
+  d=self.fixture();d['cols']['customer']={'d':['Alpha','(blank)'],'pc':[0,1],'c':[0,1]}
+  r=X.execute(d,dict(metric='profit.best_dimension',indices=[0,1],context={'dimension_key':'customer'}),M)
+  self.assertEqual({x.get('dimension_value') for x in r['records']},{'Alpha'})
  def test_cost_coverage_counts_distinct_jobs(self):
   d=self.fixture();d['p']['co']=[0,0];d['p']['sidx']=[0,1];d['p']['jd']=[20000,20000]
   d['cols']['p_job']={'d':['J1'],'pc':[0,0]}
