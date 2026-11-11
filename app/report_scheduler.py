@@ -600,8 +600,8 @@ def _add_visuals_sheet(wb, rows, report_id, start, end, source_rows=None, summar
             chart.y_axis.title = "Customer"
             chart.x_axis.title = "INR"
             chart.height, chart.width = 8, 16
-            chart.add_data(Reference(ws, min_col=5, min_row=4, max_row=3 + len(top)), titles_from_data=False)
-            chart.set_categories(Reference(ws, min_col=1, min_row=4, max_row=3 + len(top)))
+            chart.add_data(Reference(ws, min_col=5, min_row=5, max_row=4 + len(top)), titles_from_data=False)
+            chart.set_categories(Reference(ws, min_col=1, min_row=5, max_row=4 + len(top)))
             ws.add_chart(chart, "G3")
         start_row = max(ws.max_row + 3, 20)
         ws.cell(start_row, 1, "Monthly profitability trend")
@@ -666,8 +666,8 @@ def _add_visuals_sheet(wb, rows, report_id, start, end, source_rows=None, summar
             chart.y_axis.title = "Customer"
             chart.x_axis.title = "Shipments"
             chart.height, chart.width = 8, 16
-            chart.add_data(Reference(ws, min_col=2, min_row=4, max_row=3 + len(top)), titles_from_data=False)
-            chart.set_categories(Reference(ws, min_col=1, min_row=4, max_row=3 + len(top)))
+            chart.add_data(Reference(ws, min_col=2, min_row=5, max_row=4 + len(top)), titles_from_data=False)
+            chart.set_categories(Reference(ws, min_col=1, min_row=5, max_row=4 + len(top)))
             ws.add_chart(chart, "E3")
         start_row = max(ws.max_row + 3, 20)
         ws.cell(start_row, 1, "Shipments by line of business")
