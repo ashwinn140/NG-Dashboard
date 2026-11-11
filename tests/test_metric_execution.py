@@ -5,6 +5,28 @@ class MetricExecutionTests(unittest.TestCase):
  def fixture(self):
   return dict(user={'finance':True},built_at='test',rep=[0,4],reps=[['NG','AE'],['NG','AI'],['NG','OE'],['NG','OI'],['NCS','AE']],no=['S1','S1'],ops=[-1,-1],fin=[-1,-1],inv1=[-1,-1],invN=[0,0],date=[20000,20000],chg=[1.25,2.5],teus=[0,0],cbm=[1,2],ckg=[1250,2500],rbuy=[0,0],rsell=[0,0],rbf=[0,0],rsf=[0,0],cols={'p_job':{'d':['=unsafe'], 'pc':[0,0]},'p_lob':{'d':['FFWD AIR EXP'],'pc':[0,0]}},p=dict(co=[0,1],sidx=[0,1],jd=[20000,20000],income=[100,50],expense=[40,70],meta=[]))
 
+ def test_rate_usable_evidence_shows_numerator_but_calculates_full_denominator(self):
+  d=self.fixture()
+  d['ckg']=[1000,1000]
+  d['rbuy']=[100,100]
+  d['rsell']=[120,110]
+  d['rbf']=[1,2]
+  d['rsf']=[1,1]
+  q=dict(metric='ops.rate_usable',indices=[0,1],previous_indices=[0,1],
+         context={'rate_mode':'clean','rate_max':5000})
+  r=X.execute(d,q,M)
+  self.assertEqual(r['current']['numerator'],1)
+  self.assertEqual(r['current']['denominator'],2)
+  self.assertEqual(r['current']['value'],0.5)
+  self.assertEqual([row['source_index'] for row in r['records']],[0])
+  self.assertEqual([row['source_index'] for row in r['comparison_records']],[0])
+  q['context']['rate_mode']='text'
+  r=X.execute(d,q,M)
+  self.assertEqual(r['current']['numerator'],2)
+  self.assertEqual(r['current']['denominator'],2)
+  self.assertEqual(r['current']['value'],1)
+  self.assertEqual([row['source_index'] for row in r['records']],[0,1])
+
  def test_empty_operations_evidence_does_not_build_unused_finance_lineage(self):
   class ExplodingIndices:
    def __iter__(self):
