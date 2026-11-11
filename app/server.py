@@ -391,7 +391,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         if not selected_lobs:
             selected_lobs = set(visible_lobs)
 
-        normalize_customer = lambda value: " ".join(str(value or "").split()).casefold()
+        normalize_customer = lambda value: " ".join(str(value or "").split()).lower()
         groups = {}
         for row in evidence["records"]:
             customer = " ".join(str(row.get("customer") or "").split())
@@ -720,7 +720,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                     raise PermissionError("The selected line of business is outside your access scope.")
                 normalized.append((name, set(companies), lobs, last_shipment_date))
                 all_companies.update(companies)
-                all_names.add(name.strip().casefold())
+                all_names.add(name.strip().lower())
             if not normalized:
                 return {"histories": []}
             def build_history_batch():
@@ -737,11 +737,11 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                         normalize_customer_sql(shipments.c.customer).in_(sorted(all_names))
                     )).all()
                     visible = {
-                        (company, " ".join(str(customer or "").split()).casefold())
+                        (company, " ".join(str(customer or "").split()).lower())
                         for company, customer in visible_rows
                     }
                     for name, companies, _, _ in normalized:
-                        if any((company, name.casefold()) not in visible for company in companies):
+                        if any((company, name.lower()) not in visible for company in companies):
                             raise PermissionError("The customer is outside your visible operational scope for one or more selected companies.")
                     shipment_rows = conn.execute(select(
                         shipments.c.company, shipments.c.report_type, shipments.c.shipment_no,
@@ -763,15 +763,15 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                     ).order_by(profit_lines.c.job_date.desc(), profit_lines.c.id.desc())).mappings().all()
                 by_customer = {}
                 for row in source_rows:
-                    key = " ".join(str(row["customer"] or "").split()).casefold()
+                    key = " ".join(str(row["customer"] or "").split()).lower()
                     by_customer.setdefault(key, []).append(dict(row))
                 shipments_by_customer = {}
                 for row in shipment_rows:
-                    key = " ".join(str(row["customer"] or "").split()).casefold()
+                    key = " ".join(str(row["customer"] or "").split()).lower()
                     shipments_by_customer.setdefault(key, []).append(dict(row))
                 histories = []
                 for name, companies, lobs, last_shipment_date in normalized:
-                    key = name.strip().casefold()
+                    key = name.strip().lower()
                     rows = [row for row in by_customer.get(key, []) if row["company"] in companies]
                     visible_shipments = [row for row in shipments_by_customer.get(key, []) if row["company"] in companies]
                     jobs = build_recent_jobs(rows, lobs=lobs, limit=5)
