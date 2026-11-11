@@ -15,6 +15,10 @@ class CustomerHistoryTests(unittest.TestCase):
                     literal("  Acme\t\u00a0  Logistics\u202f\nIndia   ")
                 ))).scalar_one()
             self.assertEqual(value, "acme logistics india")
+                long_run = conn.execute(select(normalize_customer_sql(
+                    literal("Acme" + (" " * 300) + "Logistics")
+                ))).scalar_one()
+            self.assertEqual(long_run, "acme logistics")
         finally:
             engine.dispose()
 
