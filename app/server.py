@@ -22,6 +22,18 @@ def df_json(df: pd.DataFrame):
     return json.loads(df.to_json(orient="records", date_format="iso")) if len(df) else []
 
 
+def _rss_mb() -> float | None:
+    """Return current process RSS from Linux procfs, or None when unavailable."""
+    try:
+        with open("/proc/self/status", encoding="ascii") as status:
+            for line in status:
+                if line.startswith("VmRSS:"):
+                    return round(int(line.split()[1]) / 1024, 1)
+    except (OSError, ValueError, IndexError):
+        pass
+    return None
+
+
 class Store:
     """Engine, the upload folder, the import worker and the cached dashboard data."""
     def __init__(self, engine, upload_dir: str, start_worker: bool = True):
@@ -52,19 +64,22 @@ class Store:
                 return gzip.compress(json.dumps({"empty": True, "user": {"finance": bool(user["finance"]), "companies": user["companies"], "lobs": user["lobs"]}}).encode(), 6)
             diagnostics = str(os.environ.get("DATASET_DIAGNOSTICS", "false")).strip().lower() in ("1", "true", "yes", "on")
             if self.full is None or self.full_version != self.version:
+                rss_before = _rss_mb() if diagnostics else None
                 started = time.perf_counter()
                 self.full = DS.build_full(self.engine)
                 build_seconds = time.perf_counter() - started
+                rss_after = _rss_mb() if diagnostics else None
                 self.full_version = self.version
                 self.cache.clear()
                 if diagnostics:
                     rep_rows = len(self.full.get("rep", [])) if isinstance(self.full, dict) else 0
-                    log.info("dataset_diagnostics stage=build_full elapsed_seconds=%.3f shipment_rows=%d", build_seconds, rep_rows)
+                    log.info("dataset_diagnostics stage=build_full elapsed_seconds=%.3f rss_before_mb=%s rss_after_mb=%s shipment_rows=%d", build_seconds, rss_before, rss_after, rep_rows)
             sig = (self.version, tuple(sorted(user["companies"])), tuple(sorted(user["lobs"])), bool(user["finance"]))
             if sig not in self.cache:
                 started = time.perf_counter()
                 D = DS.restrict(self.full, dict(companies=user["companies"], lobs=user["lobs"], finance=user["finance"]))
                 restrict_seconds = time.perf_counter() - started
+                rss_after_restrict = _rss_mb() if diagnostics else None
                 D["data_version"] = self.version
                 started = time.perf_counter()
                 payload = json.dumps(D, separators=(",", ":"), ensure_ascii=False).encode()
@@ -76,8 +91,8 @@ class Store:
                 self.cache[sig] = compressed
                 if diagnostics:
                     log.info(
-                        "dataset_diagnostics stage=restrict_and_encode restrict_seconds=%.3f serialise_seconds=%.3f gzip_seconds=%.3f json_bytes=%d gzip_bytes=%d cache_entries=%d",
-                        restrict_seconds, serialise_seconds, compress_seconds, len(payload), len(compressed), len(self.cache),
+                        "dataset_diagnostics stage=restrict_and_encode restrict_seconds=%.3f serialise_seconds=%.3f gzip_seconds=%.3f rss_after_restrict_mb=%s rss_after_encode_mb=%s json_bytes=%d gzip_bytes=%d cache_entries=%d",
+                        restrict_seconds, serialise_seconds, compress_seconds, rss_after_restrict, _rss_mb(), len(payload), len(compressed), len(self.cache),
                     )
             elif diagnostics:
                 log.info("dataset_diagnostics stage=cache_hit cache_entries=%d", len(self.cache))
