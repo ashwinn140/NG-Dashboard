@@ -69,7 +69,7 @@ Metric values are the Railway API's reported service-level summaries over the la
 4. Add a repeatable benchmark using the existing synthetic benchmark fixture and representative anonymised production-shaped files where available.
 5. Capture browser heap / long-task / page-load measurements for the most-used dashboard pages before frontend changes.
 
-**Acceptance:** diagnostics are opt-in, have no effect on data outputs, do not expose sensitive data, and can be disabled without a redeploy if implemented through an environment flag.
+**Acceptance:** diagnostics are disabled by default, have no effect on data outputs, and emit only aggregate timing, RSS, row-count and byte-count information when explicitly enabled.
 
 ### Phase B — Bounded cache (after instrumentation)
 
