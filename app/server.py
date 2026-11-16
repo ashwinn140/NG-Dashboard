@@ -50,14 +50,37 @@ class Store:
                 has = c.execute(select(func.count()).select_from(shipments).where(shipments.c.to_import.is_(None)).limit(1)).scalar()
             if not has:                         # nothing loaded yet: say so instead of failing
                 return gzip.compress(json.dumps({"empty": True, "user": {"finance": bool(user["finance"]), "companies": user["companies"], "lobs": user["lobs"]}}).encode(), 6)
+            diagnostics = str(os.environ.get("DATASET_DIAGNOSTICS", "false")).strip().lower() in ("1", "true", "yes", "on")
             if self.full is None or self.full_version != self.version:
-                self.full = DS.build_full(self.engine); self.full_version = self.version; self.cache.clear()
+                started = time.perf_counter()
+                self.full = DS.build_full(self.engine)
+                build_seconds = time.perf_counter() - started
+                self.full_version = self.version
+                self.cache.clear()
+                if diagnostics:
+                    rep_rows = len(self.full.get("rep", [])) if isinstance(self.full, dict) else 0
+                    log.info("dataset_diagnostics stage=build_full elapsed_seconds=%.3f shipment_rows=%d", build_seconds, rep_rows)
             sig = (self.version, tuple(sorted(user["companies"])), tuple(sorted(user["lobs"])), bool(user["finance"]))
             if sig not in self.cache:
+                started = time.perf_counter()
                 D = DS.restrict(self.full, dict(companies=user["companies"], lobs=user["lobs"], finance=user["finance"]))
+                restrict_seconds = time.perf_counter() - started
                 D["data_version"] = self.version
+                started = time.perf_counter()
+                payload = json.dumps(D, separators=(",", ":"), ensure_ascii=False).encode()
+                serialise_seconds = time.perf_counter() - started
+                started = time.perf_counter()
+                compressed = gzip.compress(payload, 6)
+                compress_seconds = time.perf_counter() - started
                 if len(self.cache) > 20: self.cache.clear()
-                self.cache[sig] = gzip.compress(json.dumps(D, separators=(",", ":"), ensure_ascii=False).encode(), 6)
+                self.cache[sig] = compressed
+                if diagnostics:
+                    log.info(
+                        "dataset_diagnostics stage=restrict_and_encode restrict_seconds=%.3f serialise_seconds=%.3f gzip_seconds=%.3f json_bytes=%d gzip_bytes=%d cache_entries=%d",
+                        restrict_seconds, serialise_seconds, compress_seconds, len(payload), len(compressed), len(self.cache),
+                    )
+            elif diagnostics:
+                log.info("dataset_diagnostics stage=cache_hit cache_entries=%d", len(self.cache))
             return self.cache[sig]
 
     def warm(self):
