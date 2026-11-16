@@ -1,8 +1,24 @@
-"""Tests for the opt-in process RSS diagnostic helper."""
+"""Tests for the opt-in process RSS diagnostic helper without importing the web app."""
+import ast
 import unittest
+from pathlib import Path
 from unittest.mock import mock_open, patch
 
-from app.server import _rss_mb
+
+def load_rss_helper():
+    source = Path("app/server.py").read_text(encoding="utf-8")
+    module = ast.parse(source, filename="app/server.py")
+    function = next(
+        node for node in module.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_rss_mb"
+    )
+    isolated = ast.Module(body=[function], type_ignores=[])
+    namespace = {}
+    exec(compile(isolated, "app/server.py", "exec"), namespace)
+    return namespace["_rss_mb"]
+
+
+_rss_mb = load_rss_helper()
 
 
 class DatasetDiagnosticsTests(unittest.TestCase):
