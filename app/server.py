@@ -106,7 +106,17 @@ class Store:
                     if not c.execute(select(func.count()).select_from(shipments).where(shipments.c.to_import.is_(None)).limit(1)).scalar():
                         return                      # nothing loaded yet: nothing to prepare (and no error to log)
                 if self.full is None or self.full_version != self.version:
-                    self.full = DS.build_full(self.engine); self.full_version = self.version; self.cache.clear()
+                    diagnostics = str(os.environ.get("DATASET_DIAGNOSTICS", "false")).strip().lower() in ("1", "true", "yes", "on")
+                    rss_before = _rss_mb() if diagnostics else None
+                    started = time.perf_counter()
+                    self.full = DS.build_full(self.engine)
+                    build_seconds = time.perf_counter() - started
+                    rss_after = _rss_mb() if diagnostics else None
+                    self.full_version = self.version
+                    self.cache.clear()
+                    if diagnostics:
+                        rep_rows = len(self.full.get("rep", [])) if isinstance(self.full, dict) else 0
+                        log.info("dataset_diagnostics stage=warm_build_full elapsed_seconds=%.3f rss_before_mb=%s rss_after_mb=%s shipment_rows=%d", build_seconds, rss_before, rss_after, rep_rows)
         except Exception:
             log.exception("could not prepare the dashboard data")
 
