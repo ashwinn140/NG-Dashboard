@@ -100,6 +100,36 @@ class ProfitLayoutTests(unittest.TestCase):
             self.assertEqual(J.profit_coverage(f.engine,date(2026,11,8),2,1).query('year==2026').iloc[0]['lines'],3)
         finally:f.tearDown()
 
+
+    def test_versioned_partial_report_preserves_jobs_outside_its_date_range(self):
+        january = dict(zip(
+            ['Location','LOB','Job No.','Job Date','Organization','Income (INR)','Expense (INR)','Profit (INR)','Sales Person'],
+            ['Mumbai','FFWD AIR EXP','JAN-1',datetime(2026,1,2),'Customer',100,50,50,'Sales']
+        ))
+        february = dict(zip(
+            ['Location','LOB','Job No.','Job Date','Organization','Income (INR)','Expense (INR)','Profit (INR)','Sales Person'],
+            ['Mumbai','FFWD AIR EXP','FEB-1',datetime(2026,2,2),'Customer',200,100,100,'Sales']
+        ))
+        with patch.dict(os.environ, REPORT_STORAGE_MODE='versioned', REPORT_STATIC_HISTORY='0'):
+            annual = self.workbook(rows=[january, february])
+            self.assertEqual(self.load(annual)['status'], 'promoted')
+
+            partial = self.workbook(rows=[january])
+            from openpyxl import load_workbook
+            wb = load_workbook(partial)
+            ws = wb.active
+            ws['A1'] = ws['A1'].value.replace(
+                'From 01-Jan-2026 to 31-Dec-2026',
+                'From 01-Jan-2026 to 31-Jan-2026'
+            )
+            wb.save(partial)
+            wb.close()
+
+            result = self.load(partial, approve=True)
+            self.assertEqual(result['status'], 'promoted')
+            current = self.live()
+            self.assertEqual(set(current.job_no), {'JAN-1', 'FEB-1'})
+
     def test_file_duplicate_detection(self):
         p=self.workbook();self.load(p);self.assertEqual(self.load(p)['status'],'duplicate');self.assertEqual(len(self.live()),1)
 

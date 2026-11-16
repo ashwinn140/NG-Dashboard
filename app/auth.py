@@ -1,7 +1,7 @@
 """Sign-in: one-time email link (with a 6-digit code as fallback) and user ID + password. Sessions, roles and lockouts."""
 import hashlib, hmac, os, re, secrets
 from datetime import datetime, timedelta
-from sqlalchemy import select, update, insert, delete, func
+from sqlalchemy import select, update, insert, delete, func, case, or_
 from .db import users, sessions, login_tokens
 
 LINK_MINUTES = 15            # a link or code works for this long, once
@@ -52,6 +52,20 @@ def user_dict(r) -> dict:
                 has_password=bool(r.pw_hash), last_login=r.last_login.isoformat() if r.last_login else None)
 
 
+
+def _scope_values(value, allowed, label):
+    """Validate access scopes before persistence; an invalid scope must never become unrestricted."""
+    if value is None:
+        value = []
+    if not isinstance(value, (list, tuple, set)):
+        raise ValueError(f"{label} must be a list of allowed values.")
+    values = list(dict.fromkeys(str(item).strip().upper() for item in value if str(item).strip()))
+    invalid = sorted(set(values) - set(allowed))
+    if invalid:
+        raise ValueError(f"Unknown {label.lower()} scope value(s): " + ", ".join(invalid))
+    return values
+
+
 def finance_default(role: str) -> int:
     return 1 if role in ("admin", "management", "finance") else 0
 
@@ -60,7 +74,7 @@ def create_user(engine, email: str, role: str = "operations", name: str = "", us
     email = email.strip().lower()
     if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email): raise ValueError("That does not look like an email address.")
     if role not in ROLES: raise ValueError("Role must be one of: " + ", ".join(ROLES))
-    companies = [c for c in (companies or []) if c in COMPANIES]; lobs = [l for l in (lobs or []) if l in LOB_CODES]
+    companies = _scope_values(companies, COMPANIES, "Company"); lobs = _scope_values(lobs, LOB_CODES, "LOB")
     if password:
         p = password_problem(password)
         if p: raise ValueError(p)
@@ -80,8 +94,8 @@ def update_user(engine, uid: int, **f) -> dict:
         if f["role"] not in ROLES: raise ValueError("Role must be one of: " + ", ".join(ROLES))
         vals["role"] = f["role"]
     if "name" in f and f["name"] is not None: vals["name"] = f["name"]
-    if "companies" in f and f["companies"] is not None: vals["companies"] = ",".join(c for c in f["companies"] if c in COMPANIES)
-    if "lobs" in f and f["lobs"] is not None: vals["lobs"] = ",".join(l for l in f["lobs"] if l in LOB_CODES)
+    if "companies" in f and f["companies"] is not None: vals["companies"] = ",".join(_scope_values(f["companies"], COMPANIES, "Company"))
+    if "lobs" in f and f["lobs"] is not None: vals["lobs"] = ",".join(_scope_values(f["lobs"], LOB_CODES, "LOB"))
     if "finance" in f and f["finance"] is not None: vals["finance"] = int(bool(f["finance"]))
     if "active" in f and f["active"] is not None: vals["active"] = int(bool(f["active"]))
     if "user_id" in f and f["user_id"] is not None: vals["user_id"] = f["user_id"].strip().lower() or None
@@ -120,9 +134,20 @@ def request_link(engine, email: str, now: datetime | None = None):
 def use_token(engine, token: str, now: datetime | None = None):
     now = now or datetime.utcnow(); th = h("t:" + token)
     with engine.begin() as conn:
-        t = conn.execute(select(login_tokens).where(login_tokens.c.token_hash == th)).first()
-        if not t or t.used or t.expires_at < now: return None
-        conn.execute(update(login_tokens).where(login_tokens.c.id == t.id).values(used=1))
+        t = conn.execute(select(login_tokens).where(
+            login_tokens.c.token_hash == th,
+            login_tokens.c.used == 0,
+            login_tokens.c.expires_at > now,
+        ).order_by(login_tokens.c.id.desc()).limit(1)).first()
+        if not t: return None
+        # Consume the bearer token atomically. A second concurrent verifier
+        # must observe rowcount=0 after the first transaction commits.
+        consumed = conn.execute(update(login_tokens).where(
+            login_tokens.c.id == t.id,
+            login_tokens.c.used == 0,
+            login_tokens.c.expires_at > now,
+        ).values(used=1))
+        if consumed.rowcount != 1: return None
         u = conn.execute(select(users).where(users.c.email == t.email, users.c.active == 1)).first()
     return user_dict(u) if u else None
 
@@ -130,13 +155,40 @@ def use_token(engine, token: str, now: datetime | None = None):
 def use_code(engine, email: str, code: str, now: datetime | None = None):
     now = now or datetime.utcnow(); email = email.strip().lower()
     with engine.begin() as conn:
-        t = conn.execute(select(login_tokens).where(login_tokens.c.email == email, login_tokens.c.used == 0, login_tokens.c.expires_at > now).order_by(login_tokens.c.id.desc())).first()
+        t = conn.execute(select(login_tokens).where(
+            login_tokens.c.email == email,
+            login_tokens.c.used == 0,
+            login_tokens.c.expires_at > now,
+        ).order_by(login_tokens.c.id.desc()).limit(1)).first()
         if not t: return None
-        if t.attempts >= CODE_ATTEMPTS:
-            conn.execute(update(login_tokens).where(login_tokens.c.id == t.id).values(used=1)); return None
+        attempts = int(t.attempts or 0)
+        if attempts >= CODE_ATTEMPTS:
+            conn.execute(update(login_tokens).where(
+                login_tokens.c.id == t.id,
+                login_tokens.c.used == 0,
+                login_tokens.c.attempts >= CODE_ATTEMPTS,
+            ).values(used=1))
+            return None
         if not hmac.compare_digest(t.code_hash, h("c:%s:%s" % (email, code.strip()))):
-            conn.execute(update(login_tokens).where(login_tokens.c.id == t.id).values(attempts=t.attempts + 1, used=1 if t.attempts + 1 >= CODE_ATTEMPTS else 0)); return None
-        conn.execute(update(login_tokens).where(login_tokens.c.id == t.id).values(used=1))
+            # Increment in the database so simultaneous wrong codes cannot
+            # overwrite one another or bypass the configured attempt limit.
+            next_attempts = func.coalesce(login_tokens.c.attempts, 0) + 1
+            conn.execute(update(login_tokens).where(
+                login_tokens.c.id == t.id,
+                login_tokens.c.used == 0,
+                login_tokens.c.expires_at > now,
+            ).values(
+                attempts=next_attempts,
+                used=case((next_attempts >= CODE_ATTEMPTS, 1), else_=0),
+            ))
+            return None
+        consumed = conn.execute(update(login_tokens).where(
+            login_tokens.c.id == t.id,
+            login_tokens.c.used == 0,
+            login_tokens.c.attempts == attempts,
+            login_tokens.c.expires_at > now,
+        ).values(used=1))
+        if consumed.rowcount != 1: return None
         u = conn.execute(select(users).where(users.c.email == email, users.c.active == 1)).first()
     return user_dict(u) if u else None
 
@@ -149,10 +201,25 @@ def password_login(engine, login: str, pw: str, now: datetime | None = None):
         if u and u.locked_until and u.locked_until > now: return None, "Too many wrong attempts. Try again in a few minutes."
         ok = check_password(pw, u.pw_hash if u else None) and u is not None and u.active == 1
         if ok:
-            conn.execute(update(users).where(users.c.id == u.id).values(fail_count=0, locked_until=None)); return user_dict(u), ""
+            reset = conn.execute(update(users).where(
+                users.c.id == u.id,
+                or_(users.c.locked_until.is_(None), users.c.locked_until <= now),
+            ).values(fail_count=0, locked_until=None))
+            if reset.rowcount != 1:
+                return None, "Too many wrong attempts. Try again later."
+            return user_dict(u), ""
         if u:
-            n = (u.fail_count or 0) + 1
-            conn.execute(update(users).where(users.c.id == u.id).values(fail_count=0 if n >= PW_FAILS else n, locked_until=now + timedelta(minutes=LOCK_MINUTES) if n >= PW_FAILS else None))
+            next_count = func.coalesce(users.c.fail_count, 0) + 1
+            lock_now = next_count >= PW_FAILS
+            # Keep the counter and lockout transition in one atomic UPDATE;
+            # a concurrent login failure must not overwrite another attempt.
+            conn.execute(update(users).where(
+                users.c.id == u.id,
+                or_(users.c.locked_until.is_(None), users.c.locked_until <= now),
+            ).values(
+                fail_count=case((lock_now, 0), else_=next_count),
+                locked_until=case((lock_now, now + timedelta(minutes=LOCK_MINUTES)), else_=None),
+            ))
     return None, "That ID or password is not right."
 
 

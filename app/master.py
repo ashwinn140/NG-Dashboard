@@ -18,13 +18,15 @@ def read_master(path: str) -> list[dict]:
     if "Organization" not in df.columns: raise ValueError("This does not look like the Organization master: there is no 'Organization' column.")
     rows, seen = [], set()
     for r in df.to_dict("records"):
-        k = norm(r.get("Organization", ""))
+        name = _clean(r.get("Organization"))
+        if not name: continue
+        k = norm(name)
         if not k or k in seen: continue
         seen.add(k); nets = []
         for j in range(1, 7):
             v = _clean(r.get(f"Network {j} (UDF)"))
             if v and v not in nets: nets.append(v)
-        rows.append(dict(norm_key=k, name=str(r["Organization"]).strip(), country=_clean(r.get("CountryName")), sales=_clean(r.get("Salesperson")), network=", ".join(nets), conf=_clean(r.get("Conference Attended by")),
+        rows.append(dict(norm_key=k, name=name, country=_clean(r.get("CountryName")), sales=_clean(r.get("Salesperson")), network=", ".join(nets), conf=_clean(r.get("Conference Attended by")),
                          contact=_clean(r.get("Contact Name") or r.get("Contact Person")), email=_clean(r.get("Email Address") or r.get("Email"))))
     return rows
 
@@ -36,7 +38,10 @@ def preview_master(path: str) -> dict:
 
 def load_master(engine, path: str, company: str) -> dict:
     """Replace this company's master with the file's contents."""
-    rows = read_master(path); now = datetime.utcnow()
+    rows = read_master(path)
+    if not rows:
+        raise ValueError("Organization master contains no valid Organization records; the existing master was not changed.")
+    now = datetime.utcnow()
     with engine.begin() as conn:
         conn.execute(delete(org_master).where(org_master.c.company == company))
         for i in range(0, len(rows), 2000):

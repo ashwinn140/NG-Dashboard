@@ -23,7 +23,7 @@ async function boot(mutate){
  {const {dom,w,d,ng,data}=await boot();
   const cc=ng.COLS.customer.c,dates=data.date,mx=Math.max(...dates),cur={from:mx-29,to:mx},prev={from:mx-59,to:mx-30};
   const inC=new Set(),inP={};for(let i=0;i<dates.length;i++){if(dates[i]>=cur.from&&dates[i]<=cur.to)inC.add(cc[i]);else if(dates[i]>=prev.from&&dates[i]<=prev.to)inP[cc[i]]=(inP[cc[i]]||0)+1}
-  const lostIds=Object.keys(inP).filter(j=>!inC.has(+j));
+  const lostIds=Object.keys(inP).filter(j=>!inC.has(+j)&&!['(blank)','blank'].includes(String(ng.COLS.customer.d[+j]||'').trim().toLowerCase()));
   check('fixture has a customer present before and absent now (test precondition)',lostIds.length>0,{inP:Object.keys(inP).length,inC:inC.size});
   ng.S.sel={};ng.S.rel=null;ng.S.from=cur.from;ng.S.to=cur.to;ng.S.def.compare='prev';ng.S.def.topN=500;ng.setGroup('ops');ng.S.page='customers';ng.renderAll();
   const card=[...d.querySelectorAll('#page article')].find(e=>e.querySelector('h2')?.textContent==='Declining accounts');
@@ -74,4 +74,20 @@ async function boot(mutate){
    check('unbilled evidence carries exact source indices',q?.indices?.length===Number((row.children[3].textContent||'').replace(/,/g,'')),{indices:q?.indices?.length,displayed:row.children[3].textContent});
   }dom.window.close()}
 
+ // Rate-quality buckets describe source quality independently of the active acceptance mode.
+ {const {dom,w,d,ng}=await boot(data=>{
+   if(!data.rep.length)throw new Error('Rate-quality fixture needs at least one shipment');
+   data.reps=[['NG','AE']];data.rep=data.rep.map(()=>0);
+   data.rbf=data.rbf.map(()=>1);data.rsf=data.rsf.map(()=>1);
+   data.rbuy=data.rbuy.map(()=>100);data.rsell=data.rsell.map(()=>120);data.ckg=data.ckg.map(()=>1000);
+   data.rbf[0]=2;
+  });
+  ng.S.sel={};ng.S.rel=null;ng.S.from=null;ng.S.to=null;ng.setGroup('profit');ng.S.page='p_rates';
+  const textBucket=()=>{const card=[...d.querySelectorAll('#page article')].find(e=>e.querySelector('h2')?.textContent.trim()==='How the rates were read');return card?.querySelectorAll('li')[1]?.textContent||'';};
+  ng.S.def.rateMode='clean';ng.renderAll();const cleanMode=textBucket();
+  ng.S.def.rateMode='text';ng.renderAll();const textMode=textBucket();
+  const textCount=s=>(s.match(/^(\d+) have text/)||[])[1]||'';
+  check('rate-quality text bucket is independent of the active acceptance mode',textCount(cleanMode)==='1'&&textCount(cleanMode)===textCount(textMode)&&cleanMode.includes('excluded')&&textMode.includes('included'),{cleanMode,textMode});
+  dom.window.close()}
+ 
  console.log(fails?'FAILED '+fails:'ALL PASSED');process.exit(fails?1:0)})().catch(e=>{console.error(e);process.exit(1)});

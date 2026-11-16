@@ -2,7 +2,7 @@
 import unittest
 from datetime import date
 
-from app.customer_history import build_recent_jobs, build_last_shipment_owners, visible_report_types_for_scopes, normalize_customer_sql
+from app.customer_history import build_recent_jobs, build_last_shipment_owners, visible_report_types_for_scopes, normalize_customer_sql, is_named_customer
 from sqlalchemy import create_engine, literal, select
 
 
@@ -12,9 +12,13 @@ class CustomerHistoryTests(unittest.TestCase):
         try:
             with engine.connect() as conn:
                 value = conn.execute(select(normalize_customer_sql(
-                    literal("  Acme\t\u00a0  Logistics\u202f\nIndia   ")
+                    literal("  Acme" + chr(9) + chr(160) + "  Logistics" + chr(8239) + chr(10) + "India   ")
+                ))).scalar_one()
+                long_run = conn.execute(select(normalize_customer_sql(
+                    literal("Acme" + (" " * 300) + "Logistics")
                 ))).scalar_one()
             self.assertEqual(value, "acme logistics india")
+            self.assertEqual(long_run, "acme logistics")
         finally:
             engine.dispose()
 
@@ -222,6 +226,23 @@ class CustomerHistoryTests(unittest.TestCase):
         ]
         result = build_last_shipment_owners(shipments, jpr, lobs=["AE"])
         self.assertEqual(result["acme"]["last_shipment_job_owner"], "Multiple owners")
+
+
+    def test_blank_customer_bucket_is_not_exposed_as_customer_history(self):
+        self.assertFalse(is_named_customer("(blank)"))
+        self.assertFalse(is_named_customer("   "))
+        self.assertTrue(is_named_customer("Acme Logistics"))
+        rows = [{
+            "company": "NG", "customer": "(blank)", "job_no": "J-1",
+            "job_date": date(2026, 1, 1), "lob": "FFWD AIR EXP",
+            "extra": {"Job Owner": "Owner"},
+        }]
+        self.assertEqual(build_recent_jobs(rows), [])
+        shipments = [{
+            "company": "NG", "report_type": "AE", "shipment_no": "S-1",
+            "shipment_date": date(2026, 1, 1), "customer": "(blank)",
+        }]
+        self.assertEqual(build_last_shipment_owners(shipments, []), {})
 
 
 if __name__ == "__main__":

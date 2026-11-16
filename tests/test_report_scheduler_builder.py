@@ -60,6 +60,45 @@ class ReportBuilderTests(unittest.TestCase):
             "summary_detail": "detail", "totals": True,
         }
 
+    def test_customer_performance_summary_excludes_blank_and_normalizes_customer_names(self):
+        data = self.dataset()
+        day = date(2026, 11, 5).toordinal() - date(1970, 1, 1).toordinal()
+        data["rep"] = [0, 0, 0]
+        data["no"] = ["S-1", "S-2", "S-3"]
+        data["date"] = [day, day + 1, day + 2]
+        for key in ("ops", "fin"):
+            data[key] = [-1, -1, -1]
+        for key in ("gross", "chg", "teus", "cbm", "invN", "rbuy", "rbf", "rsell", "rsf"):
+            value = data[key][0]
+            data[key] = [value, value, value]
+        data["inv1"] = [data["inv1"][0]] * 3
+        data["cols"]["customer"] = encoded(["Acme Logistics", "(blank)", " ACME   LOGISTICS "])
+        definition = self.definition(
+            report_id="customer_performance",
+            columns=["customer", "shipments", "air_shipments", "ocean_shipments"],
+        )
+        definition["summary_detail"] = "summary"
+        rows = build_report_rows(data, definition, date(2026, 11, 1), date(2026, 11, 10))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["customer"], "Acme Logistics")
+        self.assertEqual(rows[0]["shipments"], 2)
+        definition["totals"] = True
+        result = build_report_workbook(
+            data, definition, date(2026, 11, 1), date(2026, 11, 10), {"status": "fresh"}
+        )
+        workbook = load_workbook(BytesIO(result["content"]))
+        report_sheet = workbook["Report"]
+        self.assertEqual(report_sheet["B7"].value, 2)
+        self.assertEqual(report_sheet["A8"].value, "TOTAL (includes unassigned)")
+        self.assertEqual(report_sheet["B8"].value, 3)
+        visuals = workbook["Visuals"]
+        self.assertEqual(visuals["B5"].value, 2)
+        self.assertEqual(visuals["B6"].value, 1)
+        self.assertEqual(visuals["B22"].value, 3)
+        self.assertEqual(visuals["B40"].value, 3)
+        self.assertIn("$B$5", visuals._charts[0].series[0].val.numRef.f)
+        self.assertIn("$A$5", visuals._charts[0].series[0].cat.numRef.f)
+
     def test_shipment_report_exposes_source_dimensions_and_operational_stage(self):
         data = self.dataset()
         definition = self.definition(columns=["shipment_no", "stage", "shipper", "trade_lane",
