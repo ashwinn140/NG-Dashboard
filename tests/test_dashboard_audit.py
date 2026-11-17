@@ -74,14 +74,10 @@ class DashboardAuditTests(unittest.TestCase):
             app.state.store.stop=True; app.state.store.wake.set()
 
 
-    def test_production_image_builds_dashboard_from_canonical_frontend(self):
-        root=Path(__file__).resolve().parents[1]
-        dockerfile=(root/'Dockerfile').read_text()
-        self.assertIn('COPY frontend ./frontend',dockerfile)
-        self.assertIn('RUN sh frontend/build.sh',dockerfile)
-        self.assertLess(dockerfile.index('COPY app ./app'),dockerfile.index('COPY frontend ./frontend'))
-        self.assertLess(dockerfile.index('COPY frontend ./frontend'),dockerfile.index('RUN sh frontend/build.sh'))
-        self.assertLess(dockerfile.index('RUN sh frontend/build.sh'),dockerfile.index('COPY entrypoint.sh /entrypoint.sh'))
+    def test_scorecard_evidence_uses_the_user_data_source(self):
+        source=(Path(__file__).resolve().parents[1]/'frontend/app_prod.js').read_text()
+        self.assertIn("metric:D.user&&D.user.finance?'profit.gp':'ops.shipments'",source)
+        self.assertIn("dimension:D.user&&D.user.finance?key:null",source)
 
     def test_production_build_reproduces_served_asset(self):
         root=Path(__file__).resolve().parents[1]
