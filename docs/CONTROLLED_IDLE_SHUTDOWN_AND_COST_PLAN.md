@@ -65,6 +65,18 @@ Next code change should be small and independently tested:
 
 Do not change finance calculations, shipment/JPR matching, source ERP attributes, import idempotency, permissions, filters, exports or visuals.
 
+## Current Railway resource baseline (21 Nov 2026)
+
+Read-only Railway service metrics were sampled over the preceding 168 hours (5-minute sampling; 2,017 samples per service). RAM figures below are average and observed maximum, in GiB:
+
+| Service | Average RAM | Maximum RAM | Current RAM | Notes |
+|---|---:|---:|---:|---|
+| NG-Dashboard | 1.450 | 2.995 | 1.330 | Largest application RAM consumer |
+| Postgres | 0.732 | 1.209 | 0.903 | Must remain online |
+| AI-Insights | 0.086 | 0.269 | 0.083 | Already sleeping when status was checked |
+
+These are observed resource metrics, not billed amounts or forecasts. CPU_USAGE is reported in Railway's raw usage units and should not be presented as a percentage. Disk metrics reflect observed disk usage, not necessarily the billable volume allocation. The next cost comparison must use equivalent billing windows and service-level resource charges, not infer savings from RAM averages alone.
+
 ## Protected job inventory (code review)
 
 The durable job states confirmed in the current code are:
