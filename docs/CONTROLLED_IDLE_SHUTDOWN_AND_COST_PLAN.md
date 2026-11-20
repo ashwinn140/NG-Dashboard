@@ -50,7 +50,7 @@ The controller must:
 Existing verified findings in `app/server.py`:
 - Full dataset is retained in `Store.full`.
 - Restricted gzip payloads are held in `Store.cache`, keyed by data version, company scope, LOB scope and finance permission.
-- Current eviction is count-based (`if len(cache) > 20: cache.clear()`), not byte-bounded LRU.
+- Current eviction was count-based (`if len(cache) > 20: cache.clear()`), not byte-bounded LRU. PR implementation now replaces it with `ByteBoundedLRU`: default 64 MiB and 20 entries, configurable with `DATASET_CACHE_MAX_BYTES` and `DATASET_CACHE_MAX_ENTRIES`. It tracks compressed payload bytes, moves cache hits to the MRU end, evicts oldest entries until both ceilings are met, and does not retain an entry larger than the byte budget. The existing permission/version key is unchanged.
 - Import worker clears full dataset/cache before every import attempt to avoid retaining the dataset alongside a large workbook.
 - Worker calls `warm()` after the queue empties, even when the batch did not promote new data.
 
@@ -60,9 +60,19 @@ Next code change should be small and independently tested:
 3. Preserve the exact permission/version cache key and lock discipline.
 4. Test eviction, replacement, version invalidation, permission isolation and concurrent access.
 5. Preserve the import-time memory release until representative workbook peak-memory tests prove a safer alternative.
+6. Cache helper unit tests cover byte eviction, LRU order, entry count, replacement accounting, oversized payloads, clear/reset and value type. A dedicated GitHub Actions workflow runs these tests and compiles the changed Python modules.
 6. Change warm-up only after proving failed/duplicate/stale/held imports cannot trigger an unnecessary full rebuild and successful promotion still appears on the next request.
 
 Do not change finance calculations, shipment/JPR matching, source ERP attributes, import idempotency, permissions, filters, exports or visuals.
+
+## Protected job inventory (code review)
+
+The durable job states confirmed in the current code are:
+- Imports: `uploads.status` values `queued` and `processing` are active/protected. The importer marks a row `processing` before ingestion and requeues interrupted work after a worker crash.
+- Scheduled reports: `report_runs.status` values `queued`, `retry_wait` (when due), and `generating` are active/protected. The worker claims a run by changing it to `generating`; interrupted runs older than 30 minutes are recovered to `retry_wait`.
+- Report schedules themselves are definitions, not executing jobs. Paused/disabled schedules must not be counted as active work unless a manual run is already queued.
+
+Coverage gap: the code review has not yet established a durable registry for every potentially long-running synchronous export/admin operation or future worker. The shutdown predicate must not be activated until routes and frontend flows are inventoried and any operation that can outlive a request has an authoritative durable state. A queued report retry with a future `retry_after` should be treated as pending work at shutdown unless the owner explicitly chooses a safe defer policy.
 
 ## Postgres audit
 
@@ -94,4 +104,5 @@ Capture query plans for identified expensive queries separately, with representa
 - No user-activity or heartbeat code deployed.
 - No production service stopped, restarted or redeployed.
 - No Postgres configuration/schema/data changed.
-- No cache eviction or warm-up code changed in this branch yet.
+- Byte-bounded cache primitive and isolated tests have been added on this branch; integration into `Store.dataset_for()` is implemented. CI validation is running/passed as reported in PR checks. No representative production dataset benchmark has been run, so the 64 MiB default remains a conservative initial ceiling, not a measured optimum.
+- Warm-up behaviour has not been changed.
