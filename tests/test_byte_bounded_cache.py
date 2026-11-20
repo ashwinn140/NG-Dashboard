@@ -39,6 +39,15 @@ class ByteBoundedLRUTests(unittest.TestCase):
         self.assertEqual(len(cache), 0)
         self.assertEqual(cache.current_bytes, 0)
 
+    def test_pop_updates_accounting_and_missing_default(self):
+        cache = ByteBoundedLRU(max_bytes=10, max_entries=3)
+        cache["a"] = b"123"
+        self.assertEqual(cache.pop("a"), b"123")
+        self.assertEqual(cache.current_bytes, 0)
+        self.assertIsNone(cache.pop("missing", None))
+        with self.assertRaises(KeyError):
+            cache.pop("missing")
+
     def test_rejects_non_bytes(self):
         cache = ByteBoundedLRU()
         with self.assertRaises(TypeError):
