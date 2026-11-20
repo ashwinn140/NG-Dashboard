@@ -60,7 +60,7 @@ Next code change should be small and independently tested:
 3. Preserve the exact permission/version cache key and lock discipline.
 4. Test eviction, replacement, version invalidation, permission isolation and concurrent access.
 5. Preserve the import-time memory release until representative workbook peak-memory tests prove a safer alternative.
-6. Cache helper unit tests cover byte eviction, LRU order, entry count, replacement accounting, oversized payloads, clear/reset and value type. A dedicated GitHub Actions workflow runs these tests and compiles the changed Python modules.
+6. Cache helper unit tests cover byte eviction, LRU order, entry count, replacement accounting, oversized payloads, clear/reset, pop accounting and value type. A dedicated GitHub Actions workflow runs these tests and compiles the changed Python modules.
 6. Change warm-up only after proving failed/duplicate/stale/held imports cannot trigger an unnecessary full rebuild and successful promotion still appears on the next request.
 
 Do not change finance calculations, shipment/JPR matching, source ERP attributes, import idempotency, permissions, filters, exports or visuals.
