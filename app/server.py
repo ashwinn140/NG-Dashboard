@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import select, func, insert, delete, update, and_, or_
 from sqlalchemy.exc import IntegrityError
 from . import auth, admin_ops as ops, dataset as DS, mailer, master as MST, processor as P, profit as J, metric_definitions as MD, metric_execution as MX, report_scheduler as RS, report_scheduler_service as RSS
+from .cache import ByteBoundedLRU
 from .db import get_engine, imports, uploads, users, prefs, admin_log, shipments, profit_lines, org_master
 
 log = logging.getLogger("app")
@@ -45,7 +46,11 @@ class Store:
             self.upload_warning = f"The upload folder {upload_dir} cannot be written ({e}). Files are kept in a temporary folder and will be lost at the next restart. Attach a volume at /data."
             log.error(self.upload_warning)
         self.lock = threading.RLock(); self.full = None; self.version = int(ops.get_flag(engine, "data_version", "0") or 0); self.full_version = -1
-        self.cache: dict = {}; self.wake = threading.Event(); self.idle = threading.Event(); self.idle.set(); self.stop = False; self.building = False
+        try: cache_max_bytes = max(0, int(os.environ.get("DATASET_CACHE_MAX_BYTES", str(64 * 1024 * 1024))))
+        except (TypeError, ValueError): cache_max_bytes = 64 * 1024 * 1024
+        try: cache_max_entries = max(0, int(os.environ.get("DATASET_CACHE_MAX_ENTRIES", "20")))
+        except (TypeError, ValueError): cache_max_entries = 20
+        self.cache = ByteBoundedLRU(cache_max_bytes, cache_max_entries); self.wake = threading.Event(); self.idle = threading.Event(); self.idle.set(); self.stop = False; self.building = False
         with engine.begin() as c: c.execute(update(uploads).where(uploads.c.status == "processing").values(status="queued"))          # a crash mid-load: try again
         if start_worker:
             self.thread = threading.Thread(target=self._supervise_worker, daemon=True, name="importer"); self.thread.start()
@@ -75,7 +80,8 @@ class Store:
                     rep_rows = len(self.full.get("rep", [])) if isinstance(self.full, dict) else 0
                     log.info("dataset_diagnostics stage=build_full elapsed_seconds=%.3f rss_before_mb=%s rss_after_mb=%s shipment_rows=%d", build_seconds, rss_before, rss_after, rep_rows)
             sig = (self.version, tuple(sorted(user["companies"])), tuple(sorted(user["lobs"])), bool(user["finance"]))
-            if sig not in self.cache:
+            cached = self.cache.get(sig)
+            if cached is None:
                 started = time.perf_counter()
                 D = DS.restrict(self.full, dict(companies=user["companies"], lobs=user["lobs"], finance=user["finance"]))
                 restrict_seconds = time.perf_counter() - started
@@ -87,16 +93,18 @@ class Store:
                 started = time.perf_counter()
                 compressed = gzip.compress(payload, 6)
                 compress_seconds = time.perf_counter() - started
-                if len(self.cache) > 20: self.cache.clear()
                 self.cache[sig] = compressed
                 if diagnostics:
                     log.info(
-                        "dataset_diagnostics stage=restrict_and_encode restrict_seconds=%.3f serialise_seconds=%.3f gzip_seconds=%.3f rss_after_restrict_mb=%s rss_after_encode_mb=%s json_bytes=%d gzip_bytes=%d cache_entries=%d",
-                        restrict_seconds, serialise_seconds, compress_seconds, rss_after_restrict, _rss_mb(), len(payload), len(compressed), len(self.cache),
+                        "dataset_diagnostics stage=restrict_and_encode restrict_seconds=%.3f serialise_seconds=%.3f gzip_seconds=%.3f rss_after_restrict_mb=%s rss_after_encode_mb=%s json_bytes=%d gzip_bytes=%d cache_entries=%d cache_bytes=%d cache_limit_bytes=%d",
+                        restrict_seconds, serialise_seconds, compress_seconds, rss_after_restrict, _rss_mb(), len(payload), len(compressed), len(self.cache), self.cache.current_bytes, self.cache.max_bytes,
                     )
-            elif diagnostics:
-                log.info("dataset_diagnostics stage=cache_hit cache_entries=%d", len(self.cache))
-            return self.cache[sig]
+                result = compressed
+            else:
+                result = cached
+                if diagnostics:
+                    log.info("dataset_diagnostics stage=cache_hit cache_entries=%d cache_bytes=%d cache_limit_bytes=%d", len(self.cache), self.cache.current_bytes, self.cache.max_bytes)
+            return result
 
     def warm(self):
         """Builds the dashboard data ahead of time, so the first person after a load does not wait."""
