@@ -6,6 +6,8 @@ scope in their cache key.
 """
 from collections import OrderedDict
 
+_MISSING = object()
+
 
 class ByteBoundedLRU:
     """An insertion-ordered LRU with both byte and entry ceilings."""
@@ -58,10 +60,13 @@ class ByteBoundedLRU:
             _, evicted = self._items.popitem(last=False)
             self.current_bytes -= len(evicted)
 
-    def pop(self, key, default=None):
-        value = self._items.pop(key, default)
-        if value is not default:
-            self.current_bytes -= len(value)
+    def pop(self, key, default=_MISSING):
+        if key not in self._items:
+            if default is _MISSING:
+                raise KeyError(key)
+            return default
+        value = self._items.pop(key)
+        self.current_bytes -= len(value)
         return value
 
     def clear(self):
