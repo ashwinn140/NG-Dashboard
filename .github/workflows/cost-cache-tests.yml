@@ -4,6 +4,8 @@ on:
     paths:
       - 'app/cache.py'
       - 'app/server.py'
+      - 'app/archive.py'
+      - 'tests/test_archive_retention.py'
       - 'ops/lifecycle_controller.py'
       - 'tests/test_lifecycle_controller.py'
       - '.github/workflows/railway-lifecycle.yml'
@@ -43,5 +45,6 @@ jobs:
           python -m unittest discover -s tests -p 'test_session_activity.py' -v
           python -m unittest discover -s tests -p 'test_lifecycle_controller.py' -v
           python -m unittest discover -s tests -p 'test_storage_mode_defaults.py' -v
+          python -m unittest discover -s tests -p 'test_archive_retention.py' -v
       - name: Compile changed Python modules
-        run: python -m py_compile app/cache.py app/server.py app/processor.py app/auth.py app/config.py app/db.py app/report_scheduler_service.py ops/lifecycle_controller.py
+        run: python -m py_compile app/cache.py app/server.py app/processor.py app/auth.py app/config.py app/db.py app/archive.py app/report_scheduler_service.py ops/lifecycle_controller.py
