@@ -66,13 +66,21 @@ def latest_deployment(token: str, project: str, environment: str, service: str) 
 
 
 def start_if_needed(base_url: str, token: str, project: str, environment: str, service: str):
-    if health(base_url):
-        print("09:00 IST start check: dashboard already healthy; no redeploy needed.")
-        return
+    # Give native serverless wake-up/cold-start time before deciding a manual
+    # redeploy is required. This avoids unnecessary morning deployments.
+    for attempt in range(6):
+        if health(base_url):
+            print("09:00 IST start check: dashboard healthy; no redeploy needed.")
+            return
+        if attempt < 5:
+            time.sleep(10)
     deployment = latest_deployment(token, project, environment, service)
     mutation = "mutation Redeploy($id: String!) { deploymentRedeploy(id: $id) { id status } }"
     result = graphql(token, mutation, {"id": deployment["id"]})
-    print("Start requested:", json.dumps(result.get("deploymentRedeploy")))
+    started = result.get("deploymentRedeploy")
+    if not started:
+        raise RuntimeError("Railway did not confirm the dashboard redeploy request")
+    print("Start requested:", json.dumps(started))
     deadline = time.time() + 240
     while time.time() < deadline:
         if health(base_url):
@@ -104,6 +112,8 @@ def stop_if_safe(base_url: str, lifecycle_token: str, railway_token: str,
     deployment = latest_deployment(railway_token, project, environment, service)
     mutation = "mutation StopDeployment($id: String!) { deploymentStop(id: $id) }"
     result = graphql(railway_token, mutation, {"id": deployment["id"]})
+    if result.get("deploymentStop") is not True:
+        raise RuntimeError("Railway did not confirm the dashboard stop request")
     print("Safe 20:00+ IST shutdown requested:", json.dumps(result.get("deploymentStop")))
 
 
