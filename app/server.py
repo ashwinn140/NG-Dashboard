@@ -1272,15 +1272,14 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                                       imports.c.row_count, imports.c.status)
                                 .order_by(imports.c.id.desc()).limit(30)).mappings().all()
             if engine.dialect.name == "postgresql":
-                db_bytes = c.execute(text("SELECT pg_database_size(current_database())")).scalar()
+                db_bytes = c.exec_driver_sql("SELECT pg_database_size(current_database())").scalar()
             elif engine.dialect.name == "sqlite":
-                page_count = c.execute(text("PRAGMA page_count")).scalar()
-                page_size = c.execute(text("PRAGMA page_size")).scalar()
+                page_count = c.exec_driver_sql("PRAGMA page_count").scalar()
+                page_size = c.exec_driver_sql("PRAGMA page_size").scalar()
                 db_bytes = int(page_count or 0) * int(page_size or 0)
             else:
                 db_bytes = None
         return {
-            "storage_mode": config.REPORT_STORAGE_MODE if hasattr(config, "REPORT_STORAGE_MODE") else os.environ.get("REPORT_STORAGE_MODE", "versioned"),
             "report_storage_mode": os.environ.get("REPORT_STORAGE_MODE", "versioned").strip().lower(),
             "static_history": os.environ.get("REPORT_STATIC_HISTORY", "0").strip().lower() in ("1", "true", "yes"),
             "history_start": os.environ.get("REPORT_HISTORY_START") or None,
