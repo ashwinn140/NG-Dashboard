@@ -1361,6 +1361,11 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
                 db_bytes = int(page_count or 0) * int(page_size or 0)
             else:
                 db_bytes = None
+        try:
+            source_archive = AR.archive_preview(engine, store.upload_dir, days=90)
+        except OSError:
+            log.exception("could not inspect archived source workbooks")
+            source_archive = {"status": "unavailable", "archive_files_total": None, "archive_bytes_total": None}
         return {
             "report_storage_mode": "replace" if config.replace_reports() else "versioned",
             "static_history": config.static_history(),
@@ -1375,7 +1380,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             "memory_warning": (_rss_mb() is not None and _rss_mb() >= _memory_threshold_mb()),
             "dataset_cache": {"entries": len(store.cache), "compressed_bytes": store.cache.current_bytes,
                               "max_bytes": store.cache.max_bytes, "max_entries": store.cache.max_entries},
-            "source_archive": AR.archive_preview(engine, store.upload_dir, days=90),
+            "source_archive": source_archive,
             "recent_imports": [dict(r) for r in latest],
         }
 
