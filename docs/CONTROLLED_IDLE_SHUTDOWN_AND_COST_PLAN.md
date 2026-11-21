@@ -52,16 +52,16 @@ Existing verified findings in `app/server.py`:
 - Restricted gzip payloads are held in `Store.cache`, keyed by data version, company scope, LOB scope and finance permission.
 - Current eviction was count-based (`if len(cache) > 20: cache.clear()`), not byte-bounded LRU. PR implementation now replaces it with `ByteBoundedLRU`: default 64 MiB and 20 entries, configurable with `DATASET_CACHE_MAX_BYTES` and `DATASET_CACHE_MAX_ENTRIES`. It tracks compressed payload bytes, moves cache hits to the MRU end, evicts oldest entries until both ceilings are met, and does not retain an entry larger than the byte budget. The existing permission/version key is unchanged.
 - Import worker clears full dataset/cache before every import attempt to avoid retaining the dataset alongside a large workbook.
-- Worker calls `warm()` after the queue empties, even when the batch did not promote new data.
+- Worker previously called `warm()` after every empty queue, including after failed, duplicate, stale and held imports. It now warms only after at least one successful promotion in the batch; multiple queued promotions are coalesced into one rebuild. A no-op/failed import still releases the in-memory full dataset before processing to avoid workbook + dataset peak overlap, but it no longer forces an immediate rebuild when the queue drains.
 
 Next code change should be small and independently tested:
 1. Measure encoded cache entry bytes and RSS under representative user scopes.
-2. Implement a conservative configurable byte budget plus maximum entry count and LRU eviction.
+2. Implemented a conservative configurable byte budget plus maximum entry count and LRU eviction (64 MiB / 20 entries by default).
 3. Preserve the exact permission/version cache key and lock discipline.
 4. Test eviction, replacement, version invalidation, permission isolation and concurrent access.
 5. Preserve the import-time memory release until representative workbook peak-memory tests prove a safer alternative.
 6. Cache helper unit tests cover byte eviction, LRU order, entry count, replacement accounting, oversized payloads, clear/reset, pop accounting and value type. A dedicated GitHub Actions workflow runs these tests and compiles the changed Python modules.
-6. Change warm-up only after proving failed/duplicate/stale/held imports cannot trigger an unnecessary full rebuild and successful promotion still appears on the next request.
+7. Warm-up now runs only after a successful promotion; failed/duplicate/stale/held imports do not trigger an unnecessary full rebuild. Successful promotions still rebuild once after the queue drains.
 
 Do not change finance calculations, shipment/JPR matching, source ERP attributes, import idempotency, permissions, filters, exports or visuals.
 
@@ -76,6 +76,16 @@ Read-only Railway service metrics were sampled over the preceding 168 hours (5-m
 | AI-Insights | 0.086 | 0.269 | 0.083 | Already sleeping when status was checked |
 
 These are observed resource metrics, not billed amounts or forecasts. CPU_USAGE is reported in Railway's raw usage units and should not be presented as a percentage. Disk metrics reflect observed disk usage, not necessarily the billable volume allocation. The next cost comparison must use equivalent billing windows and service-level resource charges, not infer savings from RAM averages alone.
+
+## Daily report replacement and historical retention findings
+
+The application has two report storage modes. `REPORT_STORAGE_MODE=versioned` is the default and retains superseded shipment/JPR row versions in the database. `REPORT_STORAGE_MODE=replace` updates current rows in place and deletes rows that disappeared from the incoming report scope. Both modes keep the current dashboard data in the active rows; `dataset.build_full()` reads only `to_import IS NULL`, so superseded version rows are not copied into the in-memory dashboard dataset. In versioned mode they still increase database storage over time, and import-history metadata grows with every received file.
+
+The repository already has a dedicated synthetic replacement regression suite (`scripts/test_daily_replacement.py`) covering repeated daily changes, cross-year preservation, branch/date scope safety, duplicate/stale/row-drop protection, JPR replacement, and static financial-year history. The CI workflow now runs this suite alongside the new cache/retention tests.
+
+Production service variable names include `REPORT_STORAGE_MODE` and `REPORT_STATIC_HISTORY`, but the connected Railway account does not expose their values to this session. I have not guessed the active setting or changed production. To meet the stated policy safely, confirm the deployed value and exercise the exact production-like dataset in a Railway fork/staging environment before switching to `replace` plus static-history protection. The switch is reversible at the setting level but does not recreate old version snapshots already deleted by replacement mode.
+
+Retention previously removed only old shipment rows, not `profit_lines`. The preview/apply implementation now counts and removes both shipment and job-profit rows before the retained window, with separate counts in the audit result. It does not delete import audit metadata or source workbook files.
 
 ## Protected job inventory (code review)
 
@@ -116,5 +126,6 @@ Capture query plans for identified expensive queries separately, with representa
 - No user-activity or heartbeat code deployed.
 - No production service stopped, restarted or redeployed.
 - No Postgres configuration/schema/data changed.
-- Byte-bounded cache primitive and isolated tests have been added on this branch; integration into `Store.dataset_for()` is implemented. CI validation is running/passed as reported in PR checks. No representative production dataset benchmark has been run, so the 64 MiB default remains a conservative initial ceiling, not a measured optimum.
-- Warm-up behaviour has not been changed.
+- Byte-bounded cache primitive and isolated tests have been added on this branch; integration into `Store.dataset_for()` is implemented. No representative production dataset benchmark has been run, so the 64 MiB default remains a conservative initial ceiling, not a measured optimum.
+- Retention preview/apply now includes job-profit rows in addition to shipment rows; import metadata and archived source workbooks remain outside this retention action.
+- Warm-up behaviour is now promotion-gated; no-op/failed imports no longer cause an immediate full dataset rebuild.
