@@ -233,6 +233,7 @@ const VIEW={
   return h('div',null,
    h('div',{class:'card',style:'margin-top:.8rem'},h('h2',null,'Storage & memory health'),h('p',{class:'note'},'Read-only diagnostics. Superseded rows are historical versions, not part of the active in-memory dashboard dataset. Use this view to verify whether incoming daily reports replace current rows or retain additional versions.'),
     h('div',{class:'kpis'},kpi(d.storage_mode,'Shipment/JPR storage mode'),kpi(d.static_history?'On':'Off','Previous financial years frozen'),kpi(d.process_rss_mb==null?'—':d.process_rss_mb+' MB','Current process RSS'),kpi(bytes(d.database_size_bytes),'Postgres database size'),kpi(bytes(d.dataset_cache?.compressed_bytes),'Compressed cache in use'),kpi(bytes(d.dataset_cache?.max_bytes),'Cache byte limit')),
+    h('p',{class:d.memory_warning?'warn':'ok'},d.memory_warning?'Memory warning: process RSS is at or above '+d.memory_threshold_mb+' MB. Check dataset diagnostics and the latest import.':'Memory threshold: '+d.memory_threshold_mb+' MB. No threshold warning at this reading.'),
     h('h3',null,'Current vs superseded data'),
     table(['Dataset','Current rows','Superseded versions'],[
      ['Shipment register',Number(d.shipment_rows?.current||0).toLocaleString(),Number(d.shipment_rows?.superseded_versions||0).toLocaleString()],
