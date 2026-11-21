@@ -2,9 +2,22 @@ name: NG-Dashboard safe lifecycle controller
 
 on:
   schedule:
-    # 09:00 IST start check, then 20:00-23:45 IST safe shutdown/defer checks.
-    - cron: '0,15,30,45 14-18,3 * * *'
+    # 09:00 IST start check (03:30 UTC).
+    - cron: '30 3 * * *'
+    # 20:00-23:45 IST safe shutdown/defer checks.
+    - cron: '0,15,30,45 14-18 * * *'
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'ops/lifecycle_controller.py'
+      - '.github/workflows/railway-lifecycle.yml'
+  push:
+    branches:
+      - main
+      - cost-optimisation/idle-shutdown-and-db-audit
+    paths:
+      - 'ops/lifecycle_controller.py'
+      - '.github/workflows/railway-lifecycle.yml'
 
 permissions:
   contents: read
