@@ -34,6 +34,18 @@ def _rss_mb() -> float | None:
         pass
     return None
 
+def _memory_threshold_mb() -> int:
+    try:
+        return max(256, int(os.environ.get("DATASET_MEMORY_WARN_MB", "2048")))
+    except (TypeError, ValueError):
+        return 2048
+
+
+def _warn_dataset_memory(stage: str, rss_mb: float | None) -> None:
+    threshold = _memory_threshold_mb()
+    if rss_mb is not None and rss_mb >= threshold:
+        log.warning("dataset_memory_threshold_exceeded stage=%s rss_mb=%.1f threshold_mb=%d", stage, rss_mb, threshold)
+
 
 class Store:
     """Engine, the upload folder, the import worker and the cached dashboard data."""
@@ -74,6 +86,7 @@ class Store:
                 self.full = DS.build_full(self.engine)
                 build_seconds = time.perf_counter() - started
                 rss_after = _rss_mb() if diagnostics else None
+                _warn_dataset_memory("build_full", rss_after)
                 self.full_version = self.version
                 self.cache.clear()
                 if diagnostics:
@@ -120,6 +133,7 @@ class Store:
                     self.full = DS.build_full(self.engine)
                     build_seconds = time.perf_counter() - started
                     rss_after = _rss_mb() if diagnostics else None
+                    _warn_dataset_memory("warm_build_full", rss_after)
                     self.full_version = self.version
                     self.cache.clear()
                     if diagnostics:
@@ -1357,6 +1371,8 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             "uploads_by_status": {str(k): int(v) for k, v in upload_counts},
             "database_size_bytes": int(db_bytes) if db_bytes is not None else None,
             "process_rss_mb": _rss_mb(),
+            "memory_threshold_mb": _memory_threshold_mb(),
+            "memory_warning": (_rss_mb() is not None and _rss_mb() >= _memory_threshold_mb()),
             "dataset_cache": {"entries": len(store.cache), "compressed_bytes": store.cache.current_bytes,
                               "max_bytes": store.cache.max_bytes, "max_entries": store.cache.max_entries},
             "recent_imports": [dict(r) for r in latest],
