@@ -106,6 +106,15 @@ sessions = Table(
     Column("id", String(64), primary_key=True), Column("user_id", Integer, index=True), Column("csrf", String(64)),
     Column("created_at", DateTime), Column("expires_at", DateTime), Column("method", String(20)),
 )
+
+# Last genuine browser interaction per authenticated session. Kept separate from
+# sessions.expires_at so activity tracking never extends authentication lifetime.
+session_activity = Table(
+    "session_activity", metadata,
+    Column("session_id", String(64), primary_key=True),
+    Column("user_id", Integer, index=True),
+    Column("last_activity_at", DateTime, index=True),
+)
 login_tokens = Table(                                                        # one-time email links and 6-digit codes (only hashes are kept)
     "login_tokens", metadata,
     Column("id", Integer, primary_key=True, autoincrement=True), Column("email", String(200), index=True),

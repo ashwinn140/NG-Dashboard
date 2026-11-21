@@ -1,7 +1,7 @@
 """The web app: sign-in, the dashboard data, the admin portal and the endpoint the Gmail script posts to."""
 import gc, gzip, hashlib, io, json, logging, os, secrets, shutil, tempfile, threading, time
 from collections import defaultdict, deque
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse
 import pandas as pd
@@ -9,8 +9,9 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Respon
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import select, func, insert, delete, update, and_, or_
 from sqlalchemy.exc import IntegrityError
-from . import auth, admin_ops as ops, dataset as DS, mailer, master as MST, processor as P, profit as J, metric_definitions as MD, metric_execution as MX, report_scheduler as RS, report_scheduler_service as RSS
-from .db import get_engine, imports, uploads, users, prefs, admin_log, shipments, profit_lines, org_master
+from . import auth, config, archive as AR, admin_ops as ops, dataset as DS, mailer, master as MST, processor as P, profit as J, metric_definitions as MD, metric_execution as MX, report_scheduler as RS, report_scheduler_service as RSS
+from .cache import ByteBoundedLRU
+from .db import get_engine, imports, uploads, users, prefs, admin_log, shipments, profit_lines, org_master, sessions, session_activity, report_runs
 
 log = logging.getLogger("app")
 WEB = Path(__file__).parent / "web"
@@ -33,6 +34,18 @@ def _rss_mb() -> float | None:
         pass
     return None
 
+def _memory_threshold_mb() -> int:
+    try:
+        return max(256, int(os.environ.get("DATASET_MEMORY_WARN_MB", "2048")))
+    except (TypeError, ValueError):
+        return 2048
+
+
+def _warn_dataset_memory(stage: str, rss_mb: float | None) -> None:
+    threshold = _memory_threshold_mb()
+    if rss_mb is not None and rss_mb >= threshold:
+        log.warning("dataset_memory_threshold_exceeded stage=%s rss_mb=%.1f threshold_mb=%d", stage, rss_mb, threshold)
+
 
 class Store:
     """Engine, the upload folder, the import worker and the cached dashboard data."""
@@ -45,7 +58,11 @@ class Store:
             self.upload_warning = f"The upload folder {upload_dir} cannot be written ({e}). Files are kept in a temporary folder and will be lost at the next restart. Attach a volume at /data."
             log.error(self.upload_warning)
         self.lock = threading.RLock(); self.full = None; self.version = int(ops.get_flag(engine, "data_version", "0") or 0); self.full_version = -1
-        self.cache: dict = {}; self.wake = threading.Event(); self.idle = threading.Event(); self.idle.set(); self.stop = False; self.building = False
+        try: cache_max_bytes = max(0, int(os.environ.get("DATASET_CACHE_MAX_BYTES", str(64 * 1024 * 1024))))
+        except (TypeError, ValueError): cache_max_bytes = 64 * 1024 * 1024
+        try: cache_max_entries = max(0, int(os.environ.get("DATASET_CACHE_MAX_ENTRIES", "20")))
+        except (TypeError, ValueError): cache_max_entries = 20
+        self.cache = ByteBoundedLRU(cache_max_bytes, cache_max_entries); self.wake = threading.Event(); self.idle = threading.Event(); self.idle.set(); self.stop = False; self.building = False; self.needs_warm = False
         with engine.begin() as c: c.execute(update(uploads).where(uploads.c.status == "processing").values(status="queued"))          # a crash mid-load: try again
         if start_worker:
             self.thread = threading.Thread(target=self._supervise_worker, daemon=True, name="importer"); self.thread.start()
@@ -69,13 +86,15 @@ class Store:
                 self.full = DS.build_full(self.engine)
                 build_seconds = time.perf_counter() - started
                 rss_after = _rss_mb() if diagnostics else None
+                _warn_dataset_memory("build_full", rss_after)
                 self.full_version = self.version
                 self.cache.clear()
                 if diagnostics:
                     rep_rows = len(self.full.get("rep", [])) if isinstance(self.full, dict) else 0
                     log.info("dataset_diagnostics stage=build_full elapsed_seconds=%.3f rss_before_mb=%s rss_after_mb=%s shipment_rows=%d", build_seconds, rss_before, rss_after, rep_rows)
             sig = (self.version, tuple(sorted(user["companies"])), tuple(sorted(user["lobs"])), bool(user["finance"]))
-            if sig not in self.cache:
+            cached = self.cache.get(sig)
+            if cached is None:
                 started = time.perf_counter()
                 D = DS.restrict(self.full, dict(companies=user["companies"], lobs=user["lobs"], finance=user["finance"]))
                 restrict_seconds = time.perf_counter() - started
@@ -87,24 +106,26 @@ class Store:
                 started = time.perf_counter()
                 compressed = gzip.compress(payload, 6)
                 compress_seconds = time.perf_counter() - started
-                if len(self.cache) > 20: self.cache.clear()
                 self.cache[sig] = compressed
                 if diagnostics:
                     log.info(
-                        "dataset_diagnostics stage=restrict_and_encode restrict_seconds=%.3f serialise_seconds=%.3f gzip_seconds=%.3f rss_after_restrict_mb=%s rss_after_encode_mb=%s json_bytes=%d gzip_bytes=%d cache_entries=%d",
-                        restrict_seconds, serialise_seconds, compress_seconds, rss_after_restrict, _rss_mb(), len(payload), len(compressed), len(self.cache),
+                        "dataset_diagnostics stage=restrict_and_encode restrict_seconds=%.3f serialise_seconds=%.3f gzip_seconds=%.3f rss_after_restrict_mb=%s rss_after_encode_mb=%s json_bytes=%d gzip_bytes=%d cache_entries=%d cache_bytes=%d cache_limit_bytes=%d",
+                        restrict_seconds, serialise_seconds, compress_seconds, rss_after_restrict, _rss_mb(), len(payload), len(compressed), len(self.cache), self.cache.current_bytes, self.cache.max_bytes,
                     )
-            elif diagnostics:
-                log.info("dataset_diagnostics stage=cache_hit cache_entries=%d", len(self.cache))
-            return self.cache[sig]
+                result = compressed
+            else:
+                result = cached
+                if diagnostics:
+                    log.info("dataset_diagnostics stage=cache_hit cache_entries=%d cache_bytes=%d cache_limit_bytes=%d", len(self.cache), self.cache.current_bytes, self.cache.max_bytes)
+            return result
 
-    def warm(self):
-        """Builds the dashboard data ahead of time, so the first person after a load does not wait."""
+    def warm(self) -> bool:
+        """Build once after a successful promotion; return whether the dataset is ready."""
         try:
             with self.lock:
                 with self.engine.connect() as c:
                     if not c.execute(select(func.count()).select_from(shipments).where(shipments.c.to_import.is_(None)).limit(1)).scalar():
-                        return                      # nothing loaded yet: nothing to prepare (and no error to log)
+                        return True
                 if self.full is None or self.full_version != self.version:
                     diagnostics = str(os.environ.get("DATASET_DIAGNOSTICS", "false")).strip().lower() in ("1", "true", "yes", "on")
                     rss_before = _rss_mb() if diagnostics else None
@@ -112,13 +133,16 @@ class Store:
                     self.full = DS.build_full(self.engine)
                     build_seconds = time.perf_counter() - started
                     rss_after = _rss_mb() if diagnostics else None
+                    _warn_dataset_memory("warm_build_full", rss_after)
                     self.full_version = self.version
                     self.cache.clear()
                     if diagnostics:
                         rep_rows = len(self.full.get("rep", [])) if isinstance(self.full, dict) else 0
                         log.info("dataset_diagnostics stage=warm_build_full elapsed_seconds=%.3f rss_before_mb=%s rss_after_mb=%s shipment_rows=%d", build_seconds, rss_before, rss_after, rep_rows)
+                return True
         except Exception:
             log.exception("could not prepare the dashboard data")
+            return False
 
     def bump(self):
         with self.lock:
@@ -159,11 +183,14 @@ class Store:
     def _worker(self):
         while not self.stop:
             if os.environ.get("IMPORTS_PAUSED") == "1":
-                self.wake.wait(2); self.wake.clear(); continue
+                self.wake.wait(360); self.wake.clear(); continue
             r = self._next()
             if not r:
-                self.warm()  # build once after a batch, never alongside the import worker
-                self.idle.set(); self.wake.wait(2); self.wake.clear(); continue
+                # Rebuild only after a promoted dataset changed. Failed, duplicate,
+                # stale and held files must not trigger an expensive full rebuild.
+                if self.needs_warm and self.warm():
+                    self.needs_warm = False
+                self.idle.set(); self.wake.wait(360); self.wake.clear(); continue
             self.idle.clear(); changed = False
             try:
                 # Do not retain/build a second dashboard dataset alongside a large workbook.
@@ -180,7 +207,9 @@ class Store:
                                     status="failed", message=msg, file_path=r.path, source=r.source or "email", uploaded_by=r.uploaded_by or "", subject=r.subject or "")
                 res = dict(import_id=iid, status="failed", message=msg)
             with self.engine.begin() as c: c.execute(update(uploads).where(uploads.c.id == r.id).values(status=status, result=json.loads(json.dumps(res, default=str))))
-            if changed: self.bump()
+            if changed:
+                self.bump()
+                self.needs_warm = True
             if res.get("status") in ("failed", "needs_review"): self._alert(r, res)
 
     def _alert(self, r, res):
@@ -211,6 +240,8 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         return f"{proto}://{request.headers.get('host', 'localhost')}"
     app = FastAPI(title="Performance dashboard", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store = store; app.state.engine = engine
+    app.state.active_authenticated_requests = 0
+    app.state.active_request_lock = threading.Lock()
     hits: dict = defaultdict(deque); app.state.hits = hits
 
     # bootstrap the first administrator (a bad value is reported, never allowed to stop the app from starting)
@@ -226,11 +257,20 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
 
     @app.middleware("http")
     async def headers(request: Request, call_next):
-        resp = await call_next(request)
-        resp.headers.update({"X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "same-origin", "Cache-Control": resp.headers.get("Cache-Control", "no-store"),
-                             "Permissions-Policy": "geolocation=(), camera=(), microphone=()"})
-        if secure: resp.headers["Strict-Transport-Security"] = "max-age=31536000"
-        return resp
+        tracked = bool(request.cookies.get("ng_session")) and request.url.path not in ("/healthz", "/api/activity/heartbeat")
+        if tracked:
+            with app.state.active_request_lock:
+                app.state.active_authenticated_requests += 1
+        try:
+            resp = await call_next(request)
+            resp.headers.update({"X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "same-origin", "Cache-Control": resp.headers.get("Cache-Control", "no-store"),
+                                 "Permissions-Policy": "geolocation=(), camera=(), microphone=()"})
+            if secure: resp.headers["Strict-Transport-Security"] = "max-age=31536000"
+            return resp
+        finally:
+            if tracked:
+                with app.state.active_request_lock:
+                    app.state.active_authenticated_requests = max(0, app.state.active_authenticated_requests - 1)
 
     def limit(request: Request, n: int = 30):
         ip = (request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else "?")); q = hits[ip]; now = time.time()
@@ -270,8 +310,55 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
     page = lambda name: HTMLResponse((WEB / name).read_text(encoding="utf-8").replace("{{PRODUCT}}", product))
 
     # ------------------------------------------------------------------ pages
+    @app.get("/assets/activity.js")
+    def activity_asset():
+        return Response((WEB / "activity.js").read_text(encoding="utf-8"), media_type="application/javascript", headers={"Cache-Control": "no-store"})
+
     @app.get("/healthz")
     def healthz(): return {"ok": True}
+
+    @app.post("/api/activity/heartbeat")
+    def activity_heartbeat(request: Request, user: dict = Depends(unsafe)):
+        """Record genuine authenticated interaction, throttled to one write per session per 2 minutes."""
+        raw = request.cookies.get("ng_session")
+        if not raw:
+            raise HTTPException(401, "Please sign in.")
+        if not auth.record_activity(engine, raw, user["id"]):
+            raise HTTPException(401, "Please sign in.")
+        return {"ok": True}
+
+    @app.get("/internal/lifecycle-state")
+    def lifecycle_state(request: Request):
+        """Machine-only, read-only lifecycle state. Disabled unless a private token is configured."""
+        expected = os.environ.get("LIFECYCLE_CONTROL_TOKEN", "")
+        supplied = request.headers.get("x-lifecycle-token", "")
+        if not expected or not secrets.compare_digest(supplied, expected):
+            raise HTTPException(404, "Not found.")
+        now = datetime.utcnow()
+        with engine.connect() as conn:
+            active_sessions = conn.execute(select(func.count()).select_from(sessions).where(
+                sessions.c.expires_at > now)).scalar()
+            active_activity_sessions = conn.execute(select(func.count()).select_from(
+                session_activity.join(sessions, session_activity.c.session_id == sessions.c.id)).where(
+                sessions.c.expires_at > now,
+                session_activity.c.last_activity_at > now - timedelta(minutes=60))).scalar()
+            last_activity = conn.execute(select(func.max(session_activity.c.last_activity_at)).select_from(
+                session_activity.join(sessions, session_activity.c.session_id == sessions.c.id)).where(
+                sessions.c.expires_at > now)).scalar()
+            queued_imports = conn.execute(select(func.count()).select_from(uploads).where(
+                uploads.c.status.in_(("queued", "processing")))).scalar()
+            pending_reports = conn.execute(select(func.count()).select_from(report_runs).where(
+                report_runs.c.status.in_(("queued", "retry_wait", "generating")))).scalar()
+        return {
+            "checked_at": now.isoformat() + "Z",
+            "active_sessions": int(active_sessions or 0),
+            "recent_activity_sessions": int(active_activity_sessions or 0),
+            "last_activity_at": last_activity.isoformat() + "Z" if last_activity else None,
+            "active_authenticated_requests": int(getattr(app.state, "active_authenticated_requests", 0)),
+            "protected_jobs": {"imports": int(queued_imports or 0), "scheduled_reports": int(pending_reports or 0)},
+            "storage_mode": "replace" if config.replace_reports() else "versioned",
+            "static_history": config.static_history(),
+        }
 
     @app.get("/auth/options")
     def auth_options(): return {"email": mailer.configured(), "password": True}
@@ -1242,6 +1329,61 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         token, code, ud = r; sent = mailer.send(u.email, f"Your {product} sign-in link", f"Open this link to sign in (works once, {auth.LINK_MINUTES} minutes):\n{public_base(request)}/auth/verify?t={token}\n\nOr use the code {code} on the sign-in page.")
         return {"sent": sent, "message": "Link sent." if sent else "Email could not be sent. Check email provider settings and delivery logs; password sign-in is still available."}
 
+    @app.get("/api/admin/archive-retention")
+    def a_archive_retention(days: int = 90, user: dict = Depends(admin)):
+        return AR.archive_preview(engine, store.upload_dir, days=days)
+
+    @app.post("/api/admin/archive-retention")
+    async def a_archive_retention_apply(request: Request, user: dict = Depends(admin_unsafe)):
+        body = await request.json()
+        return AR.archive_apply(engine, store.upload_dir, user["email"], body.get("reason", ""),
+                                days=body.get("days", 90))
+
+    @app.get("/api/admin/storage-health")
+    def a_storage_health(user: dict = Depends(admin)):
+        """Read-only storage and import diagnostics for cost/history verification."""
+        with engine.connect() as c:
+            shipment_current = c.execute(select(func.count()).select_from(shipments).where(shipments.c.to_import.is_(None))).scalar()
+            shipment_versions = c.execute(select(func.count()).select_from(shipments).where(shipments.c.to_import.is_not(None))).scalar()
+            profit_current = c.execute(select(func.count()).select_from(profit_lines).where(profit_lines.c.to_import.is_(None))).scalar()
+            profit_versions = c.execute(select(func.count()).select_from(profit_lines).where(profit_lines.c.to_import.is_not(None))).scalar()
+            import_counts = c.execute(select(imports.c.status, func.count()).group_by(imports.c.status)).all()
+            upload_counts = c.execute(select(uploads.c.status, func.count()).group_by(uploads.c.status)).all()
+            latest = c.execute(select(imports.c.id, imports.c.company, imports.c.report_type, imports.c.file_name,
+                                      imports.c.report_time, imports.c.range_from, imports.c.range_to,
+                                      imports.c.row_count, imports.c.status)
+                                .order_by(imports.c.id.desc()).limit(30)).mappings().all()
+            if engine.dialect.name == "postgresql":
+                db_bytes = c.exec_driver_sql("SELECT pg_database_size(current_database())").scalar()
+            elif engine.dialect.name == "sqlite":
+                page_count = c.exec_driver_sql("PRAGMA page_count").scalar()
+                page_size = c.exec_driver_sql("PRAGMA page_size").scalar()
+                db_bytes = int(page_count or 0) * int(page_size or 0)
+            else:
+                db_bytes = None
+        try:
+            source_archive = AR.archive_preview(engine, store.upload_dir, days=90)
+        except OSError:
+            log.exception("could not inspect archived source workbooks")
+            source_archive = {"status": "unavailable", "archive_files_total": None, "archive_bytes_total": None}
+        return {
+            "report_storage_mode": "replace" if config.replace_reports() else "versioned",
+            "static_history": config.static_history(),
+            "history_start": os.environ.get("REPORT_HISTORY_START") or None,
+            "shipment_rows": {"current": int(shipment_current or 0), "superseded_versions": int(shipment_versions or 0)},
+            "profit_rows": {"current": int(profit_current or 0), "superseded_versions": int(profit_versions or 0)},
+            "imports_by_status": {str(k): int(v) for k, v in import_counts},
+            "uploads_by_status": {str(k): int(v) for k, v in upload_counts},
+            "database_size_bytes": int(db_bytes) if db_bytes is not None else None,
+            "process_rss_mb": _rss_mb(),
+            "memory_threshold_mb": _memory_threshold_mb(),
+            "memory_warning": (_rss_mb() is not None and _rss_mb() >= _memory_threshold_mb()),
+            "dataset_cache": {"entries": len(store.cache), "compressed_bytes": store.cache.current_bytes,
+                              "max_bytes": store.cache.max_bytes, "max_entries": store.cache.max_entries},
+            "source_archive": source_archive,
+            "recent_imports": [dict(r) for r in latest],
+        }
+
     @app.get("/api/admin/settings")
     def a_settings(user: dict = Depends(admin)): return ops.get_settings(engine)
 
@@ -1270,7 +1412,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
 
     try: bad = [c for c in setup_checks() if not c["ok"] and c["key"] in ("secret", "ingest", "db", "uploads", "smtp")]
     except Exception: bad = []
-    log.warning("Started. Address: %s | database: %s | still to set up: %s", base_url if (explicit or rdom) else "taken from the browser (BASE_URL is not needed)", engine.dialect.name, ", ".join(c["key"] for c in bad) or "nothing")
+    log.warning("Started. Address: %s | database: %s | storage_mode: %s | static_history: %s | cache_budget_bytes: %d | cache_max_entries: %d | still to set up: %s", base_url if (explicit or rdom) else "taken from the browser (BASE_URL is not needed)", engine.dialect.name, ("replace" if config.replace_reports() else "versioned"), config.static_history(), store.cache.max_bytes, store.cache.max_entries, ", ".join(c["key"] for c in bad) or "nothing")
     return app
 
 
