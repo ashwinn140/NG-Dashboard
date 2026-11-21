@@ -1,0 +1,30 @@
+name: NG-Dashboard safe lifecycle controller
+
+on:
+  schedule:
+    # 09:00 IST start check, then 20:00-23:45 IST safe shutdown/defer checks.
+    - cron: '0,15,30,45 14-18,3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lifecycle:
+    if: ${{ secrets.RAILWAY_API_TOKEN != '' && secrets.LIFECYCLE_CONTROL_TOKEN != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      NG_DASHBOARD_URL: https://ng-dashboard-production.up.railway.app
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+      LIFECYCLE_CONTROL_TOKEN: ${{ secrets.LIFECYCLE_CONTROL_TOKEN }}
+      RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+      RAILWAY_ENVIRONMENT_ID: ${{ vars.RAILWAY_ENVIRONMENT_ID }}
+      RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_SERVICE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run fail-safe lifecycle decision
+        run: python ops/lifecycle_controller.py
