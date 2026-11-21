@@ -347,8 +347,8 @@ def enqueue_due_schedules(engine, now: datetime | None = None) -> int:
 
 class SchedulerWorker:
     """Opt-in polling worker. No delivery begins unless REPORT_SCHEDULER_ENABLED=true."""
-    def __init__(self, engine, store, poll_seconds: int = 5):
-        self.engine, self.store, self.poll_seconds = engine, store, max(2, int(poll_seconds))
+    def __init__(self, engine, store, poll_seconds: int = 60):
+        self.engine, self.store, self.poll_seconds = engine, store, max(30, int(poll_seconds))
         self._stop = threading.Event()
         self._thread = None
 
