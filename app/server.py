@@ -169,14 +169,14 @@ class Store:
     def _worker(self):
         while not self.stop:
             if os.environ.get("IMPORTS_PAUSED") == "1":
-                self.wake.wait(60); self.wake.clear(); continue
+                self.wake.wait(360); self.wake.clear(); continue
             r = self._next()
             if not r:
                 # Rebuild only after a promoted dataset changed. Failed, duplicate,
                 # stale and held files must not trigger an expensive full rebuild.
                 if self.needs_warm and self.warm():
                     self.needs_warm = False
-                self.idle.set(); self.wake.wait(60); self.wake.clear(); continue
+                self.idle.set(); self.wake.wait(360); self.wake.clear(); continue
             self.idle.clear(); changed = False
             try:
                 # Do not retain/build a second dashboard dataset alongside a large workbook.
