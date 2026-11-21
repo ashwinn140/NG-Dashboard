@@ -215,6 +215,21 @@ const VIEW={
   const kpi=(value,label)=>h('div',{class:'kpi'},h('b',null,value),h('span',null,label));
   const importRows=(d.recent_imports||[]).map(r=>[r.id,r.company||'',r.report_type||'',r.file_name||'',fd(r.report_time),r.range_from||'—',r.range_to||'—',r.row_count??'—',pill(r.status)]);
   const statusRows=Object.entries(d.imports_by_status||{}).map(([k,v])=>[k,v]);
+  const archiveBox=h('div');
+  const archiveDays=h('input',{type:'number',min:'30',max:'3650',value:'90'});
+  const archivePreview=h('button',{class:'btn',onclick:async()=>{
+   try{
+    const p=await api('/api/admin/archive-retention?days='+encodeURIComponent(archiveDays.value));
+    archiveBox.replaceChildren(h('pre',{style:'white-space:pre-wrap'},JSON.stringify(p,null,2)),
+     h('button',{class:'btn danger',onclick:async()=>{
+      const reason=prompt('Reason for removing old archived source workbooks?');
+      if(!reason)return;
+      if(!confirm('Delete '+p.eligible_files+' archived workbook(s), freeing up to '+bytes(p.eligible_bytes)+'? Imported business data and audit records will remain.'))return;
+      try{const done=await api('/api/admin/archive-retention',{method:'POST',json:{days:Number(archiveDays.value),reason}});archiveBox.replaceChildren(h('p',{class:'ok'},'Removed '+done.removed_files+' file(s), '+bytes(done.removed_bytes)+'. Import audit records and loaded business data were retained.'))}catch(e){toast(e.message)}
+     }},'Apply archive cleanup'));
+   }catch(e){toast(e.message)}
+  }},'Preview old source files');
+  const archivePanel=h('div',{class:'card'},h('h3',null,'Archived source workbook cleanup'),h('p',{class:'note'},'This removes only old archived .xlsx source files. It never removes loaded shipment/Job Profit rows or import audit metadata. Failed, held, queued and processing files are protected. Preview first; apply requires a reason.'),h('div',{class:'row'},h('label',null,'Keep source files for at least (days)',archiveDays),archivePreview),archiveBox);
   return h('div',null,
    h('div',{class:'card',style:'margin-top:.8rem'},h('h2',null,'Storage & memory health'),h('p',{class:'note'},'Read-only diagnostics. Superseded rows are historical versions, not part of the active in-memory dashboard dataset. Use this view to verify whether incoming daily reports replace current rows or retain additional versions.'),
     h('div',{class:'kpis'},kpi(d.storage_mode,'Shipment/JPR storage mode'),kpi(d.static_history?'On':'Off','Previous financial years frozen'),kpi(d.process_rss_mb==null?'—':d.process_rss_mb+' MB','Current process RSS'),kpi(bytes(d.database_size_bytes),'Postgres database size'),kpi(bytes(d.dataset_cache?.compressed_bytes),'Compressed cache in use'),kpi(bytes(d.dataset_cache?.max_bytes),'Cache byte limit')),
@@ -226,6 +241,7 @@ const VIEW={
     h('h3',null,'Import status counts'),table(['Status','Files'],statusRows),
     h('p',{class:'note'},'Cache entries: '+(d.dataset_cache?.entries??'—')+' / '+(d.dataset_cache?.max_entries??'—')+'. Import metadata and source workbook archives are tracked separately from active dashboard rows.')
    ),
+   archivePanel,
    h('div',{class:'card'},h('h2',null,'Latest received reports'),table(['Import ID','Company','Report','File','Received','Range from','Range to','Rows','Status'],importRows))
   );
  },
