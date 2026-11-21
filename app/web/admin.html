@@ -219,7 +219,7 @@ async function uploader(kind,title,blurb){const w=h('div');const files=h('input'
  const poll=async(ids)=>{const rows=await api('/api/admin/uploads');const mine=rows.filter(r=>ids.includes(r.id));status.replaceChildren(table(['File','Status','Result'],mine.map(r=>[r.file_name,pill(r.status),h('span',{class:'note'},r.result?(r.result.status+(r.result.message?': '+String(r.result.message).slice(0,140):'')+(r.result.new!=null?' · '+r.result.new+' new, '+r.result.changed+' changed, '+r.result.ended+' gone':'')):'')])));if(mine.some(r=>r.status==='queued'||r.status==='processing'))setTimeout(()=>poll(ids),2000)};
  w.append(h('div',{class:'card',style:'margin-top:.8rem'},h('h2',null,title),h('p',{class:'note'},blurb),drop,h('div',{class:'row'},check),out));return w}
 (()=>{const t=$('#sidebarToggle'),b=$('#sidebarBackdrop');const small=()=>window.matchMedia('(max-width:900px)').matches;const sync=()=>t.setAttribute('aria-expanded',String(small()?document.body.classList.contains('sidebar-open'):!document.body.classList.contains('sidebar-compact')));if(localStorage.getItem('ng-admin-sidebar')==='compact')document.body.classList.add('sidebar-compact');t.onclick=()=>{if(small())document.body.classList.toggle('sidebar-open');else{document.body.classList.toggle('sidebar-compact');localStorage.setItem('ng-admin-sidebar',document.body.classList.contains('sidebar-compact')?'compact':'expanded')}sync()};b.onclick=()=>{document.body.classList.remove('sidebar-open');sync()};document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.body.classList.contains('sidebar-open')){document.body.classList.remove('sidebar-open');sync();t.focus()}});window.addEventListener('resize',sync);sync()})();
-(async()=>{try{ME=await api('/api/me');CSRF=ME.csrf;$('#who').textContent=ME.name;nav();show()}catch(e){document.body.append(h('p',null,e.message))}$('#out').onclick=async()=>{await api('/auth/logout',{method:'POST'});location.href='/login'}})();
+(async()=>{try{ME=await api('/api/me');CSRF=ME.csrf;window.NG_CSRF=CSRF;$('#who').textContent=ME.name;nav();show()}catch(e){document.body.append(h('p',null,e.message))}$('#out').onclick=async()=>{await api('/auth/logout',{method:'POST'});location.href='/login'}})();
 </script><script>
 (function(){
 'use strict';
@@ -270,5 +270,5 @@ sections.forEach(([label,key],i)=>ux.addCommand(label,()=>document.querySelector
 ux.addCommand('Open business dashboard',()=>location.assign('/'));
 
 })();
-</script></body></html>
+</script><script src="/assets/activity.js" defer></script></body></html>
 
