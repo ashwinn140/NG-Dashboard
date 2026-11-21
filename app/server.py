@@ -1322,7 +1322,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
 
     try: bad = [c for c in setup_checks() if not c["ok"] and c["key"] in ("secret", "ingest", "db", "uploads", "smtp")]
     except Exception: bad = []
-    log.warning("Started. Address: %s | database: %s | still to set up: %s", base_url if (explicit or rdom) else "taken from the browser (BASE_URL is not needed)", engine.dialect.name, ", ".join(c["key"] for c in bad) or "nothing")
+    log.warning("Started. Address: %s | database: %s | storage_mode: %s | static_history: %s | cache_budget_bytes: %d | cache_max_entries: %d | still to set up: %s", base_url if (explicit or rdom) else "taken from the browser (BASE_URL is not needed)", engine.dialect.name, os.environ.get("REPORT_STORAGE_MODE", "versioned").strip().lower(), os.environ.get("REPORT_STATIC_HISTORY", "0").strip().lower() in ("1", "true", "yes"), store.cache.max_bytes, store.cache.max_entries, ", ".join(c["key"] for c in bad) or "nothing")
     return app
 
 
