@@ -309,19 +309,8 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         raw = request.cookies.get("ng_session")
         if not raw:
             raise HTTPException(401, "Please sign in.")
-        session_id = auth.h("s:" + raw)
-        now = datetime.utcnow()
-        with engine.begin() as conn:
-            existing = conn.execute(select(session_activity.c.last_activity_at).where(
-                session_activity.c.session_id == session_id)).first()
-            if existing:
-                if existing.last_activity_at <= now - timedelta(minutes=2):
-                    conn.execute(update(session_activity).where(
-                        session_activity.c.session_id == session_id).values(
-                            user_id=user["id"], last_activity_at=now))
-            else:
-                conn.execute(insert(session_activity).values(
-                    session_id=session_id, user_id=user["id"], last_activity_at=now))
+        if not auth.record_activity(engine, raw, user["id"]):
+            raise HTTPException(401, "Please sign in.")
         return {"ok": True}
 
     @app.get("/internal/lifecycle-state")
