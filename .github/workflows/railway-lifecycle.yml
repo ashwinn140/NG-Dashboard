@@ -28,7 +28,7 @@ jobs:
     timeout-minutes: 6
     env:
       NG_DASHBOARD_URL: https://ng-dashboard-production.up.railway.app
-      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+      RAILWAY_PROJECT_TOKEN: ${{ secrets.RAILWAY_PROJECT_TOKEN }}
       LIFECYCLE_CONTROL_TOKEN: ${{ secrets.LIFECYCLE_CONTROL_TOKEN }}
       RAILWAY_PROJECT_ID: b31d8080-4ed6-4317-9299-e7a8423068d6
       RAILWAY_ENVIRONMENT_ID: 410fd484-cba1-4ade-b831-b6c76e0018e1
@@ -41,7 +41,7 @@ jobs:
       - name: Check controller credentials are configured
         id: credentials
         run: |
-          if [ -z "$RAILWAY_API_TOKEN" ] || [ -z "$LIFECYCLE_CONTROL_TOKEN" ]; then
+          if [ -z "$RAILWAY_PROJECT_TOKEN" ] || [ -z "$LIFECYCLE_CONTROL_TOKEN" ]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
             echo "Lifecycle controller is inactive until its GitHub secrets and variables are configured."
           else
