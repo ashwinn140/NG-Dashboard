@@ -143,7 +143,7 @@ async function api(path,opt){opt=opt||{};const o={method:opt.method||'GET',heade
  if(opt.json!==undefined){o.headers['Content-Type']='application/json';o.body=JSON.stringify(opt.json)}if(opt.form)o.body=opt.form;
  pendingRequests++;setBusy();let r;try{r=await fetch(path,o)}finally{pendingRequests--;setBusy()}if(r.status===401){location.href='/login';return}let j=null;try{j=await r.json()}catch(e){}if(!r.ok)throw new Error((j&&j.detail)||'Something went wrong ('+r.status+')');return j}
 const fd=d=>{if(!d)return '';const s=String(d),dt=new Date(/[zZ]$|[+-]\d\d:?\d\d$/.test(s)?s:s+'Z');return isNaN(dt)?s.slice(0,16).replace('T',' '):dt.toLocaleString([],{dateStyle:'medium',timeStyle:'short'})};const pill=(s)=>h('span',{class:'pill '+({promoted:'ok',done:'ok',approved:'ok',ready:'ok',duplicate:'muted',stale:'warn',needs_review:'warn',failed:'bad',rejected:'bad',queued:'warn',processing:'warn',undone:'muted',retried:'muted'}[s]||'')},String(s||'').replace('_',' '));
-const SECTIONS=[['overview','Overview'],['imports','Imports'],['upload','Upload a report'],['history','Previous reports'],['master','Organization master'],['users','Users'],['settings','Settings'],['audit','Activity log']];
+const SECTIONS=[['overview','Overview'],['imports','Imports'],['upload','Upload a report'],['history','Previous reports'],['storage','Storage & memory'],['master','Organization master'],['users','Users'],['settings','Settings'],['audit','Activity log']];
 let cur='overview';
 function nav(){const n=$('#nav');n.replaceChildren(...SECTIONS.map(([k,l])=>h('button',{role:'tab','aria-selected':k===cur,onclick:()=>{cur=k;document.body.classList.remove('sidebar-open');document.getElementById('sidebarToggle')?.setAttribute('aria-expanded',String(!window.matchMedia('(max-width:900px)').matches&&!document.body.classList.contains('sidebar-compact')));nav();show()}},l)))}
 async function show(){const m=$('#main');m.replaceChildren(h('div',{class:'loading-panel',role:'status'},h('span',{class:'loading-spinner','aria-hidden':'true'}),h('span',null,'Loading '+(SECTIONS.find(s=>s[0]===cur)||['','section'])[1]+'…')));try{m.replaceChildren(await VIEW[cur]())}catch(e){m.replaceChildren(h('div',{class:'card'},h('p',{class:'bad'},e.message)))}}
@@ -209,6 +209,26 @@ const VIEW={
    h('button',{class:'btn primary',onclick:async()=>{try{await api('/api/admin/settings',{method:'PUT',json:Object.fromEntries(Object.keys(f).map(k=>[k,f[k].value]))});toast('Saved')}catch(e){toast(e.message)}}},'Save settings'),
    h('h2',{style:'margin-top:1.2rem'},'Keep only the last years of history'),h('p',{class:'note'},'Removes shipment and profit history older than the years above. Preview first; nothing is removed until you apply it with a reason.'),
    h('button',{class:'btn',onclick:async()=>{try{const x=await api('/api/admin/retention');ret.replaceChildren(h('pre',{style:'white-space:pre-wrap'},JSON.stringify(x,null,1)),h('div',{class:'row'},h('label',null,'Reason',h('input',{id:'ret_reason',style:'min-width:18rem'})),h('button',{class:'btn danger',onclick:async()=>{try{const y=await api('/api/admin/retention',{method:'POST',json:{reason:$('#ret_reason').value}});toast('Done');ret.replaceChildren(h('pre',null,JSON.stringify(y,null,1)))}catch(e){toast(e.message)}}},'Apply')))}catch(e){toast(e.message)}}},'Preview what would be removed'),ret);return w},
+ async storage(){
+  const d=await api('/api/admin/storage-health');
+  const bytes=n=>n==null?'—':n>=1073741824?(n/1073741824).toFixed(2)+' GiB':n>=1048576?(n/1048576).toFixed(1)+' MiB':n.toLocaleString()+' B';
+  const kpi=(value,label)=>h('div',{class:'kpi'},h('b',null,value),h('span',null,label));
+  const importRows=(d.recent_imports||[]).map(r=>[r.id,r.company||'',r.report_type||'',r.file_name||'',fd(r.report_time),r.range_from||'—',r.range_to||'—',r.row_count??'—',pill(r.status)]);
+  const statusRows=Object.entries(d.imports_by_status||{}).map(([k,v])=>[k,v]);
+  return h('div',null,
+   h('div',{class:'card',style:'margin-top:.8rem'},h('h2',null,'Storage & memory health'),h('p',{class:'note'},'Read-only diagnostics. Superseded rows are historical versions, not part of the active in-memory dashboard dataset. Use this view to verify whether incoming daily reports replace current rows or retain additional versions.'),
+    h('div',{class:'kpis'},kpi(d.storage_mode,'Shipment/JPR storage mode'),kpi(d.static_history?'On':'Off','Previous financial years frozen'),kpi(d.process_rss_mb==null?'—':d.process_rss_mb+' MB','Current process RSS'),kpi(bytes(d.database_size_bytes),'Postgres database size'),kpi(bytes(d.dataset_cache?.compressed_bytes),'Compressed cache in use'),kpi(bytes(d.dataset_cache?.max_bytes),'Cache byte limit')),
+    h('h3',null,'Current vs superseded data'),
+    table(['Dataset','Current rows','Superseded versions'],[
+     ['Shipment register',Number(d.shipment_rows?.current||0).toLocaleString(),Number(d.shipment_rows?.superseded_versions||0).toLocaleString()],
+     ['Job Profit rows',Number(d.profit_rows?.current||0).toLocaleString(),Number(d.profit_rows?.superseded_versions||0).toLocaleString()]
+    ]),
+    h('h3',null,'Import status counts'),table(['Status','Files'],statusRows),
+    h('p',{class:'note'},'Cache entries: '+(d.dataset_cache?.entries??'—')+' / '+(d.dataset_cache?.max_entries??'—')+'. Import metadata and source workbook archives are tracked separately from active dashboard rows.')
+   ),
+   h('div',{class:'card'},h('h2',null,'Latest received reports'),table(['Import ID','Company','Report','File','Received','Range from','Range to','Rows','Status'],importRows))
+  );
+ },
  async audit(){const r=await api('/api/admin/audit');return h('div',{class:'card',style:'margin-top:.8rem'},h('h2',null,'Activity log'),table(['When','Who','What','Detail'],r.map(x=>[fd(x.at),x.user,x.action,h('span',{class:'note'},x.detail)])))}};
 async function uploader(kind,title,blurb){const w=h('div');const files=h('input',{type:'file',accept:'.xlsx',multiple:true,id:'files'});const out=h('div');let prev=[];const approve=h('input',{type:'checkbox'});const reason=h('input',{placeholder:'Reason (needed to load a held report)',style:'min-width:16rem'});
  const drop=h('div',{class:'drop'},h('p',null,'Drop .xlsx files here, or choose them'),files);['dragover','dragenter'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('over')}));['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('over');if(e==='drop'){files.files=ev.dataTransfer.files}}));
