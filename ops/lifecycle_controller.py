@@ -68,11 +68,11 @@ def latest_deployment(token: str, project: str, environment: str, service: str) 
 def start_if_needed(base_url: str, token: str, project: str, environment: str, service: str):
     # Give native serverless wake-up/cold-start time before deciding a manual
     # redeploy is required. This avoids unnecessary morning deployments.
-    for attempt in range(6):
+    for attempt in range(4):
         if health(base_url):
             print("09:00 IST start check: dashboard healthy; no redeploy needed.")
             return
-        if attempt < 5:
+        if attempt < 3:
             time.sleep(10)
     deployment = latest_deployment(token, project, environment, service)
     mutation = "mutation Redeploy($id: String!) { deploymentRedeploy(id: $id) { id status } }"
@@ -129,7 +129,7 @@ def main():
     project = os.environ["RAILWAY_PROJECT_ID"]
     environment = os.environ["RAILWAY_ENVIRONMENT_ID"]
     service = os.environ["RAILWAY_SERVICE_ID"]
-    if now.hour == 9 and now.minute < 15:
+    if now.hour == 9:
         start_if_needed(base, railway, project, environment, service)
     elif now.hour >= 20 and now.hour <= 23:
         stop_if_safe(base, os.environ["LIFECYCLE_CONTROL_TOKEN"], railway,
