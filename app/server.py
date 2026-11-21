@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Respon
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import select, func, insert, delete, update, and_, or_
 from sqlalchemy.exc import IntegrityError
-from . import auth, admin_ops as ops, dataset as DS, mailer, master as MST, processor as P, profit as J, metric_definitions as MD, metric_execution as MX, report_scheduler as RS, report_scheduler_service as RSS
+from . import auth, config, admin_ops as ops, dataset as DS, mailer, master as MST, processor as P, profit as J, metric_definitions as MD, metric_execution as MX, report_scheduler as RS, report_scheduler_service as RSS
 from .cache import ByteBoundedLRU
 from .db import get_engine, imports, uploads, users, prefs, admin_log, shipments, profit_lines, org_master, sessions, session_activity, report_runs
 
@@ -342,8 +342,8 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             "last_activity_at": last_activity.isoformat() + "Z" if last_activity else None,
             "active_authenticated_requests": int(getattr(app.state, "active_authenticated_requests", 0)),
             "protected_jobs": {"imports": int(queued_imports or 0), "scheduled_reports": int(pending_reports or 0)},
-            "storage_mode": os.environ.get("REPORT_STORAGE_MODE", "versioned").strip().lower(),
-            "static_history": os.environ.get("REPORT_STATIC_HISTORY", "0").strip().lower() in ("1", "true", "yes"),
+            "storage_mode": "replace" if config.replace_reports() else "versioned",
+            "static_history": config.static_history(),
         }
 
     @app.get("/auth/options")
@@ -1338,8 +1338,8 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             else:
                 db_bytes = None
         return {
-            "report_storage_mode": os.environ.get("REPORT_STORAGE_MODE", "versioned").strip().lower(),
-            "static_history": os.environ.get("REPORT_STATIC_HISTORY", "0").strip().lower() in ("1", "true", "yes"),
+            "report_storage_mode": "replace" if config.replace_reports() else "versioned",
+            "static_history": config.static_history(),
             "history_start": os.environ.get("REPORT_HISTORY_START") or None,
             "shipment_rows": {"current": int(shipment_current or 0), "superseded_versions": int(shipment_versions or 0)},
             "profit_rows": {"current": int(profit_current or 0), "superseded_versions": int(profit_versions or 0)},
@@ -1380,7 +1380,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
 
     try: bad = [c for c in setup_checks() if not c["ok"] and c["key"] in ("secret", "ingest", "db", "uploads", "smtp")]
     except Exception: bad = []
-    log.warning("Started. Address: %s | database: %s | storage_mode: %s | static_history: %s | cache_budget_bytes: %d | cache_max_entries: %d | still to set up: %s", base_url if (explicit or rdom) else "taken from the browser (BASE_URL is not needed)", engine.dialect.name, os.environ.get("REPORT_STORAGE_MODE", "versioned").strip().lower(), os.environ.get("REPORT_STATIC_HISTORY", "0").strip().lower() in ("1", "true", "yes"), store.cache.max_bytes, store.cache.max_entries, ", ".join(c["key"] for c in bad) or "nothing")
+    log.warning("Started. Address: %s | database: %s | storage_mode: %s | static_history: %s | cache_budget_bytes: %d | cache_max_entries: %d | still to set up: %s", base_url if (explicit or rdom) else "taken from the browser (BASE_URL is not needed)", engine.dialect.name, ("replace" if config.replace_reports() else "versioned"), config.static_history(), store.cache.max_bytes, store.cache.max_entries, ", ".join(c["key"] for c in bad) or "nothing")
     return app
 
 
