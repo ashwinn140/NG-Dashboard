@@ -631,11 +631,13 @@ def health(engine, today: date | None = None, now: datetime | None = None, max_a
 
 
 def retention_preview(engine, today: date | None = None, years: int = 3, fy_start_month: int = 1) -> dict:
-    """What would be removed if history were limited to the window: shipment versions dated before its first day."""
+    """Preview shipment and job-profit rows older than the retained financial-year window."""
     start, _ = history_window(today, years, fy_start_month)
     with engine.connect() as conn:
-        n = conn.execute(select(func.count()).select_from(shipments).where(shipments.c.shipment_date < start)).scalar()
-    return dict(window_start=start, rows_before_window=n)
+        shipment_rows = conn.execute(select(func.count()).select_from(shipments).where(shipments.c.shipment_date < start)).scalar()
+        profit_rows = conn.execute(select(func.count()).select_from(profit_lines).where(profit_lines.c.job_date < start)).scalar()
+    return dict(window_start=start, rows_before_window=shipment_rows, shipment_rows_before_window=shipment_rows,
+                profit_rows_before_window=profit_rows, total_rows_before_window=shipment_rows + profit_rows)
 
 
 def _retention_maintenance(engine, configure=False):
@@ -659,18 +661,28 @@ def apply_retention(engine, approved_by: str, reason: str, today: date | None = 
     from sqlalchemy import delete
     start, _ = history_window(today, years, fy_start_month)
     _retention_maintenance(engine, configure=True)
-    removed, batches = 0, 0
+    removed_shipments, removed_profit, batches = 0, 0, 0
     while True:
         with engine.begin() as conn:
             ids = conn.execute(select(shipments.c.id).where(shipments.c.shipment_date < start).limit(250)).scalars().all()
             if not ids:
                 break
-            removed += conn.execute(delete(shipments).where(shipments.c.id.in_(ids))).rowcount
+            removed_shipments += conn.execute(delete(shipments).where(shipments.c.id.in_(ids))).rowcount
+        batches += 1
+        if batches % 32 == 0:
+            _retention_maintenance(engine)
+    while True:
+        with engine.begin() as conn:
+            ids = conn.execute(select(profit_lines.c.id).where(profit_lines.c.job_date < start).limit(250)).scalars().all()
+            if not ids:
+                break
+            removed_profit += conn.execute(delete(profit_lines).where(profit_lines.c.id.in_(ids))).rowcount
         batches += 1
         if batches % 32 == 0:
             _retention_maintenance(engine)
     _retention_maintenance(engine)
+    removed = removed_shipments + removed_profit
     with engine.begin() as conn:
-        conn.execute(insert(admin_log).values(at=datetime.utcnow(), user=approved_by, action="retention", detail=f"Removed {removed} shipment versions dated before {start}. Years kept: {years}. Year starts in month {fy_start_month}. Reason: {reason}"))
-    return dict(status="done", removed=removed, window_start=start)
+        conn.execute(insert(admin_log).values(at=datetime.utcnow(), user=approved_by, action="retention", detail=f"Removed {removed_shipments} shipment versions and {removed_profit} job-profit rows dated before {start}. Years kept: {years}. Year starts in month {fy_start_month}. Reason: {reason}"))
+    return dict(status="done", removed=removed, removed_shipments=removed_shipments, removed_profit_lines=removed_profit, window_start=start)
 
