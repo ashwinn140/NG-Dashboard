@@ -53,7 +53,7 @@ class ReplacementTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.engine = get_engine('sqlite:///' + self.tmp.name + '/db.sqlite')
-        self.mode = patch.dict(os.environ, REPORT_STORAGE_MODE='replace')
+        self.mode = patch.dict(os.environ, REPORT_STORAGE_MODE='replace', REPORT_STATIC_HISTORY='0')
         self.mode.start()
         self.clock = datetime(2026, 11, 7)
         self.sequence = 0
