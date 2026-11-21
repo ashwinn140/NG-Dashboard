@@ -17,7 +17,10 @@ def replace_reports() -> bool:
 
 
 def static_history() -> bool:
-    return os.environ.get("REPORT_STATIC_HISTORY", "0").strip().lower() in ("1", "true", "yes")
+    # Replacement mode is intended to keep previous financial years stable.
+    # Preserve legacy behaviour in versioned mode unless explicitly enabled.
+    default = "1" if replace_reports() else "0"
+    return os.environ.get("REPORT_STATIC_HISTORY", default).strip().lower() in ("1", "true", "yes")
 
 # Company name printed in row 1 of each report  ->  short code used in the app.
 COMPANIES = {
