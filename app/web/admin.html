@@ -285,7 +285,7 @@ window.NGWorkspace={tools,addCommand:(label,run)=>{items.push({label,run});rende
 const ux=window.NGWorkspace;
 const header=document.querySelector('.admin-main header')||document.querySelector('header');
 if(header)header.insertBefore(ux.tools,header.querySelector('#who'));
-const sections=[['Overview','overview'],['Imports','imports'],['Upload a report','upload'],['Previous reports','history'],['Organization master','master'],['Users','users'],['Settings','settings'],['Activity log','audit']];
+const sections=[['Overview','overview'],['Imports','imports'],['Upload a report','upload'],['Previous reports','history'],['Storage & memory','storage'],['Organization master','master'],['Users','users'],['Settings','settings'],['Activity log','audit']];
 sections.forEach(([label,key],i)=>ux.addCommand(label,()=>document.querySelectorAll('#nav button')[i]?.click()));
 ux.addCommand('Open business dashboard',()=>location.assign('/'));
 
