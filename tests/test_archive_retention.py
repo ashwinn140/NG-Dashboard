@@ -46,6 +46,7 @@ class ArchiveRetentionTests(unittest.TestCase):
 
     def test_preview_excludes_recent_and_retryable_source_files(self):
         result = archive_preview(self.engine, self.root, days=90, now=self.now)
+        self.assertEqual(result["archive_files_total"], 3)
         self.assertEqual(result["eligible_files"], 1)
         self.assertEqual(result["sample"], ["old-promoted.xlsx"])
         self.assertGreater(result["eligible_bytes"], 0)
