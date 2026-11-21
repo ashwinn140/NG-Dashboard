@@ -1,7 +1,7 @@
 """The web app: sign-in, the dashboard data, the admin portal and the endpoint the Gmail script posts to."""
 import gc, gzip, hashlib, io, json, logging, os, secrets, shutil, tempfile, threading, time
 from collections import defaultdict, deque
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse
 import pandas as pd
@@ -11,7 +11,7 @@ from sqlalchemy import select, func, insert, delete, update, and_, or_
 from sqlalchemy.exc import IntegrityError
 from . import auth, admin_ops as ops, dataset as DS, mailer, master as MST, processor as P, profit as J, metric_definitions as MD, metric_execution as MX, report_scheduler as RS, report_scheduler_service as RSS
 from .cache import ByteBoundedLRU
-from .db import get_engine, imports, uploads, users, prefs, admin_log, shipments, profit_lines, org_master
+from .db import get_engine, imports, uploads, users, prefs, admin_log, shipments, profit_lines, org_master, sessions, session_activity, report_runs
 
 log = logging.getLogger("app")
 WEB = Path(__file__).parent / "web"
@@ -226,6 +226,8 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         return f"{proto}://{request.headers.get('host', 'localhost')}"
     app = FastAPI(title="Performance dashboard", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store = store; app.state.engine = engine
+    app.state.active_authenticated_requests = 0
+    app.state.active_request_lock = threading.Lock()
     hits: dict = defaultdict(deque); app.state.hits = hits
 
     # bootstrap the first administrator (a bad value is reported, never allowed to stop the app from starting)
@@ -241,11 +243,20 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
 
     @app.middleware("http")
     async def headers(request: Request, call_next):
-        resp = await call_next(request)
-        resp.headers.update({"X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "same-origin", "Cache-Control": resp.headers.get("Cache-Control", "no-store"),
-                             "Permissions-Policy": "geolocation=(), camera=(), microphone=()"})
-        if secure: resp.headers["Strict-Transport-Security"] = "max-age=31536000"
-        return resp
+        tracked = bool(request.cookies.get("ng_session")) and request.url.path not in ("/healthz", "/api/activity/heartbeat")
+        if tracked:
+            with app.state.active_request_lock:
+                app.state.active_authenticated_requests += 1
+        try:
+            resp = await call_next(request)
+            resp.headers.update({"X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "same-origin", "Cache-Control": resp.headers.get("Cache-Control", "no-store"),
+                                 "Permissions-Policy": "geolocation=(), camera=(), microphone=()"})
+            if secure: resp.headers["Strict-Transport-Security"] = "max-age=31536000"
+            return resp
+        finally:
+            if tracked:
+                with app.state.active_request_lock:
+                    app.state.active_authenticated_requests = max(0, app.state.active_authenticated_requests - 1)
 
     def limit(request: Request, n: int = 30):
         ip = (request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else "?")); q = hits[ip]; now = time.time()
@@ -285,8 +296,66 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
     page = lambda name: HTMLResponse((WEB / name).read_text(encoding="utf-8").replace("{{PRODUCT}}", product))
 
     # ------------------------------------------------------------------ pages
+    @app.get("/assets/activity.js")
+    def activity_asset():
+        return Response((WEB / "activity.js").read_text(encoding="utf-8"), media_type="application/javascript", headers={"Cache-Control": "no-store"})
+
     @app.get("/healthz")
     def healthz(): return {"ok": True}
+
+    @app.post("/api/activity/heartbeat")
+    def activity_heartbeat(request: Request, user: dict = Depends(unsafe)):
+        """Record genuine authenticated interaction, throttled to one write per session per 2 minutes."""
+        raw = request.cookies.get("ng_session")
+        if not raw:
+            raise HTTPException(401, "Please sign in.")
+        session_id = auth.h("s:" + raw)
+        now = datetime.utcnow()
+        with engine.begin() as conn:
+            existing = conn.execute(select(session_activity.c.last_activity_at).where(
+                session_activity.c.session_id == session_id)).first()
+            if existing:
+                if existing.last_activity_at <= now - timedelta(minutes=2):
+                    conn.execute(update(session_activity).where(
+                        session_activity.c.session_id == session_id).values(
+                            user_id=user["id"], last_activity_at=now))
+            else:
+                conn.execute(insert(session_activity).values(
+                    session_id=session_id, user_id=user["id"], last_activity_at=now))
+        return {"ok": True}
+
+    @app.get("/internal/lifecycle-state")
+    def lifecycle_state(request: Request):
+        """Machine-only, read-only lifecycle state. Disabled unless a private token is configured."""
+        expected = os.environ.get("LIFECYCLE_CONTROL_TOKEN", "")
+        supplied = request.headers.get("x-lifecycle-token", "")
+        if not expected or not secrets.compare_digest(supplied, expected):
+            raise HTTPException(404, "Not found.")
+        now = datetime.utcnow()
+        with engine.connect() as conn:
+            active_sessions = conn.execute(select(func.count()).select_from(sessions).where(
+                sessions.c.expires_at > now)).scalar()
+            active_activity_sessions = conn.execute(select(func.count()).select_from(
+                session_activity.join(sessions, session_activity.c.session_id == sessions.c.id)).where(
+                sessions.c.expires_at > now,
+                session_activity.c.last_activity_at > now - timedelta(minutes=60))).scalar()
+            last_activity = conn.execute(select(func.max(session_activity.c.last_activity_at)).select_from(
+                session_activity.join(sessions, session_activity.c.session_id == sessions.c.id)).where(
+                sessions.c.expires_at > now)).scalar()
+            queued_imports = conn.execute(select(func.count()).select_from(uploads).where(
+                uploads.c.status.in_(("queued", "processing")))).scalar()
+            pending_reports = conn.execute(select(func.count()).select_from(report_runs).where(
+                report_runs.c.status.in_(("queued", "retry_wait", "generating")))).scalar()
+        return {
+            "checked_at": now.isoformat() + "Z",
+            "active_sessions": int(active_sessions or 0),
+            "recent_activity_sessions": int(active_activity_sessions or 0),
+            "last_activity_at": last_activity.isoformat() + "Z" if last_activity else None,
+            "active_authenticated_requests": int(getattr(app.state, "active_authenticated_requests", 0)),
+            "protected_jobs": {"imports": int(queued_imports or 0), "scheduled_reports": int(pending_reports or 0)},
+            "storage_mode": os.environ.get("REPORT_STORAGE_MODE", "versioned").strip().lower(),
+            "static_history": os.environ.get("REPORT_STATIC_HISTORY", "0").strip().lower() in ("1", "true", "yes"),
+        }
 
     @app.get("/auth/options")
     def auth_options(): return {"email": mailer.configured(), "password": True}
