@@ -28,7 +28,7 @@ import pandas as pd
 from sqlalchemy import and_, bindparam, delete, func, insert, or_, select, text, true, update
 
 from . import config
-from .db import admin_log, current_import, imports, shipments, settings
+from .db import admin_log, current_import, imports, shipments, profit_lines, settings
 
 
 class ReportError(Exception):
