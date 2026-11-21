@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Respon
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import select, func, insert, delete, update, and_, or_
 from sqlalchemy.exc import IntegrityError
-from . import auth, config, admin_ops as ops, dataset as DS, mailer, master as MST, processor as P, profit as J, metric_definitions as MD, metric_execution as MX, report_scheduler as RS, report_scheduler_service as RSS
+from . import auth, config, archive as AR, admin_ops as ops, dataset as DS, mailer, master as MST, processor as P, profit as J, metric_definitions as MD, metric_execution as MX, report_scheduler as RS, report_scheduler_service as RSS
 from .cache import ByteBoundedLRU
 from .db import get_engine, imports, uploads, users, prefs, admin_log, shipments, profit_lines, org_master, sessions, session_activity, report_runs
 
@@ -1314,6 +1314,16 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         if not r: raise HTTPException(429, "Too many links requested for this address. Try again in an hour.")
         token, code, ud = r; sent = mailer.send(u.email, f"Your {product} sign-in link", f"Open this link to sign in (works once, {auth.LINK_MINUTES} minutes):\n{public_base(request)}/auth/verify?t={token}\n\nOr use the code {code} on the sign-in page.")
         return {"sent": sent, "message": "Link sent." if sent else "Email could not be sent. Check email provider settings and delivery logs; password sign-in is still available."}
+
+    @app.get("/api/admin/archive-retention")
+    def a_archive_retention(days: int = 90, user: dict = Depends(admin)):
+        return AR.archive_preview(engine, store.upload_dir, days=days)
+
+    @app.post("/api/admin/archive-retention")
+    def a_archive_retention_apply(request: Request, user: dict = Depends(unsafe)):
+        body = json.loads(request_body(request) or b"{}")
+        return AR.archive_apply(engine, store.upload_dir, user["email"], body.get("reason", ""),
+                                days=body.get("days", 90))
 
     @app.get("/api/admin/storage-health")
     def a_storage_health(user: dict = Depends(admin)):
