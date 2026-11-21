@@ -54,9 +54,9 @@ jobs:
           import re
           from pathlib import Path
           html = Path("app/web/admin.html").read_text(encoding="utf-8")
-          scripts = re.findall(r'<script(?![^>]*\\bsrc=)[^>]*>(.*?)</script>', html, flags=re.I | re.S)
+          scripts = re.findall(r'<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>', html, flags=re.I | re.S)
           if not scripts:
               raise SystemExit("No inline admin script found")
-          Path("/tmp/admin-inline.js").write_text("\\n;\\n".join(scripts), encoding="utf-8")
+          Path("/tmp/admin-inline.js").write_text("\n;\n".join(scripts), encoding="utf-8")
           PY
           node --check /tmp/admin-inline.js
