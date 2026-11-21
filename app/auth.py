@@ -2,7 +2,7 @@
 import hashlib, hmac, os, re, secrets
 from datetime import datetime, timedelta
 from sqlalchemy import select, update, insert, delete, func
-from .db import users, sessions, login_tokens
+from .db import users, sessions, login_tokens, session_activity
 
 LINK_MINUTES = 15            # a link or code works for this long, once
 LINK_REQUESTS_PER_HOUR = 10  # per email address
@@ -88,7 +88,9 @@ def update_user(engine, uid: int, **f) -> dict:
     with engine.begin() as conn:
         if "role" in vals and "finance" not in vals and f.get("reset_finance"): vals["finance"] = finance_default(vals["role"])
         if vals: conn.execute(update(users).where(users.c.id == uid).values(**vals))
-        if vals.get("active") == 0: conn.execute(delete(sessions).where(sessions.c.user_id == uid))
+        if vals.get("active") == 0:
+            conn.execute(delete(session_activity).where(session_activity.c.user_id == uid))
+            conn.execute(delete(sessions).where(sessions.c.user_id == uid))
         r = conn.execute(select(users).where(users.c.id == uid)).first()
     if not r: raise ValueError("No such user.")
     return user_dict(r)
@@ -99,6 +101,7 @@ def set_password(engine, uid: int, pw: str) -> None:
     if p: raise ValueError(p)
     with engine.begin() as conn:
         conn.execute(update(users).where(users.c.id == uid).values(pw_hash=hash_password(pw), pw_set_at=datetime.utcnow(), fail_count=0, locked_until=None))
+        conn.execute(delete(session_activity).where(session_activity.c.user_id == uid))
         conn.execute(delete(sessions).where(sessions.c.user_id == uid))
 
 
@@ -160,6 +163,7 @@ def password_login(engine, login: str, pw: str, now: datetime | None = None):
 def create_session(engine, uid: int, method: str, now: datetime | None = None):
     now = now or datetime.utcnow(); raw = secrets.token_urlsafe(32); csrf = secrets.token_urlsafe(24)
     with engine.begin() as conn:
+        conn.execute(delete(session_activity).where(session_activity.c.last_activity_at < now - timedelta(hours=SESSION_HOURS)))
         conn.execute(delete(sessions).where(sessions.c.expires_at < now))
         conn.execute(insert(sessions).values(id=h("s:" + raw), user_id=uid, csrf=csrf, created_at=now, expires_at=now + timedelta(hours=SESSION_HOURS), method=method))
         conn.execute(update(users).where(users.c.id == uid).values(last_login=now))
@@ -179,4 +183,7 @@ def session_user(engine, raw: str | None, now: datetime | None = None):
 
 def end_session(engine, raw: str | None) -> None:
     if raw:
-        with engine.begin() as conn: conn.execute(delete(sessions).where(sessions.c.id == h("s:" + raw)))
+        session_id = h("s:" + raw)
+        with engine.begin() as conn:
+            conn.execute(delete(session_activity).where(session_activity.c.session_id == session_id))
+            conn.execute(delete(sessions).where(sessions.c.id == session_id))
