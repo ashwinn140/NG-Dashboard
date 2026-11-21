@@ -5,6 +5,14 @@ from ops import lifecycle_controller as lc
 
 
 class LifecycleControllerTests(unittest.TestCase):
+    @patch.object(lc.time, "sleep")
+    @patch.object(lc, "graphql")
+    @patch.object(lc, "health", side_effect=[False, False, True])
+    def test_morning_start_allows_serverless_cold_start_before_redeploy(self, health, graphql, sleep):
+        lc.start_if_needed("https://dashboard.test", "railway", "project", "env", "service")
+        graphql.assert_not_called()
+        self.assertEqual(sleep.call_count, 2)
+
     @patch.object(lc, "graphql")
     @patch.object(lc, "request_json")
     def test_shutdown_defers_for_valid_sessions(self, request, graphql):
