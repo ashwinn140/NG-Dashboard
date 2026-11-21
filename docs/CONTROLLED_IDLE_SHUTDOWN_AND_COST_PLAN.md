@@ -87,6 +87,18 @@ Production service variable names include `REPORT_STORAGE_MODE` and `REPORT_STAT
 
 Retention previously removed only old shipment rows, not `profit_lines`. The preview/apply implementation now counts and removes both shipment and job-profit rows before the retained window, with separate counts in the audit result. It does not delete import audit metadata or source workbook files.
 
+## Session-aware lifecycle implementation
+
+- Added an additive `session_activity` table keyed by the existing hashed session ID. It records only the timestamp of a genuine authenticated interaction; it does not extend the 12-hour login expiry.
+- Dashboard and admin pages send a CSRF-protected heartbeat after pointer, keyboard, touch, wheel or scroll interaction, throttled to one database write per session every two minutes. A visible tab sends a keep-alive every four minutes only while a real interaction occurred within the previous hour; the keep-alive stops after 60 minutes of genuine inactivity.
+- Logout, password reset, account deactivation and stale activity cleanup remove activity records. Session expiry remains unchanged.
+- Added a token-protected read-only `/internal/lifecycle-state` endpoint. It reports valid sessions, recent activity, authenticated in-flight requests, queued/processing imports and queued/retry-wait/generating scheduled reports. If the token is absent or invalid, the endpoint returns 404.
+- Added `/api/admin/storage-health` to report active versus superseded shipment/JPR rows, import statuses, recent imports, DB size, process RSS and cache bytes. This will let us verify the live replacement setting and whether daily imports are accumulating superseded versions after the code is deployed.
+- Import and report-scheduler idle polling is now 360 seconds. This avoids continuous two-/five-second database traffic that could prevent Railway Serverless App Sleep. Upload requests still wake the importer immediately via its event. Scheduled report execution can be delayed by up to roughly six minutes while idle; validate this against the operational SLA.
+- Added `ops/lifecycle_controller.py` and a GitHub Actions workflow. It checks at 09:00 IST and from 20:00-23:45 IST. At 20:00+, it stops only when all valid sessions are gone, no authenticated request is in flight and no protected jobs remain. At 09:00, it checks `/healthz` and only redeploys if the service is not healthy. It never stops Postgres. The workflow remains inactive until the required GitHub secrets/variables and Railway `LIFECYCLE_CONTROL_TOKEN` are configured.
+
+The controller uses Railway's documented `deploymentStop` and `deploymentRedeploy` public API mutations. See <Link url="https://docs.railway.com/integrations/api/manage-deployments" title="Railway deployment API documentation"/>. Railway's native serverless sleep remains responsible for request-driven daytime wake/sleep; no daytime manual stop is issued because that would prevent automatic wake on a user request.
+
 ## Protected job inventory (code review)
 
 The durable job states confirmed in the current code are:
