@@ -181,6 +181,30 @@ def session_user(engine, raw: str | None, now: datetime | None = None):
     d = user_dict(u); d["csrf"] = s.csrf; d["method"] = s.method; return d
 
 
+def record_activity(engine, raw: str, uid: int, now: datetime | None = None, min_interval_seconds: int = 120) -> bool:
+    """Persist a real interaction without extending the authentication session."""
+    if not raw:
+        return False
+    now = now or datetime.utcnow()
+    session_id = h("s:" + raw)
+    with engine.begin() as conn:
+        valid = conn.execute(select(sessions.c.id).where(
+            sessions.c.id == session_id, sessions.c.user_id == uid, sessions.c.expires_at > now)).first()
+        if not valid:
+            return False
+        existing = conn.execute(select(session_activity.c.last_activity_at).where(
+            session_activity.c.session_id == session_id)).first()
+        if existing:
+            if existing.last_activity_at <= now - timedelta(seconds=max(1, min_interval_seconds)):
+                conn.execute(update(session_activity).where(
+                    session_activity.c.session_id == session_id).values(
+                    user_id=uid, last_activity_at=now))
+        else:
+            conn.execute(insert(session_activity).values(
+                session_id=session_id, user_id=uid, last_activity_at=now))
+    return True
+
+
 def end_session(engine, raw: str | None) -> None:
     if raw:
         session_id = h("s:" + raw)
