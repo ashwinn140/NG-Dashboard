@@ -50,7 +50,7 @@ class Store:
         except (TypeError, ValueError): cache_max_bytes = 64 * 1024 * 1024
         try: cache_max_entries = max(0, int(os.environ.get("DATASET_CACHE_MAX_ENTRIES", "20")))
         except (TypeError, ValueError): cache_max_entries = 20
-        self.cache = ByteBoundedLRU(cache_max_bytes, cache_max_entries); self.wake = threading.Event(); self.idle = threading.Event(); self.idle.set(); self.stop = False; self.building = False
+        self.cache = ByteBoundedLRU(cache_max_bytes, cache_max_entries); self.wake = threading.Event(); self.idle = threading.Event(); self.idle.set(); self.stop = False; self.building = False; self.needs_warm = False
         with engine.begin() as c: c.execute(update(uploads).where(uploads.c.status == "processing").values(status="queued"))          # a crash mid-load: try again
         if start_worker:
             self.thread = threading.Thread(target=self._supervise_worker, daemon=True, name="importer"); self.thread.start()
@@ -106,13 +106,13 @@ class Store:
                     log.info("dataset_diagnostics stage=cache_hit cache_entries=%d cache_bytes=%d cache_limit_bytes=%d", len(self.cache), self.cache.current_bytes, self.cache.max_bytes)
             return result
 
-    def warm(self):
-        """Builds the dashboard data ahead of time, so the first person after a load does not wait."""
+    def warm(self) -> bool:
+        """Build once after a successful promotion; return whether the dataset is ready."""
         try:
             with self.lock:
                 with self.engine.connect() as c:
                     if not c.execute(select(func.count()).select_from(shipments).where(shipments.c.to_import.is_(None)).limit(1)).scalar():
-                        return                      # nothing loaded yet: nothing to prepare (and no error to log)
+                        return True
                 if self.full is None or self.full_version != self.version:
                     diagnostics = str(os.environ.get("DATASET_DIAGNOSTICS", "false")).strip().lower() in ("1", "true", "yes", "on")
                     rss_before = _rss_mb() if diagnostics else None
@@ -125,8 +125,10 @@ class Store:
                     if diagnostics:
                         rep_rows = len(self.full.get("rep", [])) if isinstance(self.full, dict) else 0
                         log.info("dataset_diagnostics stage=warm_build_full elapsed_seconds=%.3f rss_before_mb=%s rss_after_mb=%s shipment_rows=%d", build_seconds, rss_before, rss_after, rep_rows)
+                return True
         except Exception:
             log.exception("could not prepare the dashboard data")
+            return False
 
     def bump(self):
         with self.lock:
@@ -170,7 +172,10 @@ class Store:
                 self.wake.wait(2); self.wake.clear(); continue
             r = self._next()
             if not r:
-                self.warm()  # build once after a batch, never alongside the import worker
+                # Rebuild only after a promoted dataset changed. Failed, duplicate,
+                # stale and held files must not trigger an expensive full rebuild.
+                if self.needs_warm and self.warm():
+                    self.needs_warm = False
                 self.idle.set(); self.wake.wait(2); self.wake.clear(); continue
             self.idle.clear(); changed = False
             try:
@@ -188,7 +193,7 @@ class Store:
                                     status="failed", message=msg, file_path=r.path, source=r.source or "email", uploaded_by=r.uploaded_by or "", subject=r.subject or "")
                 res = dict(import_id=iid, status="failed", message=msg)
             with self.engine.begin() as c: c.execute(update(uploads).where(uploads.c.id == r.id).values(status=status, result=json.loads(json.dumps(res, default=str))))
-            if changed: self.bump()
+            if changed:\n                self.bump()\n                self.needs_warm = True
             if res.get("status") in ("failed", "needs_review"): self._alert(r, res)
 
     def _alert(self, r, res):
