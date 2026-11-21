@@ -45,7 +45,7 @@ def _protected_paths(engine, root: Path) -> set[Path]:
 def _eligible(root: Path, protected: set[Path], cutoff_ts: float):
     for candidate in root.rglob("*"):
         try:
-            if candidate.is_symlink() or not candidate.is_file():
+            if candidate.is_symlink() or not candidate.is_file() or candidate.suffix.lower() != ".xlsx":
                 continue
             resolved = candidate.resolve(strict=True)
             if not resolved.is_relative_to(root) or resolved in protected:
