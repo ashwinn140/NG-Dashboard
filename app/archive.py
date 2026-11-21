@@ -65,9 +65,21 @@ def archive_preview(engine, upload_dir, days: int = 90, now: datetime | None = N
     cutoff_ts = now.timestamp() - days * 86400
     files = list(_eligible(root, protected, cutoff_ts))
     total = sum(size for _, size in files)
+    archive_files = []
+    for candidate in root.rglob("*"):
+        try:
+            if candidate.is_symlink() or not candidate.is_file() or candidate.suffix.lower() != ".xlsx":
+                continue
+            resolved = candidate.resolve(strict=True)
+            if resolved.is_relative_to(root):
+                archive_files.append(candidate.stat().st_size)
+        except OSError:
+            continue
     return {
         "retention_days": days,
         "cutoff_utc": (now - timedelta(days=days)).isoformat() + "Z",
+        "archive_files_total": len(archive_files),
+        "archive_bytes_total": sum(archive_files),
         "eligible_files": len(files),
         "eligible_bytes": total,
         "protected_files": len(protected),
