@@ -4,6 +4,12 @@ on:
     paths:
       - 'app/cache.py'
       - 'app/server.py'
+      - 'app/auth.py'
+      - 'app/db.py'
+      - 'app/web/activity.js'
+      - 'app/web/dashboard.html'
+      - 'app/web/admin.html'
+      - 'tests/test_session_activity.py'
       - 'tests/test_import_worker_warmup.py'
       - 'tests/test_byte_bounded_cache.py'
       - 'app/processor.py'
@@ -28,5 +34,6 @@ jobs:
           python -m unittest discover -s tests -p 'test_retention_profit_lines.py' -v
           python -m unittest scripts.test_daily_replacement -v
           python -m unittest discover -s tests -p 'test_import_worker_warmup.py' -v
+          python -m unittest discover -s tests -p 'test_session_activity.py' -v
       - name: Compile changed Python modules
-        run: python -m py_compile app/cache.py app/server.py app/processor.py
+        run: python -m py_compile app/cache.py app/server.py app/processor.py app/auth.py app/db.py
