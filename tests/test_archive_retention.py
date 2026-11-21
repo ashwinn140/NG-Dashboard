@@ -22,7 +22,8 @@ class ArchiveRetentionTests(unittest.TestCase):
         self.old_promoted = self.root / "old-promoted.xlsx"
         self.old_failed = self.root / "old-failed.xlsx"
         self.recent = self.root / "recent.xlsx"
-        for path in (self.old_promoted, self.old_failed, self.recent):
+        self.other = self.root / "old-other.txt"
+        for path in (self.old_promoted, self.old_failed, self.recent, self.other):
             path.write_bytes(b"source workbook")
         os.utime(self.old_promoted, (self.now.timestamp() - 120 * 86400,) * 2)
         os.utime(self.old_failed, (self.now.timestamp() - 120 * 86400,) * 2)
@@ -55,6 +56,7 @@ class ArchiveRetentionTests(unittest.TestCase):
         self.assertFalse(self.old_promoted.exists())
         self.assertTrue(self.old_failed.exists())
         self.assertTrue(self.recent.exists())
+        self.assertTrue(self.other.exists())
         with self.engine.connect() as conn:
             self.assertEqual(conn.execute(select(func.count()).select_from(imports)).scalar(), 3)
             self.assertEqual(conn.execute(select(func.count()).select_from(admin_log)).scalar(), 1)
