@@ -87,6 +87,8 @@ Production service variable names include `REPORT_STORAGE_MODE` and `REPORT_STAT
 
 Retention previously removed only old shipment rows, not `profit_lines`. The preview/apply implementation now counts and removes both shipment and job-profit rows before the retained window, with separate counts in the audit result. It does not delete import audit metadata or source workbook files.
 
+The source workbook archive is a separate storage consumer: `save_file()` stores each unique SHA-256 attachment under `/data/uploads/YYYY/MM`; identical deliveries reuse the same path, but changed daily workbooks accumulate. This grows the 1 GB app volume, not the in-memory dataset. A separate archive-retention preview/apply flow now removes only source files older than a chosen period (default 90 days, bounded 30-3650) that are not referenced by failed/needs-review imports or queued/processing/failed uploads. It preserves all imported business rows and import audit metadata. Cleanup is manual, preview-first and requires an admin reason; it is not automatic.
+
 ## Session-aware lifecycle implementation
 
 - Added an additive `session_activity` table keyed by the existing hashed session ID. It records only the timestamp of a genuine authenticated interaction; it does not extend the 12-hour login expiry.
