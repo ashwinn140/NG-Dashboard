@@ -1320,8 +1320,8 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         return AR.archive_preview(engine, store.upload_dir, days=days)
 
     @app.post("/api/admin/archive-retention")
-    def a_archive_retention_apply(request: Request, user: dict = Depends(unsafe)):
-        body = json.loads(request_body(request) or b"{}")
+    async def a_archive_retention_apply(request: Request, user: dict = Depends(admin_unsafe)):
+        body = await request.json()
         return AR.archive_apply(engine, store.upload_dir, user["email"], body.get("reason", ""),
                                 days=body.get("days", 90))
 
