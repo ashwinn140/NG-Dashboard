@@ -11,7 +11,6 @@ permissions:
 
 jobs:
   lifecycle:
-    if: ${{ secrets.RAILWAY_API_TOKEN != '' && secrets.LIFECYCLE_CONTROL_TOKEN != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 6
     env:
@@ -26,5 +25,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Check controller credentials are configured
+        id: credentials
+        run: |
+          if [ -z "$RAILWAY_API_TOKEN" ] || [ -z "$LIFECYCLE_CONTROL_TOKEN" ] || [ -z "$RAILWAY_PROJECT_ID" ] || [ -z "$RAILWAY_ENVIRONMENT_ID" ] || [ -z "$RAILWAY_SERVICE_ID" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "Lifecycle controller is inactive until its GitHub secrets and variables are configured."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Run fail-safe lifecycle decision
+        if: steps.credentials.outputs.configured == 'true'
         run: python ops/lifecycle_controller.py
