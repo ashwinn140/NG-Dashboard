@@ -1257,6 +1257,44 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
         token, code, ud = r; sent = mailer.send(u.email, f"Your {product} sign-in link", f"Open this link to sign in (works once, {auth.LINK_MINUTES} minutes):\n{public_base(request)}/auth/verify?t={token}\n\nOr use the code {code} on the sign-in page.")
         return {"sent": sent, "message": "Link sent." if sent else "Email could not be sent. Check email provider settings and delivery logs; password sign-in is still available."}
 
+    @app.get("/api/admin/storage-health")
+    def a_storage_health(user: dict = Depends(admin)):
+        """Read-only storage and import diagnostics for cost/history verification."""
+        with engine.connect() as c:
+            shipment_current = c.execute(select(func.count()).select_from(shipments).where(shipments.c.to_import.is_(None))).scalar()
+            shipment_versions = c.execute(select(func.count()).select_from(shipments).where(shipments.c.to_import.is_not(None))).scalar()
+            profit_current = c.execute(select(func.count()).select_from(profit_lines).where(profit_lines.c.to_import.is_(None))).scalar()
+            profit_versions = c.execute(select(func.count()).select_from(profit_lines).where(profit_lines.c.to_import.is_not(None))).scalar()
+            import_counts = c.execute(select(imports.c.status, func.count()).group_by(imports.c.status)).all()
+            upload_counts = c.execute(select(uploads.c.status, func.count()).group_by(uploads.c.status)).all()
+            latest = c.execute(select(imports.c.id, imports.c.company, imports.c.report_type, imports.c.file_name,
+                                      imports.c.report_time, imports.c.range_from, imports.c.range_to,
+                                      imports.c.row_count, imports.c.status)
+                                .order_by(imports.c.id.desc()).limit(30)).mappings().all()
+            if engine.dialect.name == "postgresql":
+                db_bytes = c.execute(text("SELECT pg_database_size(current_database())")).scalar()
+            elif engine.dialect.name == "sqlite":
+                page_count = c.execute(text("PRAGMA page_count")).scalar()
+                page_size = c.execute(text("PRAGMA page_size")).scalar()
+                db_bytes = int(page_count or 0) * int(page_size or 0)
+            else:
+                db_bytes = None
+        return {
+            "storage_mode": config.REPORT_STORAGE_MODE if hasattr(config, "REPORT_STORAGE_MODE") else os.environ.get("REPORT_STORAGE_MODE", "versioned"),
+            "report_storage_mode": os.environ.get("REPORT_STORAGE_MODE", "versioned").strip().lower(),
+            "static_history": os.environ.get("REPORT_STATIC_HISTORY", "0").strip().lower() in ("1", "true", "yes"),
+            "history_start": os.environ.get("REPORT_HISTORY_START") or None,
+            "shipment_rows": {"current": int(shipment_current or 0), "superseded_versions": int(shipment_versions or 0)},
+            "profit_rows": {"current": int(profit_current or 0), "superseded_versions": int(profit_versions or 0)},
+            "imports_by_status": {str(k): int(v) for k, v in import_counts},
+            "uploads_by_status": {str(k): int(v) for k, v in upload_counts},
+            "database_size_bytes": int(db_bytes) if db_bytes is not None else None,
+            "process_rss_mb": _rss_mb(),
+            "dataset_cache": {"entries": len(store.cache), "compressed_bytes": store.cache.current_bytes,
+                              "max_bytes": store.cache.max_bytes, "max_entries": store.cache.max_entries},
+            "recent_imports": [dict(r) for r in latest],
+        }
+
     @app.get("/api/admin/settings")
     def a_settings(user: dict = Depends(admin)): return ops.get_settings(engine)
 
