@@ -31,7 +31,7 @@ def graphql(token: str, query: str, variables: dict):
     result = request_json(
         API,
         method="POST",
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        headers={"Project-Access-Token": token, "Content-Type": "application/json"},
         body={"query": query, "variables": variables},
         timeout=30,
     )
@@ -118,14 +118,14 @@ def stop_if_safe(base_url: str, lifecycle_token: str, railway_token: str,
 
 
 def main():
-    required = ("NG_DASHBOARD_URL", "LIFECYCLE_CONTROL_TOKEN", "RAILWAY_API_TOKEN",
+    required = ("NG_DASHBOARD_URL", "LIFECYCLE_CONTROL_TOKEN", "RAILWAY_PROJECT_TOKEN",
                 "RAILWAY_PROJECT_ID", "RAILWAY_ENVIRONMENT_ID", "RAILWAY_SERVICE_ID")
     missing = [key for key in required if not os.environ.get(key)]
     if missing:
         raise RuntimeError("Missing required GitHub Actions secrets/variables: " + ", ".join(missing))
     now = datetime.now(TZ)
     base = os.environ["NG_DASHBOARD_URL"]
-    railway = os.environ["RAILWAY_API_TOKEN"]
+    railway = os.environ["RAILWAY_PROJECT_TOKEN"]
     project = os.environ["RAILWAY_PROJECT_ID"]
     environment = os.environ["RAILWAY_ENVIRONMENT_ID"]
     service = os.environ["RAILWAY_SERVICE_ID"]
