@@ -1375,6 +1375,7 @@ def create_app(engine=None, upload_dir: str | None = None, start_worker: bool = 
             "memory_warning": (_rss_mb() is not None and _rss_mb() >= _memory_threshold_mb()),
             "dataset_cache": {"entries": len(store.cache), "compressed_bytes": store.cache.current_bytes,
                               "max_bytes": store.cache.max_bytes, "max_entries": store.cache.max_entries},
+            "source_archive": AR.archive_preview(engine, store.upload_dir, days=90),
             "recent_imports": [dict(r) for r in latest],
         }
 
