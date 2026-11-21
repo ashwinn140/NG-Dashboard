@@ -28,6 +28,7 @@ class ArchiveRetentionTests(unittest.TestCase):
         os.utime(self.old_promoted, (self.now.timestamp() - 120 * 86400,) * 2)
         os.utime(self.old_failed, (self.now.timestamp() - 120 * 86400,) * 2)
         os.utime(self.recent, (self.now.timestamp() - 10 * 86400,) * 2)
+        os.utime(self.other, (self.now.timestamp() - 120 * 86400,) * 2)
 
         with self.engine.begin() as conn:
             conn.execute(insert(imports), [
