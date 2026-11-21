@@ -193,7 +193,9 @@ class Store:
                                     status="failed", message=msg, file_path=r.path, source=r.source or "email", uploaded_by=r.uploaded_by or "", subject=r.subject or "")
                 res = dict(import_id=iid, status="failed", message=msg)
             with self.engine.begin() as c: c.execute(update(uploads).where(uploads.c.id == r.id).values(status=status, result=json.loads(json.dumps(res, default=str))))
-            if changed:\n                self.bump()\n                self.needs_warm = True
+            if changed:
+                self.bump()
+                self.needs_warm = True
             if res.get("status") in ("failed", "needs_review"): self._alert(r, res)
 
     def _alert(self, r, res):
